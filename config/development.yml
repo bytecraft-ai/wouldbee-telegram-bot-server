@@ -1,9 +1,8 @@
 db:
-  # host: 'localhost'
-  # username: 'developer'
+  host: 'localhost'
+  username: 'developer'
   password: 'dbonfire'
-  url: 'mongodb://localhost/<dbname>'
-  database: 'wouldbee-tg-dev'
+  database: 'telegram'
   synchronize: true
   dropSchema: false
   logging: true

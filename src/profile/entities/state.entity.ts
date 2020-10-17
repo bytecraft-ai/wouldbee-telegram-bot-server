@@ -1,11 +1,9 @@
 import {
     Entity,
-    ObjectIdColumn,
     Column,
     JoinColumn,
     ManyToOne,
     OneToMany,
-    PrimaryColumn,
     PrimaryGeneratedColumn
 } from 'typeorm';
 import { IsString, Length, MaxLength } from 'class-validator';
@@ -18,11 +16,8 @@ import { City } from './city.entity';
 
 @Entity()
 export class State {
-    @ObjectIdColumn()
-    _id: string;
-
     @PrimaryGeneratedColumn()
-    id: number;
+    id?: number;
 
     @Length(stateMinLength, stateMaxLength)
     @IsString()

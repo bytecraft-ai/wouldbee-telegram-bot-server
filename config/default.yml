@@ -2,7 +2,9 @@ server:
   port: 3000
 
 db:
-  type: 'mongodb'
+  type: 'postgres'
+  host: 'localhost'
+  port: 5432
 
 jwt:
   expiresIn: '7d'

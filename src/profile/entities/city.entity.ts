@@ -15,10 +15,6 @@ import { cityMaxLength, cityMinLength } from 'src/common/field-length';
 
 @Entity()
 export class City {
-
-    @ObjectIdColumn()
-    _id?: string;
-
     @PrimaryGeneratedColumn()
     id?: number;
 

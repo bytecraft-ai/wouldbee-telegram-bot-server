@@ -1,6 +1,5 @@
 import {
     Entity,
-    ObjectIdColumn,
     Column,
     ManyToOne,
     PrimaryGeneratedColumn,
@@ -26,9 +25,6 @@ import { PartnerPreference } from './partner-preference.entity';
 
 @Entity()
 export class Profile {
-    @ObjectIdColumn()
-    _id: string;
-
     @PrimaryGeneratedColumn("uuid")
     id: string;
 
@@ -41,9 +37,6 @@ export class Profile {
     @DeleteDateColumn()
     deletedOn?: Date;
 
-    // @Column({ default: () => `now()` })
-    // lastSeen: Date;
-
     @Column({ unique: true })
     email: string;
 
@@ -52,7 +45,6 @@ export class Profile {
 
     @ManyToOne(type => Country, { eager: true })
     @JoinColumn()
-    @Column()
     country: Country;
 
     @Column({ unique: true })
@@ -96,6 +88,9 @@ export class Profile {
 
     @OneToOne(type => PartnerPreference)
     partnerPreference: PartnerPreference;
+
+    // @Column({ default: () => `now()` })
+    // lastSeen: Date;
 
     // @Column("smallint", { nullable: true })
     // reasonForDeletion?: AccountDeletionReason;

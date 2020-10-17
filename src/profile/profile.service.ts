@@ -111,7 +111,7 @@ export class ProfileService {
 
         profile = this.profileRepository.create({
             email,
-            country,
+            // country,
             phone,
             name,
             gender,

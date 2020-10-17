@@ -22,9 +22,6 @@ import { State } from './state.entity';
 
 @Entity()
 export class PartnerPreference {
-    @ObjectIdColumn()
-    _id: string;
-
     @PrimaryGeneratedColumn("uuid")
     id: string;
 

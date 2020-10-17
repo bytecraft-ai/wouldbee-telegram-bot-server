@@ -1,6 +1,5 @@
 import {
     Entity,
-    ObjectIdColumn,
     Column,
     PrimaryGeneratedColumn
 } from 'typeorm';
@@ -15,9 +14,6 @@ import { casteMaxLength, casteMinLength } from 'src/common/field-length';
 
 @Entity()
 export class Caste {
-    @ObjectIdColumn()
-    _id: string;
-
     @PrimaryGeneratedColumn()
     id: number;
 

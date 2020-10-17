@@ -1,14 +1,5 @@
-# db:
-#   username: 'WBAdmin'
-#   password: 'prod-dbonfire'
-#   database: 'WBProd'
-#   synchronize: false
-#   dropSchema: false
-#   logging: true
-
 db:
-  url: 'mongodb+srv://developer:<password>@cluster0.twlem.mongodb.net/<dbname>?retryWrites=true&w=majority'
-  database: 'wouldbee-tg-prod'
+  database: 'telegram_production'
   synchronize: true
   dropSchema: false
   logging: false

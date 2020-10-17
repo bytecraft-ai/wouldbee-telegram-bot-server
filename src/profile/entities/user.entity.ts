@@ -14,9 +14,6 @@ import { Country } from './country.entity';
 
 @Entity()
 export class User {
-    @ObjectIdColumn()
-    _id: string;
-
     @PrimaryGeneratedColumn("uuid")
     id: string;
 
