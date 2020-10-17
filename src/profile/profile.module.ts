@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { TelegramService } from './telegram.service';
-import { TelegramController } from './telegram.controller';
+import { ProfileService } from './profile.service';
+import { ProfileController } from './profile.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Caste } from './entities/caste.entity';
 import { City } from './entities/city.entity';
@@ -12,7 +12,7 @@ import { User } from './entities/user.entity';
 
 @Module({
     imports: [TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, User])],
-    providers: [TelegramService],
-    controllers: [TelegramController]
+    providers: [ProfileService],
+    controllers: [ProfileController]
 })
-export class TelegramModule { }
+export class ProfileModule { }

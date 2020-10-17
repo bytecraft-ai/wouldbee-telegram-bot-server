@@ -1,9 +1,10 @@
-import { Injectable, UnauthorizedException, Logger, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger, BadRequestException, NotFoundException, ConflictException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Gender, Religion } from 'src/common/enum';
 import { getAgeInYearsFromDOB } from 'src/common/util';
 import { Repository } from 'typeorm';
-import { RegisterDto, PartnerPreferenceDto, UserDto } from './dto/telegram.dto';
+import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
+import { RegisterDto, PartnerPreferenceDto, UserDto } from './dto/profile.dto';
 import { Caste } from './entities/caste.entity';
 import { City } from './entities/city.entity';
 import { Country } from './entities/country.entity';
@@ -11,12 +12,13 @@ import { PartnerPreference } from './entities/partner-preference.entity';
 import { Profile } from './entities/profile.entity';
 import { State } from './entities/state.entity';
 import { User } from './entities/user.entity';
-import { GetCityOptions, GetStateOptions } from './telegram.interface';
+import { GetCityOptions, GetStateOptions } from './profile.interface';
+import { createHash, createHmac } from 'crypto';
 
-const logger = new Logger('TelegramService');
+const logger = new Logger('ProfileService');
 
 @Injectable()
-export class TelegramService {
+export class ProfileService {
     constructor(
         @InjectRepository(User) private userRepository: Repository<User>,
         @InjectRepository(Profile) private profileRepository: Repository<Profile>,
@@ -26,6 +28,38 @@ export class TelegramService {
         @InjectRepository(State) private stateRepository: Repository<State>,
         @InjectRepository(Country) private countryRepository: Repository<Country>,
     ) { }
+
+
+    checkTelegramAuth(auth: TelegramAuthenticateDto): boolean {
+        if (!process.env.BOT_TOKEN) {
+            throw new InternalServerErrorException('Telegram Bot token is not set!');
+        }
+        console.log('auth:', JSON.stringify(auth));
+        const now = Date.now() / 1000;
+        const timeDiff = now - parseInt(auth.auth_date);
+        console.log('now:', now, 'timeDiff:', timeDiff);
+
+        const checkString: string = Object.keys(auth)
+            .filter(key => key !== 'hash')
+            .map(key => `${key}=${auth[key]}`)
+            .sort()
+            .join('\n');
+
+        const secret = createHash('sha256')
+            .update(process.env.BOT_TOKEN)
+            .digest();
+
+        const hash = createHmac('sha256', secret)
+            .update(checkString)
+            .digest('hex');
+
+        return auth.hash === hash; // && timeDiff < constants.telegram.authExpiresIn;
+    }
+
+
+    async sendMessage(): Promise<boolean> {
+        return true;
+    }
 
 
     async getUser(id: string, throwOnFail = false): Promise<User | undefined> {
@@ -39,10 +73,13 @@ export class TelegramService {
     async createUser(userInput: UserDto): Promise<User | undefined> {
         const { email, phone } = userInput;
         let user = await this.userRepository.findOne({
-            where: [
-                { email },
-                { phone }
-            ]
+            where: {
+                $or: [
+                    { email: email },
+                    { phone: phone }
+                ]
+            }
+
         });
         if (user) {
             throw new ConflictException('user with email/phone already exists!');

@@ -1,0 +1,8 @@
+telegram bot widget api ref
+https://core.telegram.org/widgets/login
+
+telegram bot tutorial without telegraph
+https://phpinfo.in/how-to-build-a-telegram-bot-using-node-js-and-now/
+
+deployment
+https://coderrocketfuel.com/article/deploy-a-nodejs-application-to-digital-ocean-with-https
