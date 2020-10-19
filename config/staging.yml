@@ -1,0 +1,13 @@
+db:
+  host: 'localhost'
+  username: 'developer'
+  password: 'dbonfire'
+  database: 'telegram'
+  synchronize: true
+  dropSchema: false
+  logging: true
+
+jwt:
+  # TODO
+  secret: 'change-it-to-something-secure'
+  expiresIn: '7d'

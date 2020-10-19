@@ -4,9 +4,17 @@ const logger = new Logger('AppController');
 
 @Controller()
 export class AppController {
-  @Get()
+
+  @Get('/')
   @Render('index')
-  root() {
-    return { message: 'Welcome to Would Bee! Please register to get started!' };
-  }
+  index() { }
+
+  @Get('/privacy')
+  @Render('privacy')
+  privacy() { }
+
+  @Get('/terms')
+  @Render('terms')
+  terms() { }
+
 }

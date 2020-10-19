@@ -2,6 +2,9 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import { AppModule } from './app.module';
+import { get } from 'config';
+require('dotenv').config();
+const serverConfig = get('server');
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(
@@ -12,6 +15,6 @@ async function bootstrap() {
   app.setBaseViewsDir(join(__dirname, '..', 'views'));
   app.setViewEngine('hbs');
 
-  await app.listen(3030);
+  await app.listen(process.env.SERVER_PORT || serverConfig.port);
 }
 bootstrap();

@@ -809,7 +809,7 @@ function App() {
     src: _assets_logo_png__WEBPACK_IMPORTED_MODULE_2__.default,
     className: "logo-img",
     alt: "logo"
-  }), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", null, " Best free metrimony app")), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
+  }), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", null, "Best Free Matrimony Service")), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
     className: "hero-section"
   }), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
     className: "page-body"
@@ -818,7 +818,7 @@ function App() {
   }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(_elements_Text_index__WEBPACK_IMPORTED_MODULE_1__.Text, {
     fontSize: "40px",
     className: "subheading font-poppins-medium"
-  }, "World's best free service"), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
+  }, "World's First Free Telegram-Based Matrimony Service"), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
     className: "services-icons"
   }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(_components_shared_IconWithDescription_index__WEBPACK_IMPORTED_MODULE_6__.default, {
     imagePath: _assets_telegram_phone_png__WEBPACK_IMPORTED_MODULE_3__.default,
@@ -835,27 +835,27 @@ function App() {
     fontSize: "43px",
     color: "#DE1C72",
     className: "subheading"
-  }, "You can use one of the following methods to send us your biodata:"), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("ol", null, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(_elements_Text_index__WEBPACK_IMPORTED_MODULE_1__.Text, {
+  }, "Use one of the following methods to send us your bio-data:"), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("ol", null, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(_elements_Text_index__WEBPACK_IMPORTED_MODULE_1__.Text, {
     fontSize: "46px",
     className: "heading font-opensans-regular"
-  }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("li", null, "Send on telegram app to 9655500000")), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(_elements_Text_index__WEBPACK_IMPORTED_MODULE_1__.Text, {
+  }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("li", null, "Send on Telegram app to +91 89284 03347")), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(_elements_Text_index__WEBPACK_IMPORTED_MODULE_1__.Text, {
     fontSize: "46px",
     className: "heading font-opensans-regular"
-  }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("li", null, "Send on WhatsApp to 9655500000")), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(_elements_Text_index__WEBPACK_IMPORTED_MODULE_1__.Text, {
+  }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("li", null, "Send on WhatsApp to +91 89284 03347")), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement(_elements_Text_index__WEBPACK_IMPORTED_MODULE_1__.Text, {
     fontSize: "46px",
     className: "heading font-opensans-regular"
-  }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("li", null, "Send on email to support@wouldbee.com")))))), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
+  }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("li", null, "Send on email to   support@wouldbee.com")))))), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
     className: "footer"
   }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", {
     className: "quick-links"
   }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", {
     className: "font-opensans-regular"
   }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("a", {
-    href: "/privacy"
+    href: "./privacy"
   }, "Privacy Policy")), /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", {
     className: "font-opensans-regular"
   }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("a", {
-    href: "terms"
+    href: "./terms"
   }, "Terms of use"))))));
 }
 

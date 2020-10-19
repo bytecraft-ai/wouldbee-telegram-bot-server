@@ -14,7 +14,16 @@ nestjs-telegraph api documentation
 https://nestjs-telegraf.vercel.app/docs/telegraf-methods
 
 deployment
-https://coderrocketfuel.com/article/deploy-a-nodejs-application-to-digital-ocean-with-https
+
+-(digital ocean) https://coderrocketfuel.com/article/deploy-a-nodejs-application-to-digital-ocean-with-https
+
+-(aws) https://medium.com/@chiamakaobitube/deploy-a-simple-nodejs-app-to-aws-ec2-and-get-it-running-on-a-custom-domain-f805e1e24780
+
+-(pointing name-cheap domain to aws ec2) http://techgenix.com/namecheap-aws-ec2-linux/
+
+-(setting up nginx)
+https://www.tecmint.com/nginx-as-reverse-proxy-for-nodejs-app/#:~:text=%20How%20to%20Configure%20Nginx%20as%20Reverse%20Proxy,create%20a%20server%20block%20configuration%20file...%20More%20
+
 
 python example (has some potential, not seen yet)
  - https://stackoverflow.com/questions/31042219/how-do-i-get-authentication-in-a-telegram-bot
