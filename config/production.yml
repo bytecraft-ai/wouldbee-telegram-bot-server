@@ -1,6 +1,5 @@
 db:
   database: 'telegram_production'
-  synchronize: true
   dropSchema: false
   logging: false
 

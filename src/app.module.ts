@@ -5,18 +5,20 @@ import { typeOrmConfig } from './config/typeorm-config';
 import { ProfileModule } from './profile/profile.module';
 import { TelegrafModule } from 'nestjs-telegraf';
 import { AppService } from './app.service';
-require("dotenv").config();
+import { AwsServiceModule } from './aws-service/aws-service.module';
+import { TelegramModule } from './telegram/telegram.module';
 
-console.log('typeorm config:', typeOrmConfig);
+// console.log('typeorm config:', typeOrmConfig);
 // console.log('bot token:', process.env.BOT_TOKEN);
 
 @Module({
   imports: [
     TypeOrmModule.forRoot({ ...typeOrmConfig, autoLoadEntities: true }),
-    ProfileModule,
-    TelegrafModule.forRoot({
-      token: process.env.BOT_TOKEN,
-    })
+    ProfileModule, AwsServiceModule,
+    // TelegrafModule.forRoot({
+    //   token: process.env.BOT_TOKEN,
+    // }),
+    TelegramModule
   ],
   providers: [AppService],
   controllers: [AppController]

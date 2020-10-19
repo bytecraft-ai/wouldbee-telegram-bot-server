@@ -61,3 +61,12 @@ export enum AnnualIncome {
     FIVE_CR_OR_MORE,
     TEN_CR_OR_MORE,
 }
+
+
+export enum TypeOfDocument {
+    PICTURE = 1,
+    VIDEO,
+    ID_PROOF,
+    BIO_DATA,
+    REPORT_ATTACHMENT
+}

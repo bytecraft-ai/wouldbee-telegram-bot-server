@@ -4,5 +4,20 @@ https://core.telegram.org/widgets/login
 telegram bot tutorial without telegraph
 https://phpinfo.in/how-to-build-a-telegram-bot-using-node-js-and-now/
 
+telegram bot with nestjs without telegraph
+https://dev.to/yemiwebby/building-a-chat-bot-using-nestjs-and-telegram-4i2h
+
+getting phone number from user over chat - medium article
+https://tutorials.botsfloor.com/request-and-handle-phone-number-and-location-with-telegram-bot-api-e90004c0c87e
+
+nestjs-telegraph api documentation
+https://nestjs-telegraf.vercel.app/docs/telegraf-methods
+
 deployment
 https://coderrocketfuel.com/article/deploy-a-nodejs-application-to-digital-ocean-with-https
+
+python example (has some potential, not seen yet)
+ - https://stackoverflow.com/questions/31042219/how-do-i-get-authentication-in-a-telegram-bot
+ - https://github.com/jlmadurga/django-telegram-bot
+ - https://github.com/jlmadurga/django-telegram-bot-demo
+ 
