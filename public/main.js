@@ -856,7 +856,8 @@ function App() {
     className: "font-opensans-regular"
   }, /*#__PURE__*/react__WEBPACK_IMPORTED_MODULE_0__.createElement("a", {
     href: "./terms"
-  }, "Terms of use"))))));
+  }, "Terms of use"))))
+  ));
 }
 
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (App);
