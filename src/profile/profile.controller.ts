@@ -1,10 +1,82 @@
-import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Render, Param, Logger } from '@nestjs/common';
+import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Render, Param, Logger, UseInterceptors, UploadedFiles } from '@nestjs/common';
 import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
-import { CreateProfileDto, CreateUserDto, PartnerPreferenceDto } from './dto/profile.dto';
+import { CreateProfileDto, CreateUserDto, FileUploadDto, PartnerPreferenceDto, RegistrationDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
 import { User } from './entities/user.entity';
+import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
+import { GetCitiesDto, GetCountriesDto, GetStatesDto } from './dto/location.dto';
 
 const logger = new Logger('ProfileController');
+
+
+@Controller('common')
+@UsePipes(ValidationPipe)
+export class CommonController {
+    constructor(private readonly profileService: ProfileService) { }
+
+    @Get('/')
+    async getCommonData() {
+        return this.profileService.getCommonData();
+    }
+
+
+    @Get('/seed')
+    async seed() {
+        await this.profileService.seedCaste();
+        return this.getCastes();
+    }
+
+
+    @Get('/caste')
+    async getCastes() {
+        return this.profileService.getCastes();
+    }
+
+
+    @Get('/caste/:id')
+    async getCaste(@Param('id') id: number) {
+        return this.profileService.getCaste(id, true);
+    }
+
+
+    @Get('/city')
+    async getCities(@Body() getCitiesDto: GetCitiesDto) {
+        return this.profileService.getCities();
+    }
+
+
+    @Get('/city/:id')
+    async getCity(@Param('id') id: number) {
+        return this.profileService.getCity(id, { throwOnFail: true });
+    }
+
+
+    @Get('/state')
+    async getStates(@Body() getStatesDto: GetStatesDto) {
+        return this.profileService.getCastes();
+    }
+
+
+    @Get('/state/:id')
+    async getState(@Param('id') id: number) {
+        return this.profileService.getCaste(id, true);
+    }
+
+
+    @Get('/country')
+    async getCountries(@Body() getCountriesDto: GetCountriesDto) {
+        return this.profileService.getCountriesLike(getCountriesDto?.like, getCountriesDto?.skip, getCountriesDto?.take);
+
+    }
+
+
+    @Get('/country/:id')
+    async getCountry(@Param('id') id: number) {
+        return this.profileService.getCountry(id, true);
+    }
+
+}
+
 
 @Controller('user')
 @UsePipes(ValidationPipe)
@@ -13,12 +85,31 @@ export class UserController {
 
     @Post('/')
     // @Render('index')
-    async registerUser(@Body() registerInput: CreateUserDto): Promise<User> {
+    @UseInterceptors(FileFieldsInterceptor([
+        { name: 'bioData', maxCount: 1 },
+        { name: 'idProof', maxCount: 1 },
+    ]))
+    async createUser(@Body() registerInput: CreateUserDto,
+        @UploadedFiles() files): Promise<User> {
         logger.log('registerUser was hit with:', JSON.stringify(registerInput));
+        console.log('files:', files);
         const user = await this.profileService.createUser(registerInput);
         console.log('registered user:', user);
         return user;
     }
+
+
+    @Post('/register')
+    @UseInterceptors(FileFieldsInterceptor([
+        { name: 'bioData', maxCount: 1 },
+        { name: 'idProof', maxCount: 1 },
+    ]))
+    async register(@Body() registrationDto: RegistrationDto, @UploadedFiles() files) {
+        console.log(files);
+        const user = await this.profileService.register(registrationDto);
+    }
+
+
 
 
     @Get('/')
@@ -41,22 +132,6 @@ export class UserController {
         return this.profileService.getUser(id);
     }
 
-
-    // @Post('/telegramauth')
-    // @Render('index')
-    // async telegramAuth(@Body() auth: TelegramAuthenticateDto) {
-    //     console.log('register was hit with:', auth);
-    //     const valid = this.profileService.checkTelegramAuth(auth);
-    //     return { message: valid ? "Auth validated!" : "Invalid Auth" };
-    // }
-
-
-    // @Get('/msg')
-    // @Render('index')
-    // async sendMessage() {
-    //     const sent = await this.profileService.sendMessage();
-    //     return { message: `send msg: ${sent ? 'success' : 'failure'} ` }
-    // }
 }
 
 
@@ -111,5 +186,24 @@ export class PreferenceController {
     async setPreference(@Body() userPreference: PartnerPreferenceDto) {
         console.log('set preference to', userPreference);
         return this.profileService.savePartnerPreference(userPreference);
+    }
+}
+
+
+@Controller('file')
+@UsePipes(ValidationPipe)
+export class FileController {
+    constructor(private readonly profileService: ProfileService) { }
+
+
+    @Post('/')
+    async updateFile(@Body() fileUploadDto: FileUploadDto) {
+
+    }
+
+
+    @Get('/uploadlink')
+    async getUploadLink(@Body() fileUploadDto: FileUploadDto) {
+
     }
 }

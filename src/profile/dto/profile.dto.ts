@@ -1,8 +1,9 @@
-import { IsNotEmpty, IsString, MinLength, MaxLength, Matches, IsNumberString, Length, IsEmail, IsInt, IsOptional, Min, Max, IsPositive, IsUUID, IsNumber } from 'class-validator';
-import { AnnualIncome, Gender, Religion } from 'src/common/enum';
+import { IsNotEmpty, IsString, MinLength, MaxLength, Matches, IsNumberString, Length, IsEmail, IsInt, IsOptional, Min, Max, IsPositive, IsUUID, IsNumber, IsIn } from 'class-validator';
+import { AnnualIncome, Gender, Religion, TypeOfDocument } from 'src/common/enum';
 import { nameMaxLength, nameMinLength } from 'src/common/field-length';
 
-export class CreateUserDto {
+
+export class RegistrationDto {
     @IsOptional()
     @IsEmail()
     email?: string;
@@ -16,13 +17,8 @@ export class CreateUserDto {
     @Length(4, 15)
     @IsNumberString()
     phone: string;
-}
 
-export class CreateProfileDto {
-    // TODO: apply email validation
-    @IsNotEmpty()
-    @IsUUID(4)
-    userId?: string;
+    // profile
 
     @IsNotEmpty()
     @Length(nameMinLength, nameMaxLength)
@@ -47,6 +43,94 @@ export class CreateProfileDto {
 
     @IsNotEmpty()
     cityId?: number;
+
+    // preference
+
+    @IsOptional()
+    @Min(18)
+    @Max(100)
+    @IsInt()
+    minAge?: number;
+
+    @IsOptional()
+    @Min(21)
+    @Max(100)
+    @IsInt()
+    maxAge?: number;
+
+    @IsOptional()
+    religions?: Religion[];
+
+    @IsOptional()
+    @IsPositive()
+    @IsInt()
+    casteIds?: number[];
+
+    @IsOptional()
+    minimumIncome?: AnnualIncome;
+
+    @IsOptional()
+    @IsPositive()
+    @IsInt()
+    cityIds?: number[];
+
+    @IsOptional()
+    @IsPositive()
+    @IsInt()
+    stateIds?: number[];
+
+    @IsOptional()
+    @IsPositive()
+    @IsInt()
+    countryIds?: number[];
+}
+
+
+export class CreateUserDto {
+    @IsOptional()
+    @IsEmail()
+    email?: string;
+
+    @IsOptional()
+    @IsPositive()
+    @IsNumber()
+    countryId: number;
+
+    @IsNotEmpty()
+    @Length(4, 15)
+    @IsNumberString()
+    phone: string;
+}
+
+export class CreateProfileDto {
+    @IsNotEmpty()
+    @IsUUID(4)
+    userId: string;
+
+    @IsNotEmpty()
+    @Length(nameMinLength, nameMaxLength)
+    @IsString()
+    name: string;
+
+    @IsNotEmpty()
+    gender: Gender;
+
+    @IsNotEmpty()
+    dob: Date;
+
+    @IsNotEmpty()
+    religion: Religion;
+
+    @IsNotEmpty()
+    @IsInt()
+    casteId: number;
+
+    @IsNotEmpty()
+    annualIncome: AnnualIncome;
+
+    @IsNotEmpty()
+    @IsInt()
+    cityId: number;
 }
 
 
@@ -93,6 +177,21 @@ export class PartnerPreferenceDto {
     @IsPositive()
     @IsInt()
     countryIds?: number[];
+}
+
+
+export class FileUploadDto {
+    @IsNotEmpty()
+    @IsUUID(4)
+    userId: string;
+
+    @IsIn(['bio', 'id'])
+    @IsString()
+    fileType: string;
+
+    @IsNotEmpty()
+    @Length(32, 200)
+    fileName: string;
 }
 
    // // TODO: apply strong password validation

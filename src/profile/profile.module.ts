@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ProfileService } from './profile.service';
-import { PreferenceController, ProfileController, UserController } from './profile.controller';
+import { CommonController, PreferenceController, ProfileController, UserController } from './profile.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Caste } from './entities/caste.entity';
 import { City } from './entities/city.entity';
@@ -11,11 +11,12 @@ import { State } from './entities/state.entity';
 import { User } from './entities/user.entity';
 import { TelegramProfile } from './entities/telegram-profile.entity';
 import { SharedProfile } from './entities/shared-profiles.entity';
+import { AwsServiceModule } from 'src/aws-service/aws-service.module';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, User, TelegramProfile, SharedProfile])],
+    imports: [TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, User, TelegramProfile, SharedProfile]), AwsServiceModule],
     providers: [ProfileService],
-    controllers: [ProfileController, UserController, PreferenceController],
+    controllers: [ProfileController, UserController, PreferenceController, CommonController],
     exports: [ProfileService]
 })
 export class ProfileModule { }

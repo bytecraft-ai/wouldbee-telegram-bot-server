@@ -241,3 +241,31 @@ export function getCallerFunctionName(): string {
     // console.log(caller + ":" + message);
     return caller;
 }
+
+
+// ref - http://www.howtocreate.co.uk/xor.html
+export function myXOR(x: any, y: any): boolean {
+    return !x != !y
+}
+
+
+export function setDifference<T>(setA: Set<T>, setB: Set<T>): Set<T> {
+    let _difference = new Set(setA)
+    for (let elem of setB) {
+        _difference.delete(elem)
+    }
+    return _difference
+}
+
+
+export function setDifferenceFromArrays<T>(arrayA: Array<T>, arrayB: Array<T>): Array<T> {
+    let setA = new Set(arrayA), setB = new Set(arrayB);
+    const _difference = setDifference(setA, setB);
+    return Array.from(_difference);
+}
+
+
+export function deDuplicateArray<T>(array: Array<T>): Array<T> {
+    let _set = new Set<T>(array);
+    return Array.from(_set);
+}

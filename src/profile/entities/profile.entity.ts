@@ -103,6 +103,13 @@ export class Profile {
     @Column("smallint")
     annualIncome: AnnualIncome;
 
+    @Column({ nullable: true, length: 300 })
+    idProofUrl: string;
+
+    @Column({ nullable: true, length: 300 })
+    bioDataUrl: string;
+
+
     @OneToOne(type => PartnerPreference)
     partnerPreference: PartnerPreference;
 

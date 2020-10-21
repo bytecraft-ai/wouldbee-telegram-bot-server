@@ -1,10 +1,10 @@
 import { Injectable, UnauthorizedException, Logger, BadRequestException, NotFoundException, ConflictException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Gender, Religion } from 'src/common/enum';
-import { getAgeInYearsFromDOB } from 'src/common/util';
+import { femaleAgeList, Gender, maleAgeList, Religion, TypeOfDocument } from 'src/common/enum';
+import { deDuplicateArray, getAgeInYearsFromDOB, setDifferenceFromArrays } from 'src/common/util';
 import { Repository } from 'typeorm';
 import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
-import { PartnerPreferenceDto, CreateUserDto, CreateProfileDto } from './dto/profile.dto';
+import { PartnerPreferenceDto, CreateUserDto, CreateProfileDto, RegistrationDto } from './dto/profile.dto';
 import { Caste } from './entities/caste.entity';
 import { City } from './entities/city.entity';
 import { Country } from './entities/country.entity';
@@ -16,12 +16,16 @@ import { GetCityOptions, GetStateOptions } from './profile.interface';
 import { createHash, createHmac } from 'crypto';
 import { TelegramProfile } from './entities/telegram-profile.entity';
 import { SharedProfile } from './entities/shared-profiles.entity';
+import { AwsService } from 'src/aws-service/aws-service.service';
+import { Transactional } from 'typeorm-transactional-cls-hooked';
+import { CommonData, IList } from 'src/common/interface';
 
 const logger = new Logger('ProfileService');
 
 @Injectable()
 export class ProfileService {
     constructor(
+        private readonly awsService: AwsService,
         @InjectRepository(User) private userRepository: Repository<User>,
         @InjectRepository(Profile) private profileRepository: Repository<Profile>,
         @InjectRepository(TelegramProfile) private telegramRepository: Repository<TelegramProfile>,
@@ -250,10 +254,77 @@ export class ProfileService {
     }
 
 
-    async getTelegramProfile(userId: string, throwOnFail = true): Promise<TelegramProfile | undefined> {
+    @Transactional()
+    async register(rDto: RegistrationDto): Promise<User> {
+        // set up transaction
+        let user: User;
+        try {
+            const userInput: CreateUserDto = {
+                email: rDto?.email,
+                countryId: rDto?.countryId,
+                phone: rDto.phone
+            };
+            user = await this.createUser(userInput);
+
+            const profileInput: CreateProfileDto = {
+                userId: user.id,
+                name: rDto.name,
+                gender: rDto.gender,
+                dob: rDto.dob,
+                religion: rDto.religion,
+                casteId: rDto.casteId,
+                annualIncome: rDto.annualIncome,
+                cityId: rDto.cityId
+            };
+            const profile = await this.createProfile(profileInput);
+
+            const preferenceInput: PartnerPreferenceDto = {
+                id: user.id,
+                minAge: rDto?.minAge,
+                maxAge: rDto?.maxAge,
+                religions: rDto?.religions,
+                minimumIncome: rDto?.minimumIncome,
+                cityIds: rDto?.cityIds,
+                stateIds: rDto?.stateIds,
+                countryIds: rDto?.countryIds,
+
+            }
+            const preference = await this.savePartnerPreference(preferenceInput);
+        }
+        catch (error) {
+            logger.error(`ERROR: registration failed! Input: ${JSON.stringify(rDto)} \nError: ${error}`);
+            throw error;
+        }
+        return user;
+    }
+
+
+    async getTelegramProfileById(userId: string, throwOnFail = true): Promise<TelegramProfile | undefined> {
         const telegramProfile = await this.telegramRepository.findOne(userId);
         if (throwOnFail && !telegramProfile) {
             throw new NotFoundException(`Telegram profile with id: ${userId} not found!`);
+        }
+        return telegramProfile;
+    }
+
+
+    async getTelegramProfileByTelegramUserId(telegramUserId: number, throwOnFail = true): Promise<TelegramProfile | undefined> {
+        const telegramProfile = await this.telegramRepository.findOne({
+            where: { telegramUserId }
+        });
+        if (throwOnFail && !telegramProfile) {
+            throw new NotFoundException(`Telegram profile with telegram user id: ${telegramUserId} not found!`);
+        }
+        return telegramProfile;
+    }
+
+
+    async getTelegramProfileByTelegramChatId(telegramChatId: number, throwOnFail = true): Promise<TelegramProfile | undefined> {
+        const telegramProfile = await this.telegramRepository.findOne({
+            where: { telegramChatId }
+        });
+        if (throwOnFail && !telegramProfile) {
+            throw new NotFoundException(`Telegram profile with chat id: ${telegramChatId} not found!`);
         }
         return telegramProfile;
     }
@@ -266,7 +337,7 @@ export class ProfileService {
         if (!telegramUserId || !telegramChatId) {
             throw new BadRequestException('Requires non empty telegramUserId and chatId');
         }
-        let telegramProfile = await this.getTelegramProfile(user.id, false);
+        let telegramProfile = await this.getTelegramProfileById(user.id, false);
         if (!telegramProfile) {
             telegramProfile = this.telegramRepository.create({
                 id: user.id,
@@ -281,6 +352,17 @@ export class ProfileService {
     }
 
 
+    async generateS3SignedURLs(profileId: string,
+        fileName: string,
+        typeOfDocument: TypeOfDocument): Promise<string | undefined> {
+
+        const urlObj = await this.awsService.createSignedURL(profileId, fileName, typeOfDocument, false);
+
+        return urlObj.preSignedUrl;
+    }
+
+
+    // TODO
     async seedCaste() {
         const casteNameList = 'Agrawal Khandelwal Maheshwari Brahmin Jat Rajput Kayasth Gurjar Meena'.split(' ');
         const casteList: Caste[] = [];
@@ -301,7 +383,7 @@ export class ProfileService {
     }
 
 
-    async getCaste(casteId: number, throwOnFail = false): Promise<Caste | undefined> {
+    async getCaste(casteId: number, throwOnFail = true): Promise<Caste | undefined> {
         const caste = await this.casteRepository.findOne(casteId);
         if (throwOnFail && !caste) {
             throw new NotFoundException(`Caste with id: ${casteId} not found!`);
@@ -432,6 +514,30 @@ export class ProfileService {
     }
 
 
+    async getStatesLike(pattern: string, countryIds: number[], skip = 0, take = 20): Promise<IList<State>> {
+
+        const query = this.stateRepository.createQueryBuilder("state");
+        let whereIsSet: boolean = false
+
+        if (pattern !== null && pattern.trim() !== "") {
+            query.where("state.name ILIKE :pattern", { pattern: `%${pattern}%` });
+            whereIsSet = true;
+        }
+
+        if (countryIds?.length) {
+            query.andWhere("state.countryId IN (:...countryIds)", { countryIds });
+            // whereIsSet ? query.andWhere("state.countryId IN :countryIds", { countryIds: countryIds }) : query.where("state.countryId = :countryIds", { countryIds: countryIds });
+        }
+
+        const [states, count] = await query.skip(skip).take(take).getManyAndCount();
+
+        return {
+            count,
+            values: states
+        };
+    }
+
+
     async getCountryByName(countryName: string, throwOnFail = true): Promise<Country | undefined> {
         if (!countryName) throw new BadRequestException("Empty or null countryName")
         // return this.countryRepository.findOne({ name: countryName });
@@ -445,7 +551,7 @@ export class ProfileService {
     }
 
 
-    async getCountry(countryId: number, throwOnFail = false): Promise<Country | undefined> {
+    async getCountry(countryId: number, throwOnFail = true): Promise<Country | undefined> {
         if (countryId === null) throw new BadRequestException("countryId is null")
         const country = await this.countryRepository.findOne({ id: countryId });
         if (throwOnFail && !country) {
@@ -461,7 +567,7 @@ export class ProfileService {
 
 
     async getCountriesLike(pattern: string, skip = 0,
-        take = 100): Promise<Country[]> {
+        take = 20): Promise<Country[]> {
 
         const query = this.countryRepository.createQueryBuilder("country");
         // let whereIsSet: boolean = false
@@ -508,37 +614,57 @@ export class ProfileService {
     }
 
 
+    private async getCountryIdsForStates(stateIds: number[]): Promise<Country[] | undefined> {
+        const query = `SELECT DISTINCT c.id 
+            FROM country c INNER JOIN state s ON s."countryId" = c.id
+            WHERE s.id IN (${stateIds.join(',')});`;
+        console.log('getCountryIdsForStates() query:', query);
+        const results = await this.stateRepository.query(query);
+        return results.map(result => result.id);
+    }
+
+
     // defining named parameters
     // ref: https://medium.com/better-programming/named-parameters-in-typescript-e32c763d2b2e#:~:text=Even%20though%20there%20is%20technically,play%20with%20letters%20in%20Scrabble.
     async getCitiesLike(pattern: string,
         {
-            stateId = null,
-            countryId = null,
+            countryIds = [],
+            stateIds = [],
             skip = 0,
-            take = 100
-        }): Promise<City[]> {
+            take = 20,
+        }): Promise<IList<City>> {
 
         let query = this.cityRepository.createQueryBuilder("city");
         let whereIsSet: boolean = false
 
         if (pattern !== null && pattern.trim() !== "") {
-            // query = query.where("city.name ILIKE :pattern", { pattern: `%${pattern}%` });
             query = query.where("city.name ILIKE :pattern", { pattern: `${pattern}%` });
             whereIsSet = true;
         }
 
-        if (stateId) {
-            query = whereIsSet ? query.andWhere("city.stateId = :stateId", { stateId: stateId }) : query.where("city.stateId = :stateId", { stateId: stateId });
-            whereIsSet = true;
+        // console.log('stateIds, countryIds:', stateIds, countryIds);
+
+        if (stateIds?.length) {
+            stateIds = deDuplicateArray(stateIds);
+            query.andWhere("city.stateId IN (:...stateIds)", { stateIds })
+
+            const countryIdsForStates = await this.getCountryIdsForStates(stateIds);
+            // console.log('countryIdsForStates:', countryIdsForStates);
+            countryIds = setDifferenceFromArrays(countryIds, countryIdsForStates);
+            // console.log('remaining countryIds:', countryIds);
         }
         // TODO: test - search restricted to a country probably doesn't yet work.
-        else if (countryId) {
-            query = whereIsSet ? query.leftJoin("city.state", "state")
-                .andWhere("state.countryId = :countryId", { countryId: countryId }) : query.leftJoin("city.state", "state")
-                    .where("state.countryId = :countryId", { countryId: countryId });
+        if (countryIds?.length) {
+            query.leftJoin("city.state", "state")
+                .orWhere("state.countryId IN (:...countryIds)", { countryIds })
         }
 
-        return query.skip(skip).take(take).getMany();
+        const [cities, count] = await query.skip(skip).take(take).getManyAndCount();
+
+        return {
+            count,
+            values: cities
+        };
     }
 
 
@@ -592,5 +718,13 @@ export class ProfileService {
             'SELECT id FROM city TABLESAMPLE SYSTEM_ROWS($1);', [take]);
 
         return results.map(result => result.id);
+    }
+
+
+    getCommonData(): CommonData {
+        return {
+            maleAgeList: maleAgeList,
+            femaleAgeList: femaleAgeList,
+        }
     }
 }

@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, Logger, NotAcceptableException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotAcceptableException } from '@nestjs/common';
 import { get } from 'config'
 import { S3, SES, SNS, config, Credentials } from 'aws-sdk';
 import { TypeOfDocument } from 'src/common/enum';
@@ -137,12 +137,28 @@ export class AwsService {
     }
 
 
-    async createSignedURL(publicId: string, fileName: string, typeOfDocument: TypeOfDocument,
-        getTruePutFalse: boolean): Promise<S3SignedUrl | undefined> {
+    validateFileNameForS3Upload(fileName: string, typeOfDocument: TypeOfDocument): boolean {
+        if (fileName.includes('_bio')) {
+            return typeOfDocument === TypeOfDocument.BIO_DATA;
+        }
+        else if (fileName.includes('_id')) {
+            return typeOfDocument === TypeOfDocument.ID_PROOF;
+        }
+        // else if (fileName.includes('_picture')) {
+        //     return typeOfDocument === TypeOfDocument.PICTURE;
+        // }
+        // else if (fileName.includes('_video')) {
+        //     typeOfDocument = TypeOfDocument.VIDEO;
+        // }
+        else {
+            throw new BadRequestException(`unsupported typeOfDocument input: ${typeOfDocument}!`);
+        }
+    }
 
-        // requires the following env variables
-        // heroku config:set AWS_ACCESS_KEY_ID=xxx AWS_SECRET_ACCESS_KEY=yyy
-        // heroku config:set S3_BUCKET=bucket_name S3_REGION=region
+
+    async createSignedURL(publicId: string, fileName: string, typeOfDocument: TypeOfDocument, getTruePutFalse: boolean): Promise<S3SignedUrl | undefined> {
+
+        this.validateFileNameForS3Upload(fileName, typeOfDocument);
 
         const S3_BUCKET = this.getS3Bucket(typeOfDocument);
 

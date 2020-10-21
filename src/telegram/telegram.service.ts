@@ -109,79 +109,71 @@ export class TelegramService {
 
     @Start()
     async start(ctx: Context) {
-        var option = {
-            "parse_mode": "Markdown",
-            "reply_markup": {
-                "one_time_keyboard": true,
-                "keyboard": [[{
-                    text: "My phone number",
-                    request_contact: true
-                }], ["Cancel"]]
-            }
-        };
+        const msg = ctx.message;
+        const telegramProfile = await this.profileService.getTelegramProfileByTelegramUserId(ctx.from.id);
 
-        const welcomeMessage = 'Welcome to Would Bee! Please share the phone number you registered with to continue.'
-
-        await ctx.telegram.sendMessage(ctx.chat.id, welcomeMessage, {
-            parse_mode: "Markdown",
-            reply_markup: {
-                one_time_keyboard: true,
-                keyboard: [
-                    [{
-                        text: "Share Phone Number",
+        if (telegramProfile) {
+            ctx.reply('Welcome back! Please use /help command to see how can you interact with me.')
+        } else {
+            var option = {
+                "parse_mode": "Markdown",
+                "reply_markup": {
+                    "one_time_keyboard": true,
+                    "keyboard": [[{
+                        text: "My phone number",
                         request_contact: true
-                    },
-                    {
-                        text: "Cancel"
-                    }],
-                ],
-                force_reply: true
-            }
-        });
-
-        // await ctx.telegram.sendMessage(ctx.chat.id, welcomeMessage, {
-        //     // parse_mode: "Markdown",
-        //     reply_markup: {
-        //         keyboard: [
-        //             [{
-        //                 text: "Share Phone Number",
-        //                 request_contact: true
-        //             },
-        //             {
-        //                 text: "Cancel",
-        //             }],
-        //         ],
-        //         // force_reply: true
-        //     }
-        // })
-
-        // On sharing own number by clicking button, we will not receive a vcard.
-        // However, on sending a random contact from contact list, we will receive a vcard.
-        this.bot.on("contact", async (ctx: Context) => {
-            const msg = ctx.message;
-            // console.log('vcard:', ctx.update.message?.contact["vcard"])
-            if (ctx.update.message?.contact["vcard"]) {
-                ctx.reply('Please share your own contact by clicking the share contact button. You need not attach a contact.')
-            } else {
-                logger.log(`first name: ${msg.contact.first_name}, contact: ${msg.contact.phone_number}, chat-id: ${msg.chat.id}, user-id: ${ctx.from.id}`);
-                const user = await this.profileService.getUserByPhone(msg.contact.phone_number, false);
-                if (user) {
-                    ctx.reply(`Thank you ${msg.contact.first_name} for confirming your number: ${msg.contact.phone_number}`);
-                    const telegramProfile = await this.profileService.getORCreateTelegramProfile(msg.contact.phone_number, ctx.from.id, msg.chat.id);
-                } else {
-                    ctx.reply(`You are not registered with us! Please visit www.wouldbee.com to register.`);
+                    }], ["Cancel"]]
                 }
+            };
+
+            let payload: string;
+            try {
+                // this can be registered user's public id.
+                // TODO: how to use payload to make the bot better
+                payload = msg.text.split(' ')[1];
             }
+            catch (err) { }
 
-            // console.log('from:', ctx.from, 'update-type:', ctx.updateType, 'update-sub-type:', ctx.updateSubTypes, 'update:', ctx.update, 'callback-query:', ctx.callbackQuery, 'chosen-inline-result:', ctx.chosenInlineResult, 'inlineQuery:', ctx.inlineQuery);
-        })
+            const welcomeMessage = 'Welcome to Would Bee! Please share the phone number you registered with to continue.'
+
+            await ctx.telegram.sendMessage(ctx.chat.id, welcomeMessage, {
+                parse_mode: "Markdown",
+                reply_markup: {
+                    one_time_keyboard: true,
+                    keyboard: [
+                        [{
+                            text: "Share Phone Number",
+                            request_contact: true
+                        },
+                        {
+                            text: "Cancel"
+                        }],
+                    ],
+                    force_reply: true
+                }
+            });
+
+            this.bot.on("contact", async (ctx: Context) => {
+                // console.log('vcard:', ctx.update.message?.contact["vcard"])
+                if (ctx.update.message?.contact["vcard"]) {
+                    ctx.reply('Please share your own contact by clicking the share contact button. Do not attach a contact.')
+                } else {
+                    logger.log(`first name: ${msg.contact.first_name}, contact: ${msg.contact.phone_number}, chat-id: ${msg.chat.id}, user-id: ${ctx.from.id}`);
+
+                    const user = await this.profileService.getUserByPhone(msg.contact.phone_number, false);
+
+                    if (user) {
+                        ctx.reply(`Thank you ${msg.contact.first_name} for confirming your number: ${msg.contact.phone_number}`);
+                        const telegramProfile = await this.profileService.getORCreateTelegramProfile(msg.contact.phone_number, ctx.from.id, msg.chat.id);
+                    } else {
+                        ctx.reply(`You are not registered with us! 
+                    Please visit www.wouldbee.com to register.`);
+                    }
+                }
+            });
+        }
+
     }
-
-    // @On('contact')
-    // OnContact(ctx: Context) {
-    //     const msg = ctx.message;
-    //     ctx.reply(`You sent a contact: ${msg.contact.phone_number}`)
-    // }
 
     @Help()
     help(ctx: Context) {
@@ -197,6 +189,10 @@ export class TelegramService {
     @Hears('hi')
     hears(ctx: Context) {
         ctx.reply('Hey there');
+    }
+
+    feedback(ctx: Context) {
+        ctx.reply('How are you liking our service? Please give us the feedback below')
     }
 
 }
