@@ -31,7 +31,7 @@ export class Country {
 
     // can't be unique as a few are empty (two empties are equal so not unique)
     @MaxLength(phoneCodeMaxLength)
-    @Column("varchar", { length: phoneCodeMaxLength })
+    @Column("varchar", { length: phoneCodeMaxLength, nullable: false })
     phoneCode: string
 
     @OneToMany(type => State, state => state.country, { eager: false })

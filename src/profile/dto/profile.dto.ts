@@ -1,65 +1,60 @@
-import { IsNotEmpty, IsString, MinLength, MaxLength, Matches, IsNumberString, Length, IsEmail, IsInt, IsOptional, Min, Max, IsPositive } from 'class-validator';
+import { IsNotEmpty, IsString, MinLength, MaxLength, Matches, IsNumberString, Length, IsEmail, IsInt, IsOptional, Min, Max, IsPositive, IsUUID, IsNumber } from 'class-validator';
 import { AnnualIncome, Gender, Religion } from 'src/common/enum';
 import { nameMaxLength, nameMinLength } from 'src/common/field-length';
 
-export class UserDto {
-    // TODO: apply email validation
-    @IsNotEmpty()
+export class CreateUserDto {
+    @IsOptional()
     @IsEmail()
-    email: string;
+    email?: string;
 
-    @IsNotEmpty()
-    @Length(4, 15)
-    @IsNumberString()
-    phone: string;
-}
-
-export class RegisterDto {
-    // TODO: apply email validation
-    @IsNotEmpty()
-    @IsEmail()
-    email: string;
-
-    @Length(2)
-    @IsString()
+    @IsOptional()
+    @IsPositive()
+    @IsNumber()
     countryId: number;
 
     @IsNotEmpty()
     @Length(4, 15)
     @IsNumberString()
     phone: string;
+}
+
+export class CreateProfileDto {
+    // TODO: apply email validation
+    @IsNotEmpty()
+    @IsUUID(4)
+    userId?: string;
 
     @IsNotEmpty()
     @Length(nameMinLength, nameMaxLength)
     @IsString()
-    name: string;
+    name?: string;
 
     @IsNotEmpty()
     gender: Gender;
 
     @IsNotEmpty()
-    dob: Date;
+    dob?: Date;
 
     @IsNotEmpty()
     religion: Religion;
 
     @IsNotEmpty()
     @IsInt()
-    casteId: number;
+    casteId?: number;
 
     @IsNotEmpty()
-    annualIncome: AnnualIncome;
+    annualIncome?: AnnualIncome;
 
     @IsNotEmpty()
-    cityId: number;
+    cityId?: number;
 }
 
 
 export class PartnerPreferenceDto {
 
-    @IsPositive()
-    @IsInt()
-    id: number;
+    @IsNotEmpty()
+    @IsUUID(4)
+    id: string;
 
     @IsOptional()
     @Min(18)

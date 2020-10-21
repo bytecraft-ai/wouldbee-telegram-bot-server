@@ -4,7 +4,7 @@ import { Gender, Religion } from 'src/common/enum';
 import { getAgeInYearsFromDOB } from 'src/common/util';
 import { Repository } from 'typeorm';
 import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
-import { RegisterDto, PartnerPreferenceDto, UserDto } from './dto/profile.dto';
+import { PartnerPreferenceDto, CreateUserDto, CreateProfileDto } from './dto/profile.dto';
 import { Caste } from './entities/caste.entity';
 import { City } from './entities/city.entity';
 import { Country } from './entities/country.entity';
@@ -14,6 +14,8 @@ import { State } from './entities/state.entity';
 import { User } from './entities/user.entity';
 import { GetCityOptions, GetStateOptions } from './profile.interface';
 import { createHash, createHmac } from 'crypto';
+import { TelegramProfile } from './entities/telegram-profile.entity';
+import { SharedProfile } from './entities/shared-profiles.entity';
 
 const logger = new Logger('ProfileService');
 
@@ -22,6 +24,8 @@ export class ProfileService {
     constructor(
         @InjectRepository(User) private userRepository: Repository<User>,
         @InjectRepository(Profile) private profileRepository: Repository<Profile>,
+        @InjectRepository(TelegramProfile) private telegramRepository: Repository<TelegramProfile>,
+        @InjectRepository(SharedProfile) private sharedProfileRepository: Repository<SharedProfile>,
         @InjectRepository(PartnerPreference) private prefRepository: Repository<PartnerPreference>,
         @InjectRepository(Caste) private casteRepository: Repository<Caste>,
         @InjectRepository(City) private cityRepository: Repository<City>,
@@ -62,7 +66,34 @@ export class ProfileService {
     }
 
 
-    async getUser(id: string, throwOnFail = false): Promise<User | undefined> {
+    async getUsers(): Promise<User[] | undefined> {
+        return this.userRepository.find();
+    }
+
+
+    async getUserByPhone(phone: string, throwOnFail = true): Promise<User | undefined> {
+        // const user = await this.userRepository.findOne({
+        //     where: { phone: phone }
+        // });
+        // if (throwOnFail && !user) {
+        //     throw new NotFoundException(`user with phone: ${phone} not found!`);
+        // }
+        // return user;
+
+        const user = await this.userRepository.createQueryBuilder("user")
+            .leftJoinAndSelect("user.country", 'country')
+            .where("country.phoneCode || user.phone LIKE :phone",
+                { phone }).getOne();
+        // .orWhere("user.phone LIKE :phone",
+        //     { phone: `phone` }).getOne();
+        if (throwOnFail && !user) {
+            throw new NotFoundException(`user with phone: ${phone} not found!`);
+        }
+        return user;
+    }
+
+
+    async getUser(id: string, throwOnFail = true): Promise<User | undefined> {
         const user = await this.userRepository.findOne(id);
         if (throwOnFail && !user) {
             throw new NotFoundException('user not found!');
@@ -70,72 +101,86 @@ export class ProfileService {
         return user;
     }
 
-    async createUser(userInput: UserDto): Promise<User | undefined> {
-        const { email, phone } = userInput;
-        let user = await this.userRepository.findOne({
-            where: {
-                $or: [
-                    { email: email },
-                    { phone: phone }
-                ]
-            }
 
+    async createUser(userInput: CreateUserDto): Promise<User | undefined> {
+        const { email, phone, countryId } = userInput;
+
+        let country: Country;
+        if (!countryId) {
+            country = await this.getCountryByName('India', true);
+        } else {
+            country = await this.getCountry(countryId, true);
+        }
+
+        console.log('country:', country);
+
+        let user = await this.userRepository.findOne({
+            where: [
+                { email: email },
+                { phone: phone }
+            ]
         });
         if (user) {
             throw new ConflictException('user with email/phone already exists!');
         }
+
         user = this.userRepository.create({
             email,
+            country,
             phone
         });
         return this.userRepository.save(user);
     }
 
 
-    async createProfile(registerInput: RegisterDto) {
-        const { email, countryId, phone, name, gender, dob, religion, casteId, annualIncome, cityId } = registerInput;
-        let profile = await this.userRepository.findOne({
-            where: [
-                { email },
-                { phone }
-            ]
-        });
+    async createProfile(profileDto: CreateProfileDto): Promise<Profile | undefined> {
+        const { userId, name, gender, dob, religion, casteId, annualIncome, cityId } = profileDto;
+        let profile = await this.profileRepository.findOne(userId);
         if (profile) {
             throw new
-                ConflictException('profile with email/phone already exists!');
+                ConflictException('profile already exists!');
         }
-
         const caste = await this.getCaste(casteId, true);
         const city = await this.getCity(cityId, { throwOnFail: true });
-        const country = await this.getCountry(countryId, true);
-
         profile = this.profileRepository.create({
-            email,
-            // country,
-            phone,
+            id: userId,
             name,
             gender,
             dob,
             religion,
-            annualIncome,
             caste,
-            city,
-        });
+            annualIncome,
+            city
+        })
         return this.profileRepository.save(profile);
     }
 
 
-    async getProfile(id: number, throwOnFail = false): Promise<Profile> {
+    async getProfiles(): Promise<Profile[] | undefined> {
+        return this.profileRepository.find();
+    }
+
+
+    async getProfile(id: string, throwOnFail = true): Promise<Profile | undefined> {
         const profile = await this.profileRepository.findOne(id);
         if (throwOnFail && !profile) {
-            throw new NotFoundException("Profile not found");
+            throw new NotFoundException(`Profile with id: ${id} not found`);
         }
         return profile;
     }
 
 
-    async getPreference(id: number): Promise<PartnerPreference> {
-        return this.prefRepository.findOne(id);
+    async getPreference(id: string, throwOnFail = true): Promise<PartnerPreference | undefined> {
+        const preference = await this.prefRepository.findOne(id);
+        if (throwOnFail && !preference) {
+            throw new NotFoundException(`Preference with id: ${id} not found`);
+        }
+        return preference;
+    }
+
+
+    async getPreferences(): Promise<PartnerPreference[] | undefined> {
+        return this.prefRepository.find();
     }
 
 
@@ -196,9 +241,44 @@ export class ProfileService {
         pref.minimumIncome = minimumIncome;
         pref.profile = profile;
 
-        return this.prefRepository.save(pref)
+        pref = await this.prefRepository.save(pref)
+
+        logger.log(`saved preference for profile: ${JSON.stringify(profile)}`);
+        logger.log(JSON.stringify(pref));
+
+        return pref;
     }
 
+
+    async getTelegramProfile(userId: string, throwOnFail = true): Promise<TelegramProfile | undefined> {
+        const telegramProfile = await this.telegramRepository.findOne(userId);
+        if (throwOnFail && !telegramProfile) {
+            throw new NotFoundException(`Telegram profile with id: ${userId} not found!`);
+        }
+        return telegramProfile;
+    }
+
+
+    async getORCreateTelegramProfile(phone: string, telegramUserId: number, telegramChatId: number): Promise<TelegramProfile | undefined> {
+        const user = await this.getUserByPhone(phone, true);
+        logger.log(`getORCreateTelegramProfile(), user:`, JSON.stringify(user));
+
+        if (!telegramUserId || !telegramChatId) {
+            throw new BadRequestException('Requires non empty telegramUserId and chatId');
+        }
+        let telegramProfile = await this.getTelegramProfile(user.id, false);
+        if (!telegramProfile) {
+            telegramProfile = this.telegramRepository.create({
+                id: user.id,
+                telegramUserId,
+                telegramChatId
+            });
+            telegramProfile = await this.telegramRepository.save(telegramProfile);
+            logger.log(`Created telegram profile for user`);
+        }
+        logger.log(`returning telegram profile:`, JSON.stringify(telegramProfile));
+        return telegramProfile;
+    }
 
 
     async seedCaste() {
@@ -352,12 +432,16 @@ export class ProfileService {
     }
 
 
-    async getCountryByName(countryName: string): Promise<Country | undefined> {
+    async getCountryByName(countryName: string, throwOnFail = true): Promise<Country | undefined> {
         if (!countryName) throw new BadRequestException("Empty or null countryName")
         // return this.countryRepository.findOne({ name: countryName });
-        return this.countryRepository.createQueryBuilder("country")
+        const country = this.countryRepository.createQueryBuilder("country")
             .where("country.name ILIKE :countryName", { countryName: countryName })
             .getOne();
+        if (throwOnFail && !country) {
+            throw new NotFoundException(`Country with name: ${countryName} not found`);
+        }
+        return country;
     }
 
 

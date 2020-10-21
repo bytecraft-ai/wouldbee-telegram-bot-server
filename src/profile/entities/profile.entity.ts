@@ -8,6 +8,7 @@ import {
     DeleteDateColumn,
     JoinColumn,
     OneToOne,
+    OneToMany,
 } from 'typeorm';
 import {
     Gender,
@@ -20,6 +21,8 @@ import { nameMaxLength, nameMinLength } from 'src/common/field-length';
 import { Caste } from './caste.entity';
 import { City } from './city.entity';
 import { PartnerPreference } from './partner-preference.entity';
+import { User } from './user.entity';
+import { SharedProfile } from './shared-profiles.entity';
 
 // TODO: implement table indexing on important columns
 
@@ -27,6 +30,20 @@ import { PartnerPreference } from './partner-preference.entity';
 export class Profile {
     @PrimaryGeneratedColumn("uuid")
     id: string;
+
+    @OneToOne(
+        type => User,
+        user => user.profile,
+        {
+            // Can't use as part of composite primary key without this.
+            nullable: false,
+        }
+    )
+    @JoinColumn({
+        name: "id",
+        referencedColumnName: "id",
+    })
+    user: User;
 
     @CreateDateColumn()
     createdOn: Date;
@@ -88,6 +105,13 @@ export class Profile {
 
     @OneToOne(type => PartnerPreference)
     partnerPreference: PartnerPreference;
+
+    @OneToMany(
+        type => SharedProfile,
+        sharedProfile => sharedProfile.sharedProfile,
+        { nullable: true }
+    )
+    sharedWithUsers: SharedProfile[];
 
     // @Column({ default: () => `now()` })
     // lastSeen: Date;
