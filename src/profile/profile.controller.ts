@@ -1,4 +1,4 @@
-import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Render, Param, Logger, UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Render, Param, Logger, UseInterceptors, UploadedFiles, Query, DefaultValuePipe, ParseIntPipe, ParseArrayPipe } from '@nestjs/common';
 import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
 import { CreateProfileDto, CreateUserDto, FileUploadDto, PartnerPreferenceDto, RegistrationDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
@@ -10,7 +10,7 @@ const logger = new Logger('ProfileController');
 
 
 @Controller('common')
-@UsePipes(ValidationPipe)
+// @UsePipes(ValidationPipe)
 export class CommonController {
     constructor(private readonly profileService: ProfileService) { }
 
@@ -40,8 +40,19 @@ export class CommonController {
 
 
     @Get('/city')
-    async getCities(@Body() getCitiesDto: GetCitiesDto) {
-        return this.profileService.getCities();
+    async getCities(
+        @Query() getCitiesDto: GetCitiesDto,
+        @Query('stateIds', new DefaultValuePipe([]), new ParseArrayPipe({ items: Number, separator: ',' }))
+        stateIds: number[],
+        @Query('countryIds', new DefaultValuePipe([]), new ParseArrayPipe({ items: Number, separator: ',' }))
+        countryIds: number[],
+    ) {
+        return this.profileService.getCitiesLike(getCitiesDto?.like, {
+            countryIds: countryIds,
+            stateIds: stateIds,
+            take: getCitiesDto?.take,
+            skip: getCitiesDto?.skip
+        });
     }
 
 
@@ -52,19 +63,25 @@ export class CommonController {
 
 
     @Get('/state')
-    async getStates(@Body() getStatesDto: GetStatesDto) {
-        return this.profileService.getCastes();
+    async getStates(
+        @Query() getStatesDto: GetStatesDto,
+        @Query('countryIds', new DefaultValuePipe([]), new ParseArrayPipe({ items: Number, separator: ',' }))
+        countryIds: number[],
+    ) {
+        console.log('countryIds:', countryIds);
+        return this.profileService.getStatesLike(getStatesDto?.like, countryIds, getStatesDto?.skip, getStatesDto?.take);
     }
 
 
     @Get('/state/:id')
     async getState(@Param('id') id: number) {
-        return this.profileService.getCaste(id, true);
+        return this.profileService.getState(id, { throwOnFail: true });
     }
 
 
     @Get('/country')
-    async getCountries(@Body() getCountriesDto: GetCountriesDto) {
+    async getCountries(@Query() getCountriesDto: GetCountriesDto) {
+        logger.log('getCountries()', JSON.stringify(getCountriesDto));
         return this.profileService.getCountriesLike(getCountriesDto?.like, getCountriesDto?.skip, getCountriesDto?.take);
 
     }

@@ -507,7 +507,7 @@ export class ProfileService {
         }
 
         if (throwOnFail && !state) {
-            throw new NotFoundException(`City with id: {cityId} not found`);
+            throw new NotFoundException(`State with id: ${stateId} not found`);
         }
 
         return state;
@@ -519,7 +519,7 @@ export class ProfileService {
         const query = this.stateRepository.createQueryBuilder("state");
         let whereIsSet: boolean = false
 
-        if (pattern !== null && pattern.trim() !== "") {
+        if (pattern) {
             query.where("state.name ILIKE :pattern", { pattern: `%${pattern}%` });
             whereIsSet = true;
         }
@@ -572,7 +572,7 @@ export class ProfileService {
         const query = this.countryRepository.createQueryBuilder("country");
         // let whereIsSet: boolean = false
 
-        if (pattern !== null && pattern.trim() !== "") {
+        if (pattern) {
             query.where("country.name ILIKE :pattern", { pattern: `%${pattern}%` });
             // whereIsSet = true;
         }
@@ -637,7 +637,7 @@ export class ProfileService {
         let query = this.cityRepository.createQueryBuilder("city");
         let whereIsSet: boolean = false
 
-        if (pattern !== null && pattern.trim() !== "") {
+        if (pattern) {
             query = query.where("city.name ILIKE :pattern", { pattern: `${pattern}%` });
             whereIsSet = true;
         }
@@ -689,7 +689,7 @@ export class ProfileService {
         });
 
         if (throwOnFail && !city) {
-            throw new NotFoundException(`City with id: {cityId} not found`);
+            throw new NotFoundException(`City with id: ${cityId} not found`);
         }
 
         return city;

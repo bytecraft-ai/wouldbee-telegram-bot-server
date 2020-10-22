@@ -7,7 +7,7 @@ import { get } from 'config';
 require('dotenv').config();
 const serverConfig = get('server');
 
-import { Logger } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 
 import {
   initializeTransactionalContext,
@@ -30,6 +30,13 @@ async function bootstrap() {
   app.useStaticAssets(join(__dirname, '..', 'public'));
   app.setBaseViewsDir(join(__dirname, '..', 'views'));
   app.setViewEngine('hbs');
+
+  app.useGlobalPipes(new ValidationPipe({
+    transform: true,
+    // transformOptions: {
+    //   enableImplicitConversion: true
+    // }
+  }));
 
   await app.listen(process.env.SERVER_PORT || serverConfig.port);
   logger.log(`Application listening on port ${process.env.SERVER_PORT || serverConfig.port}`);
