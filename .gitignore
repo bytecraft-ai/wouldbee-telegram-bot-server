@@ -35,3 +35,8 @@ lerna-debug.log*
 
 # env
 .env
+
+uploads/
+*.pdf
+*.doc
+*.docx

@@ -18,6 +18,7 @@ import {
     session,
     Stage,
     BaseScene,
+    Command,
 } from 'nestjs-telegraf';
 import { ProfileService } from 'src/profile/profile.service';
 
@@ -172,7 +173,11 @@ export class TelegramService {
                 }
             });
         }
+    }
 
+    @Command('upload-bio')
+    uploadBio(ctx: Context) {
+        ctx.reply('Send me your bio-data');
     }
 
     @Help()

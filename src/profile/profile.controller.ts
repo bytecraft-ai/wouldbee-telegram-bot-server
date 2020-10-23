@@ -5,6 +5,8 @@ import { ProfileService } from './profile.service';
 import { User } from './entities/user.entity';
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { GetCitiesDto, GetCountriesDto, GetStatesDto } from './dto/location.dto';
+import { editFileName, imageOrDocFileFilter } from 'src/common/file-util';
+import { diskStorage } from 'multer';
 
 const logger = new Logger('ProfileController');
 
@@ -105,7 +107,25 @@ export class UserController {
     @UseInterceptors(FileFieldsInterceptor([
         { name: 'bioData', maxCount: 1 },
         { name: 'idProof', maxCount: 1 },
-    ]))
+    ], {
+        // dest: 'uploads/',
+        dest: '/tmp/wb-tg-uploads/',
+        storage: diskStorage({
+            destination: '/tmp/wb-tg-uploads/',
+            filename: editFileName,
+            //     function (req, file, cb) {
+            //     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+            //     cb(null, file.fieldname + '-' + uniqueSuffix)
+            // }
+        }),
+        fileFilter: imageOrDocFileFilter,
+        // limits: {
+        //     fields: 100,
+        //     fileSize: 5000000,       // ~ 5 MB
+        //     files: 2,
+        //     parts: 5000000
+        // }
+    }))
     async createUser(@Body() registerInput: CreateUserDto,
         @UploadedFiles() files): Promise<User> {
         logger.log('registerUser was hit with:', JSON.stringify(registerInput));

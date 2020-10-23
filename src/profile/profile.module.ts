@@ -12,9 +12,10 @@ import { User } from './entities/user.entity';
 import { TelegramProfile } from './entities/telegram-profile.entity';
 import { SharedProfile } from './entities/shared-profiles.entity';
 import { AwsServiceModule } from 'src/aws-service/aws-service.module';
+import { PassportModule } from '@nestjs/passport';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, User, TelegramProfile, SharedProfile]), AwsServiceModule],
+    imports: [TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, User, TelegramProfile, SharedProfile]), AwsServiceModule, PassportModule.register({ defaultStrategy: 'jwt' }),],
     providers: [ProfileService],
     controllers: [ProfileController, UserController, PreferenceController, CommonController],
     exports: [ProfileService]

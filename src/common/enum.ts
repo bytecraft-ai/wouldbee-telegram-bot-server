@@ -1,3 +1,10 @@
+export enum UserRole {
+    USER = 1,
+    ADMIN,
+    AGENT
+}
+
+
 export enum Gender {
     MALE = 1,
     FEMALE,

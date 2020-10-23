@@ -1,3 +1,6 @@
+export const passwordMinLength = 8;
+export const passwordMaxLength = 20;
+
 export const nameMinLength = 3;
 export const nameMaxLength = 100;
 
