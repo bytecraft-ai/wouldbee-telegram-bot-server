@@ -21,8 +21,10 @@ import { nameMaxLength, nameMinLength } from 'src/common/field-length';
 import { Caste } from './caste.entity';
 import { City } from './city.entity';
 import { PartnerPreference } from './partner-preference.entity';
-import { User } from './user.entity';
 import { SharedProfile } from './shared-profiles.entity';
+import { TelegramProfile } from './telegram-profile.entity';
+import { Language, MaritalStatus } from 'src/common/enum';
+// import { User } from './user.entity';
 
 // TODO: implement table indexing on important columns
 
@@ -32,8 +34,8 @@ export class Profile {
     id: string;
 
     @OneToOne(
-        type => User,
-        user => user.profile,
+        type => TelegramProfile,
+        telegramProfile => telegramProfile.profile,
         {
             // Can't use as part of composite primary key without this.
             nullable: false,
@@ -43,7 +45,7 @@ export class Profile {
         name: "id",
         referencedColumnName: "id",
     })
-    user: User;
+    telegramProfile: TelegramProfile;
 
     @CreateDateColumn()
     createdOn: Date;
@@ -54,8 +56,8 @@ export class Profile {
     @DeleteDateColumn()
     deletedOn?: Date;
 
-    @Column({ unique: true })
-    email: string;
+    // @Column({ unique: true })
+    // email: string;
 
     @Column("int")
     countryId: number;
@@ -103,22 +105,30 @@ export class Profile {
     @Column("smallint")
     annualIncome: AnnualIncome;
 
-    @Column({ nullable: true, length: 300 })
-    idProofUrl: string;
-
-    @Column({ nullable: true, length: 300 })
-    bioDataUrl: string;
-
-
     @OneToOne(type => PartnerPreference)
     partnerPreference: PartnerPreference;
 
+    // profile shared with other profiles
     @OneToMany(
         type => SharedProfile,
         sharedProfile => sharedProfile.sharedProfile,
         { nullable: true }
     )
-    sharedWithUsers: SharedProfile[];
+    sharedWithProfiles: SharedProfile[];
+
+    // profiles shared with this profile
+    @OneToMany(
+        type => SharedProfile,
+        sharedProfile => sharedProfile.sentToProfile,
+        { nullable: true }
+    )
+    sharedProfiles: SharedProfile[];
+
+    @Column("smallint", { nullable: true })
+    motherTongue?: Language;
+
+    @Column("smallint", { nullable: true })
+    maritalStatus?: MaritalStatus;
 
     // @Column({ default: () => `now()` })
     // lastSeen: Date;
@@ -126,21 +136,11 @@ export class Profile {
     // @Column("smallint", { nullable: true })
     // reasonForDeletion?: AccountDeletionReason;
 
-    // @Column("smallint")
-    // @Column({ type: "enum", enum: MaritalStatus })
-    // motherTongue: Language;
-
-    // @Column({ type: "enum", enum: MaritalStatus })
-    // @Column("smallint")
-    // maritalStatus: MaritalStatus;
-
-    // @Column("uuid", { unique: true, nullable: false })
-    // @Generated("uuid")
-    // publicId: string;
-
     // @Column({ unique: true, nullable: false })
     // sharableId?: string;
 
     // @Column({ unique: true, nullable: true })
     // notificationId?: string;
+
+
 }

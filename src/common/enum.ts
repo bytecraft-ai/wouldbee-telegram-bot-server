@@ -31,6 +31,42 @@ export enum MaritalStatus {
 }
 
 
+export enum Language {
+    ASSAMESE = 1, // 1
+    AWADHI,
+    BENGALI,
+    BHOJPURI,
+    BODO, // 5
+    DOGRI,
+    ENGLISH,
+    GARHWALI,
+    GUJARATI,
+    HARYANAVI,
+    HIMACHALI,
+    HINDI, // 12
+    KANNADA,
+    KASHMIRI,
+    KONKANI,
+    MAITHILI,
+    MALAYALAM,
+    MARATHI, // 18
+    MARWARI,
+    MEITEI,
+    NEPALI,
+    ODIA,
+    PUNJABI,
+    RAJASTHANI,
+    SANSKRIT, // 25
+    SANTALI,
+    SIKKIMESE,
+    SINDHI,
+    TAMIL,
+    TELUGU, // 30
+    URDU,
+    OTHER, // 38
+}
+
+
 export enum AccountDeletionReason {
     FOUND_MATCH_HERE = 1,
     FOUND_MATCH_ELSEWHERE_FAMILY,

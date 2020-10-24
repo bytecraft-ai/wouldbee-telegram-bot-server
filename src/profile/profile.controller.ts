@@ -2,7 +2,7 @@ import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Render, Param, L
 import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
 import { CreateProfileDto, CreateUserDto, FileUploadDto, PartnerPreferenceDto, RegistrationDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
-import { User } from './entities/user.entity';
+// import { User } from './entities/user.entity';
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { GetCitiesDto, GetCountriesDto, GetStatesDto } from './dto/location.dto';
 import { editFileName, imageOrDocFileFilter } from 'src/common/file-util';
@@ -97,79 +97,77 @@ export class CommonController {
 }
 
 
-@Controller('user')
-@UsePipes(ValidationPipe)
-export class UserController {
-    constructor(private readonly profileService: ProfileService) { }
+// @Controller('user')
+// @UsePipes(ValidationPipe)
+// export class UserController {
+//     constructor(private readonly profileService: ProfileService) { }
 
-    @Post('/')
-    // @Render('index')
-    @UseInterceptors(FileFieldsInterceptor([
-        { name: 'bioData', maxCount: 1 },
-        { name: 'idProof', maxCount: 1 },
-    ], {
-        // dest: 'uploads/',
-        dest: '/tmp/wb-tg-uploads/',
-        storage: diskStorage({
-            destination: '/tmp/wb-tg-uploads/',
-            filename: editFileName,
-            //     function (req, file, cb) {
-            //     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-            //     cb(null, file.fieldname + '-' + uniqueSuffix)
-            // }
-        }),
-        fileFilter: imageOrDocFileFilter,
-        // limits: {
-        //     fields: 100,
-        //     fileSize: 5000000,       // ~ 5 MB
-        //     files: 2,
-        //     parts: 5000000
-        // }
-    }))
-    async createUser(@Body() registerInput: CreateUserDto,
-        @UploadedFiles() files): Promise<User> {
-        logger.log('registerUser was hit with:', JSON.stringify(registerInput));
-        console.log('files:', files);
-        const user = await this.profileService.createUser(registerInput);
-        console.log('registered user:', user);
-        return user;
-    }
-
-
-    @Post('/register')
-    @UseInterceptors(FileFieldsInterceptor([
-        { name: 'bioData', maxCount: 1 },
-        { name: 'idProof', maxCount: 1 },
-    ]))
-    async register(@Body() registrationDto: RegistrationDto, @UploadedFiles() files) {
-        console.log(files);
-        const user = await this.profileService.register(registrationDto);
-    }
+//     @Post('/')
+//     // @Render('index')
+//     @UseInterceptors(FileFieldsInterceptor([
+//         { name: 'bioData', maxCount: 1 },
+//         { name: 'idProof', maxCount: 1 },
+//     ], {
+//         // dest: 'uploads/',
+//         dest: '/tmp/wb-tg-uploads/',
+//         storage: diskStorage({
+//             destination: '/tmp/wb-tg-uploads/',
+//             filename: editFileName,
+//             //     function (req, file, cb) {
+//             //     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+//             //     cb(null, file.fieldname + '-' + uniqueSuffix)
+//             // }
+//         }),
+//         fileFilter: imageOrDocFileFilter,
+//         // limits: {
+//         //     fields: 100,
+//         //     fileSize: 5000000,       // ~ 5 MB
+//         //     files: 2,
+//         //     parts: 5000000
+//         // }
+//     }))
+//     async createUser(@Body() registerInput: CreateUserDto,
+//         @UploadedFiles() files): Promise<User> {
+//         logger.log('registerUser was hit with:', JSON.stringify(registerInput));
+//         console.log('files:', files);
+//         const user = await this.profileService.createUser(registerInput);
+//         console.log('registered user:', user);
+//         return user;
+//     }
 
 
+// @Post('/register')
+// @UseInterceptors(FileFieldsInterceptor([
+//     { name: 'bioData', maxCount: 1 },
+//     { name: 'idProof', maxCount: 1 },
+// ]))
+// async register(@Body() registrationDto: RegistrationDto, @UploadedFiles() files) {
+//     console.log(files);
+//     const user = await this.profileService.register(registrationDto);
+// }
 
 
-    @Get('/')
-    async getUsers() {
-        console.log('get all users');
-        return this.profileService.getUsers();
-    }
+// @Get('/')
+// async getUsers() {
+//     console.log('get all users');
+//     return this.profileService.getUsers();
+// }
 
 
-    @Get('/find:phone')
-    async findUser(@Param('phone') phone: string) {
-        console.log('get user with phone', phone);
-        return this.profileService.getUserByPhone(phone);
-    }
+// @Get('/find:phone')
+// async findUser(@Param('phone') phone: string) {
+//     console.log('get user with phone', phone);
+//     return this.profileService.getUserByPhone(phone);
+// }
 
 
-    @Get(':id')
-    async getUser(@Param('id') id: string) {
-        console.log('get user with id', id);
-        return this.profileService.getUser(id);
-    }
+// @Get(':id')
+// async getUser(@Param('id') id: string) {
+//     console.log('get user with id', id);
+//     return this.profileService.getUser(id);
+// }
 
-}
+// }
 
 
 @Controller('profile')

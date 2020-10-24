@@ -1,6 +1,9 @@
 // import { LRUMap } from 'lru_map';
 import { Logger, BadRequestException } from '@nestjs/common';
-
+import request from 'request';
+import { createWriteStream } from 'fs';
+var url = require('url');
+var http = require('http');
 
 const logger = new Logger('util');
 
@@ -269,3 +272,64 @@ export function deDuplicateArray<T>(array: Array<T>): Array<T> {
     let _set = new Set<T>(array);
     return Array.from(_set);
 }
+
+
+export async function downloadFile(fileName: string, uri: string) {
+
+    const downloadDir = '/tmp/'
+
+    /* Create an empty file where we can save data */
+    let file = createWriteStream(downloadDir + fileName);
+
+    /* Using Promises so that we can use the ASYNC AWAIT syntax */
+    await new Promise((resolve, reject) => {
+        let stream = request({
+            /* Here you should specify the exact link to the file you are trying to download */
+            uri,
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8,ro;q=0.7,ru;q=0.6,la;q=0.5,pt;q=0.4,de;q=0.3',
+                'Cache-Control': 'max-age=0',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36'
+            },
+            /* GZIP true for most of the websites now, disable it if you don't need it */
+            gzip: true
+        })
+            .pipe(file)
+            .on('finish', () => {
+                console.log(`The file is finished downloading.`);
+                resolve();
+            })
+            .on('error', (error) => {
+                reject(error);
+            })
+    })
+        .catch(error => {
+            console.log(`Could not download file: ${error}`);
+        });
+}
+
+
+export function download_file_httpget(file_url: string) {
+    const DOWNLOAD_DIR = '/tmp/'
+    var options = {
+        host: url.parse(file_url).host,
+        port: 80,
+        path: url.parse(file_url).pathname
+    };
+
+    var file_name = url.parse(file_url).pathname.split('/').pop();
+    var file = createWriteStream(DOWNLOAD_DIR + file_name);
+
+    http.get(options, function (res) {
+        res.on('data', function (data) {
+            file.write(data);
+        }).on('end', function () {
+            file.end();
+            console.log(file_name + ' downloaded to ' + DOWNLOAD_DIR);
+        });
+    });
+};

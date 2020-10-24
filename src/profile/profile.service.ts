@@ -11,7 +11,7 @@ import { Country } from './entities/country.entity';
 import { PartnerPreference } from './entities/partner-preference.entity';
 import { Profile } from './entities/profile.entity';
 import { State } from './entities/state.entity';
-import { User } from './entities/user.entity';
+// import { User } from './entities/user.entity';
 import { GetCityOptions, GetStateOptions } from './profile.interface';
 import { createHash, createHmac } from 'crypto';
 import { TelegramProfile } from './entities/telegram-profile.entity';
@@ -26,7 +26,7 @@ const logger = new Logger('ProfileService');
 export class ProfileService {
     constructor(
         private readonly awsService: AwsService,
-        @InjectRepository(User) private userRepository: Repository<User>,
+        // @InjectRepository(User) private userRepository: Repository<User>,
         @InjectRepository(Profile) private profileRepository: Repository<Profile>,
         @InjectRepository(TelegramProfile) private telegramRepository: Repository<TelegramProfile>,
         @InjectRepository(SharedProfile) private sharedProfileRepository: Repository<SharedProfile>,
@@ -70,71 +70,71 @@ export class ProfileService {
     }
 
 
-    async getUsers(): Promise<User[] | undefined> {
-        return this.userRepository.find();
-    }
+    // async getUsers(): Promise<User[] | undefined> {
+    //     return this.userRepository.find();
+    // }
 
 
-    async getUserByPhone(phone: string, throwOnFail = true): Promise<User | undefined> {
-        // const user = await this.userRepository.findOne({
-        //     where: { phone: phone }
-        // });
-        // if (throwOnFail && !user) {
-        //     throw new NotFoundException(`user with phone: ${phone} not found!`);
-        // }
-        // return user;
+    // async getUserByPhone(phone: string, throwOnFail = true): Promise<User | undefined> {
+    //     // const user = await this.userRepository.findOne({
+    //     //     where: { phone: phone }
+    //     // });
+    //     // if (throwOnFail && !user) {
+    //     //     throw new NotFoundException(`user with phone: ${phone} not found!`);
+    //     // }
+    //     // return user;
 
-        const user = await this.userRepository.createQueryBuilder("user")
-            .leftJoinAndSelect("user.country", 'country')
-            .where("country.phoneCode || user.phone LIKE :phone",
-                { phone }).getOne();
-        // .orWhere("user.phone LIKE :phone",
-        //     { phone: `phone` }).getOne();
-        if (throwOnFail && !user) {
-            throw new NotFoundException(`user with phone: ${phone} not found!`);
-        }
-        return user;
-    }
-
-
-    async getUser(id: string, throwOnFail = true): Promise<User | undefined> {
-        const user = await this.userRepository.findOne(id);
-        if (throwOnFail && !user) {
-            throw new NotFoundException('user not found!');
-        }
-        return user;
-    }
+    //     const user = await this.userRepository.createQueryBuilder("user")
+    //         .leftJoinAndSelect("user.country", 'country')
+    //         .where("country.phoneCode || user.phone LIKE :phone",
+    //             { phone }).getOne();
+    //     // .orWhere("user.phone LIKE :phone",
+    //     //     { phone: `phone` }).getOne();
+    //     if (throwOnFail && !user) {
+    //         throw new NotFoundException(`user with phone: ${phone} not found!`);
+    //     }
+    //     return user;
+    // }
 
 
-    async createUser(userInput: CreateUserDto): Promise<User | undefined> {
-        const { email, phone, countryId } = userInput;
+    // async getUser(id: string, throwOnFail = true): Promise<User | undefined> {
+    //     const user = await this.userRepository.findOne(id);
+    //     if (throwOnFail && !user) {
+    //         throw new NotFoundException('user not found!');
+    //     }
+    //     return user;
+    // }
 
-        let country: Country;
-        if (!countryId) {
-            country = await this.getCountryByName('India', true);
-        } else {
-            country = await this.getCountry(countryId, true);
-        }
 
-        console.log('country:', country);
+    // async createUser(userInput: CreateUserDto): Promise<User | undefined> {
+    //     const { email, phone, countryId } = userInput;
 
-        let user = await this.userRepository.findOne({
-            where: [
-                { email: email },
-                { phone: phone }
-            ]
-        });
-        if (user) {
-            throw new ConflictException('user with email/phone already exists!');
-        }
+    //     let country: Country;
+    //     if (!countryId) {
+    //         country = await this.getCountryByName('India', true);
+    //     } else {
+    //         country = await this.getCountry(countryId, true);
+    //     }
 
-        user = this.userRepository.create({
-            email,
-            country,
-            phone
-        });
-        return this.userRepository.save(user);
-    }
+    //     console.log('country:', country);
+
+    //     let user = await this.userRepository.findOne({
+    //         where: [
+    //             { email: email },
+    //             { phone: phone }
+    //         ]
+    //     });
+    //     if (user) {
+    //         throw new ConflictException('user with email/phone already exists!');
+    //     }
+
+    //     user = this.userRepository.create({
+    //         email,
+    //         country,
+    //         phone
+    //     });
+    //     return this.userRepository.save(user);
+    // }
 
 
     async createProfile(profileDto: CreateProfileDto): Promise<Profile | undefined> {
@@ -254,49 +254,49 @@ export class ProfileService {
     }
 
 
-    @Transactional()
-    async register(rDto: RegistrationDto): Promise<User> {
-        // set up transaction
-        let user: User;
-        try {
-            const userInput: CreateUserDto = {
-                email: rDto?.email,
-                countryId: rDto?.countryId,
-                phone: rDto.phone
-            };
-            user = await this.createUser(userInput);
+    // @Transactional()
+    // async register(rDto: RegistrationDto): Promise<User> {
+    //     // set up transaction
+    //     let user: User;
+    //     try {
+    //         const userInput: CreateUserDto = {
+    //             email: rDto?.email,
+    //             countryId: rDto?.countryId,
+    //             phone: rDto.phone
+    //         };
+    //         user = await this.createUser(userInput);
 
-            const profileInput: CreateProfileDto = {
-                userId: user.id,
-                name: rDto.name,
-                gender: rDto.gender,
-                dob: rDto.dob,
-                religion: rDto.religion,
-                casteId: rDto.casteId,
-                annualIncome: rDto.annualIncome,
-                cityId: rDto.cityId
-            };
-            const profile = await this.createProfile(profileInput);
+    //         const profileInput: CreateProfileDto = {
+    //             userId: user.id,
+    //             name: rDto.name,
+    //             gender: rDto.gender,
+    //             dob: rDto.dob,
+    //             religion: rDto.religion,
+    //             casteId: rDto.casteId,
+    //             annualIncome: rDto.annualIncome,
+    //             cityId: rDto.cityId
+    //         };
+    //         const profile = await this.createProfile(profileInput);
 
-            const preferenceInput: PartnerPreferenceDto = {
-                id: user.id,
-                minAge: rDto?.minAge,
-                maxAge: rDto?.maxAge,
-                religions: rDto?.religions,
-                minimumIncome: rDto?.minimumIncome,
-                cityIds: rDto?.cityIds,
-                stateIds: rDto?.stateIds,
-                countryIds: rDto?.countryIds,
+    //         const preferenceInput: PartnerPreferenceDto = {
+    //             id: user.id,
+    //             minAge: rDto?.minAge,
+    //             maxAge: rDto?.maxAge,
+    //             religions: rDto?.religions,
+    //             minimumIncome: rDto?.minimumIncome,
+    //             cityIds: rDto?.cityIds,
+    //             stateIds: rDto?.stateIds,
+    //             countryIds: rDto?.countryIds,
 
-            }
-            const preference = await this.savePartnerPreference(preferenceInput);
-        }
-        catch (error) {
-            logger.error(`ERROR: registration failed! Input: ${JSON.stringify(rDto)} \nError: ${error}`);
-            throw error;
-        }
-        return user;
-    }
+    //         }
+    //         const preference = await this.savePartnerPreference(preferenceInput);
+    //     }
+    //     catch (error) {
+    //         logger.error(`ERROR: registration failed! Input: ${JSON.stringify(rDto)} \nError: ${error}`);
+    //         throw error;
+    //     }
+    //     return user;
+    // }
 
 
     async getTelegramProfileById(userId: string, throwOnFail = true): Promise<TelegramProfile | undefined> {
@@ -330,26 +330,26 @@ export class ProfileService {
     }
 
 
-    async getORCreateTelegramProfile(phone: string, telegramUserId: number, telegramChatId: number): Promise<TelegramProfile | undefined> {
-        const user = await this.getUserByPhone(phone, true);
-        logger.log(`getORCreateTelegramProfile(), user:`, JSON.stringify(user));
+    // async getORCreateTelegramProfile(phone: string, telegramUserId: number, telegramChatId: number): Promise<TelegramProfile | undefined> {
+    //     // const user = await this.getUserByPhone(phone, true);
+    //     logger.log(`getORCreateTelegramProfile(), user:`, JSON.stringify(user));
 
-        if (!telegramUserId || !telegramChatId) {
-            throw new BadRequestException('Requires non empty telegramUserId and chatId');
-        }
-        let telegramProfile = await this.getTelegramProfileById(user.id, false);
-        if (!telegramProfile) {
-            telegramProfile = this.telegramRepository.create({
-                id: user.id,
-                telegramUserId,
-                telegramChatId
-            });
-            telegramProfile = await this.telegramRepository.save(telegramProfile);
-            logger.log(`Created telegram profile for user`);
-        }
-        logger.log(`returning telegram profile:`, JSON.stringify(telegramProfile));
-        return telegramProfile;
-    }
+    //     if (!telegramUserId || !telegramChatId) {
+    //         throw new BadRequestException('Requires non empty telegramUserId and chatId');
+    //     }
+    //     let telegramProfile = await this.getTelegramProfileById(user.id, false);
+    //     if (!telegramProfile) {
+    //         telegramProfile = this.telegramRepository.create({
+    //             id: user.id,
+    //             telegramUserId,
+    //             telegramChatId
+    //         });
+    //         telegramProfile = await this.telegramRepository.save(telegramProfile);
+    //         logger.log(`Created telegram profile for user`);
+    //     }
+    //     logger.log(`returning telegram profile:`, JSON.stringify(telegramProfile));
+    //     return telegramProfile;
+    // }
 
 
     async generateS3SignedURLs(profileId: string,

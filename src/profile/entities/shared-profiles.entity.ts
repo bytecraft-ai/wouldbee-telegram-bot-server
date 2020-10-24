@@ -8,7 +8,7 @@ import {
     ManyToOne,
 } from 'typeorm';
 import { Profile } from './profile.entity';
-import { User } from './user.entity';
+// import { User } from './user.entity';
 
 @Entity()
 export class SharedProfile {
@@ -28,9 +28,9 @@ export class SharedProfile {
 
     // @PrimaryColumn()
     @Column()
-    sentToUserId: string;
+    sentToProfileId: string;
 
-    @ManyToOne(type => User, { eager: true })
-    @JoinColumn({ name: "sentToUserId" })
-    sentTo: User;
+    @ManyToOne(type => Profile, { eager: true })
+    @JoinColumn({ name: "sentToProfileId" })
+    sentToProfile: Profile;
 }
