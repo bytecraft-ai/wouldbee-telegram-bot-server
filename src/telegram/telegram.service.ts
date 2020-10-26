@@ -104,13 +104,12 @@ export class TelegramService {
                 if (telegramProfile) {
                     await ctx.reply(`You are already registered! If you'd like to update your profile picture or bio, you can use respective commands. To see the list of all available commands, use /help command.`);
 
-                    ctx.scene.leave();
+                    return ctx.scene.leave();
 
                     /**
                      * TODO:
                      * Check if user is registering because of earlier failure at bio-data upload or picture upload. If so, redirect at the appropriate step and skip the steps before that.
                      */
-                    return;
                 }
 
                 // Step-1 :: Ask for Phone number.
@@ -151,13 +150,14 @@ export class TelegramService {
 
                         try {
                             const telegramProfile = await this.profileService.createTelegramProfile(msg.chat.id, ctx.from.id, msg.contact.phone_number);
+
                             console.log('Created Telegram Profile:', telegramProfile);
                             ctx.wizard.state.data.telegramProfile = telegramProfile;
                         }
                         catch (error) {
                             logger.error('Could not create telegram profile. Error', error);
                             await ctx.reply("Some error occurred. Please try again later by using /upload_bio command!");
-                            ctx.scene.leave();
+                            return ctx.scene.leave();
                         }
 
                         await ctx.reply(`Thank you ${msg.contact.first_name} for sharing your phone number: ${msg.contact.phone_number}`);
@@ -229,10 +229,11 @@ export class TelegramService {
                             await downloadFile(link, fileName);
 
                             await this.profileService.uploadDocument(ctx.from.id, fileName, document.mime_type, TypeOfDocument.BIO_DATA, document.file_id);
+
                         } catch (error) {
                             logger.error("Could not download/upload the bio-data. Error:", error);
                             await ctx.reply("Some error occurred. Please try again later!");
-                            ctx.scene.leave();
+                            return ctx.scene.leave();
                         }
 
                         await ctx.reply(`Success! Your bio-data has been saved! You can update it anytime using the /upload_bio command.
@@ -304,7 +305,7 @@ export class TelegramService {
                     } catch (error) {
                         logger.error("Could not download/upload the bio-data. Error:", error);
                         await ctx.reply("Some error occurred. Please try again later!");
-                        ctx.scene.leave();
+                        return ctx.scene.leave();
                     }
 
                     await ctx.reply(`Success! Your profile picture has been saved! You can update it anytime using the /upload_picture command. Note that your picture will be manually verified before being set to your matches.`);
@@ -352,7 +353,7 @@ export class TelegramService {
                     } catch (error) {
                         logger.error("Could not download/upload the bio-data. Error:", error);
                         await ctx.reply("Some error occurred. Please try again later!");
-                        ctx.scene.leave();
+                        return ctx.scene.leave();
                     }
 
                     await ctx.reply(`Success! Your profile picture has been saved! You can update it anytime using the /upload_picture command. Note that your picture will be manually verified before being set to your matches.`);
@@ -478,68 +479,21 @@ export class TelegramService {
         ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
         if (this.doesProfileExist(ctx)) {
-            ctx.reply('Welcome back! Please use /help command to see how you can interact with me.')
+            await ctx.reply('Welcome back! Please use /help command to see how you can interact with me.')
         } else {
-            // var option = {
-            //     "parse_mode": "Markdown",
-            //     "reply_markup": {
-            //         "one_time_keyboard": true,
-            //         "keyboard": [[{
-            //             text: "My phone number",
-            //             request_contact: true
-            //         }], ["Cancel"]]
-            //     }
-            // };
-
-            // let payload: string;
-            // try {
-            //     // this can be registered user's public id.
-            //     // TODO: how to use payload to make the bot better
-            //     payload = msg.text.split(' ')[1];
-            // }
-            // catch (err) { }
-
-            await ctx.telegram.sendMessage(ctx.chat.id, welcomeMessage, {
-                parse_mode: "Markdown",
-                reply_markup: {
-                    one_time_keyboard: true,
-                    keyboard: [
-                        [{
-                            text: "Share Phone Number",
-                            request_contact: true
-                        },
-                        {
-                            text: "Cancel"
-                        }],
-                    ],
-                    force_reply: true
-                }
-            });
-
-            this.bot.on("contact", async (ctx: Context) => {
-                // console.log('vcard:', ctx.update.message?.contact["vcard"])
-                if (ctx.update.message?.contact["vcard"]) {
-                    ctx.reply('Please share your phone number by clicking the button below.')
-                } else {
-                    logger.log(`Contact shared: First name: ${msg.contact.first_name}, contact: ${msg.contact.phone_number}, chat-id: ${msg.chat.id}, user-id: ${ctx.from.id}`);
-
-                    const telegramProfile = await this.profileService.createTelegramProfile(msg.chat.id, ctx.from.id, msg.contact.phone_number);
-                    await ctx.reply(`Thank you ${msg.contact.first_name} for sharing your phone number: ${msg.contact.phone_number}`);
-                    return;
-                }
-            });
+            await ctx.reply(welcomeMessage);
         }
     }
 
 
-    @Command('uploadbio')
+    @Command('upload_bio')
     async uploadBio(ctx: Context) {
 
         // TODO: Set context for accepting bio-data with a 1 minute timeout in session
 
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
-        await ctx.telegram.sendMessage(ctx.chat.id, `Ok. Send me your bio-data, preferably in PDF format. It should not be more than 2 MB in size. Don't include profile pictures in the bio-data. You can send profile picture separately using /uploadPicture command. Note that it will be verified manually before being sent to prospective matches.`);
+        await ctx.telegram.sendMessage(ctx.chat.id, `Ok. Send me your bio-data, preferably in PDF format. It should not be more than 2 MB in size. Don't include profile pictures in the bio-data. You can send profile picture separately using /upload_pic command. Note that it will be verified manually before being sent to prospective matches.`);
     }
 
 
@@ -609,7 +563,7 @@ export class TelegramService {
     }
 
 
-    @Command('uploadPicture')
+    @Command('upload_pic')
     async uploadPicture(ctx: Context) {
 
         // TODO: Set context for accepting profile picture with a 1 minute timeout in session

@@ -215,17 +215,26 @@ export class AwsService {
 
         let url: string;
         // Uploading files to the bucket
-        this.awsS3.upload(params, (err, data) => {
-            if (err) {
-                logger.error('Could not upload file to S3, error:', err);
-                throw err;
-            }
-            url = data.Location;
-            logger.log(`File: ${fileName} uploaded successfully. ${data.Location}`);
+        // this.awsS3.upload(params, (err, data) => {
+        //     if (err) {
+        //         logger.error('Could not upload file to S3, error:', err);
+        //         throw err;
+        //     }
+        //     url = data.Location;
+        //     logger.log(`File: ${fileName} uploaded successfully. ${data.Location}`);
+        // });
+
+        return new Promise((resolve, reject) => {
+            this.awsS3.upload(params, (err, data) => {
+                if (err) {
+                    logger.error('Could not upload file to S3, error:', err);
+                    reject(err);
+                }
+                url = data.Location;
+                logger.log(`File: ${fileName} uploaded successfully. ${data.Location}`);
+                resolve(url);
+            });
         });
-
-        return url;
-
     }
 
 
