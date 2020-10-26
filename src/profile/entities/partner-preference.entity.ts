@@ -7,7 +7,8 @@ import {
     ManyToMany,
     JoinTable,
     DeleteDateColumn,
-    PrimaryGeneratedColumn
+    PrimaryGeneratedColumn,
+    PrimaryColumn
 } from 'typeorm';
 import { IsOptional, IsString, Length, MaxLength } from 'class-validator';
 import { City } from './city.entity';

@@ -6,3 +6,10 @@ db:
 jwt:
   secret: 'move-it-to-env-variable'
   expiresIn: '7d'
+
+aws:
+  S3_BUCKET_PIC: 'tg-prod-pic'
+  S3_BUCKET_ID: 'tg-prod-id'
+  S3_BUCKET_BIO: 'tg-prod-bio'
+  S3_BUCKET_REPORT: 'tg-prod-report'
+  S3_REGION: 'ap-south-1'

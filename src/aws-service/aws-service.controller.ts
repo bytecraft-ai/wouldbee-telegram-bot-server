@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Logger, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
+import { TypeOfDocument } from 'src/common/enum';
 import { SendEmailDto, SendSmsDto } from './aws-service.dto';
 // import { Roles } from 'src/common/decorators/roles.decorator';
 // import { UserRole } from 'src/common/enum';
@@ -7,7 +8,7 @@ import { AwsService } from './aws-service.service';
 
 const logger = new Logger('AwsServiceController');
 
-@Controller('AwsService')
+@Controller('aws')
 @UsePipes(ValidationPipe)
 export class AwsServiceController {
 
@@ -25,4 +26,9 @@ export class AwsServiceController {
     // sendEmail(sendEmailDto: SendEmailDto) {
     //     return this.awsServiceService.sendEmail(sendEmailDto);
     // }
+
+    @Get('/upload')
+    upload() {
+        return this.awsServiceService.uploadFileToS3("abcdefghijklmopqrtuvwxyzabcdes", "biodatas/abcdefghijklmopqrtuvwxyzabcdes_bio.pdf", "application/pdf", TypeOfDocument.BIO_DATA)
+    }
 }

@@ -5,17 +5,42 @@ import {
     PrimaryGeneratedColumn,
     UpdateDateColumn,
     CreateDateColumn,
+    JoinColumn,
+    PrimaryColumn,
+    DeleteDateColumn,
 } from 'typeorm';
 import { State } from './state.entity';
 import { IsString, Length } from 'class-validator';
 import { fileNameMaxLength, fileNameMinLength, urlMaxLength } from 'src/common/field-length';
 import { Agent } from 'http';
-import { TypeOfDocument } from 'src/common/enum';
+import { TypeOfDocument, TypeOfIdProof } from 'src/common/enum';
+import { Profile } from './profile.entity';
+import { TelegramProfile } from './telegram-profile.entity';
 
 @Entity()
 export class Document {
-    @PrimaryGeneratedColumn()
-    id?: number;
+    @PrimaryGeneratedColumn("uuid")
+    id?: string;
+
+    @ManyToOne(
+        type => TelegramProfile,
+        telegramProfile => telegramProfile.documents,
+        {
+            // Can't use as part of composite primary key without this.
+            nullable: false,
+        }
+    )
+    @JoinColumn({
+        name: "id",
+        referencedColumnName: "id",
+    })
+    telegramProfile: TelegramProfile;
+
+    @PrimaryColumn("smallint")
+    typeOfDocument: TypeOfDocument;
+
+    @Column("smallint", { nullable: true })
+    typeOfIdProof: TypeOfIdProof;
 
     @CreateDateColumn()
     createdOn?: Date;
@@ -23,8 +48,8 @@ export class Document {
     @UpdateDateColumn()
     updatedOn?: Date;
 
-    @Column("smallint")
-    typeOfDocument: TypeOfDocument;
+    @DeleteDateColumn()
+    deletedOn: Date;
 
     @Length(fileNameMinLength, fileNameMaxLength)
     @IsString()
@@ -34,12 +59,9 @@ export class Document {
     @Length(40, urlMaxLength)
     @IsString()
     @Column("varchar", { length: urlMaxLength })
-    Url: string;
+    url: string;
 
-    @Column({ nullable: true })
-    isVerified: boolean;
-
-    @ManyToOne(type => Agent)
-    @Column()
-    verifiedBy: Agent;
+    @IsString()
+    @Column("varchar", { length: urlMaxLength })
+    telegramFileId: string;
 }

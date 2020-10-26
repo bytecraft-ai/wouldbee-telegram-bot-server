@@ -1,9 +1,9 @@
 import { Injectable, UnauthorizedException, Logger, BadRequestException, NotFoundException, ConflictException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { femaleAgeList, Gender, maleAgeList, Religion, TypeOfDocument } from 'src/common/enum';
+import { femaleAgeList, Gender, maleAgeList, Religion, TypeOfDocument, TypeOfIdProof } from 'src/common/enum';
 import { deDuplicateArray, getAgeInYearsFromDOB, setDifferenceFromArrays } from 'src/common/util';
 import { Repository } from 'typeorm';
-import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
+// import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
 import { PartnerPreferenceDto, CreateUserDto, CreateProfileDto, RegistrationDto } from './dto/profile.dto';
 import { Caste } from './entities/caste.entity';
 import { City } from './entities/city.entity';
@@ -19,6 +19,7 @@ import { SharedProfile } from './entities/shared-profiles.entity';
 import { AwsService } from 'src/aws-service/aws-service.service';
 import { Transactional } from 'typeorm-transactional-cls-hooked';
 import { CommonData, IList } from 'src/common/interface';
+import { Document } from './entities/document.entity';
 
 const logger = new Logger('ProfileService');
 
@@ -31,6 +32,9 @@ export class ProfileService {
         @InjectRepository(TelegramProfile) private telegramRepository: Repository<TelegramProfile>,
         @InjectRepository(SharedProfile) private sharedProfileRepository: Repository<SharedProfile>,
         @InjectRepository(PartnerPreference) private prefRepository: Repository<PartnerPreference>,
+
+        @InjectRepository(Document) private documentRepository: Repository<Document>,
+
         @InjectRepository(Caste) private casteRepository: Repository<Caste>,
         @InjectRepository(City) private cityRepository: Repository<City>,
         @InjectRepository(State) private stateRepository: Repository<State>,
@@ -38,36 +42,36 @@ export class ProfileService {
     ) { }
 
 
-    checkTelegramAuth(auth: TelegramAuthenticateDto): boolean {
-        if (!process.env.BOT_TOKEN) {
-            throw new InternalServerErrorException('Telegram Bot token is not set!');
-        }
-        console.log('auth:', JSON.stringify(auth));
-        const now = Date.now() / 1000;
-        const timeDiff = now - parseInt(auth.auth_date);
-        console.log('now:', now, 'timeDiff:', timeDiff);
+    // checkTelegramAuth(auth: TelegramAuthenticateDto): boolean {
+    //     if (!process.env.BOT_TOKEN) {
+    //         throw new InternalServerErrorException('Telegram Bot token is not set!');
+    //     }
+    //     console.log('auth:', JSON.stringify(auth));
+    //     const now = Date.now() / 1000;
+    //     const timeDiff = now - parseInt(auth.auth_date);
+    //     console.log('now:', now, 'timeDiff:', timeDiff);
 
-        const checkString: string = Object.keys(auth)
-            .filter(key => key !== 'hash')
-            .map(key => `${key}=${auth[key]}`)
-            .sort()
-            .join('\n');
+    //     const checkString: string = Object.keys(auth)
+    //         .filter(key => key !== 'hash')
+    //         .map(key => `${key}=${auth[key]}`)
+    //         .sort()
+    //         .join('\n');
 
-        const secret = createHash('sha256')
-            .update(process.env.BOT_TOKEN)
-            .digest();
+    //     const secret = createHash('sha256')
+    //         .update(process.env.BOT_TOKEN)
+    //         .digest();
 
-        const hash = createHmac('sha256', secret)
-            .update(checkString)
-            .digest('hex');
+    //     const hash = createHmac('sha256', secret)
+    //         .update(checkString)
+    //         .digest('hex');
 
-        return auth.hash === hash; // && timeDiff < constants.telegram.authExpiresIn;
-    }
+    //     return auth.hash === hash; // && timeDiff < constants.telegram.authExpiresIn;
+    // }
 
 
-    async sendMessage(): Promise<boolean> {
-        return true;
-    }
+    // async sendMessage(): Promise<boolean> {
+    //     return true;
+    // }
 
 
     // async getUsers(): Promise<User[] | undefined> {
@@ -299,16 +303,44 @@ export class ProfileService {
     // }
 
 
-    async getTelegramProfileById(userId: string, throwOnFail = true): Promise<TelegramProfile | undefined> {
-        const telegramProfile = await this.telegramRepository.findOne(userId);
+    async createTelegramProfile(telegramChatId: number, telegramUserId: number, phone?: string): Promise<TelegramProfile | undefined> {
+        if (!telegramUserId || !telegramChatId) {
+            throw new BadRequestException('Requires non empty telegramUserId and chatId');
+        }
+        let telegramProfile = await this.telegramRepository.findOne({
+            where: [
+                { phone },//: (phone ? phone: 'dummy') },
+                { telegramUserId },
+                { telegramUserId }
+            ]
+        })
+        if (!telegramProfile) {
+            telegramProfile = this.telegramRepository.create({
+                telegramChatId,
+                telegramUserId,
+                phone,
+            })
+            telegramProfile = await this.telegramRepository.save(telegramProfile);
+            logger.log(`Created new telegram profile!`);
+        } else {
+            throw new ConflictException('Telegram profile already exists!');
+        }
+
+        // logger.log(`Returning telegram profile:`, JSON.stringify(telegramProfile));
+        return telegramProfile;
+    }
+
+
+    async getTelegramProfileById(id: string, { throwOnFail = true }): Promise<TelegramProfile | undefined> {
+        const telegramProfile = await this.telegramRepository.findOne(id);
         if (throwOnFail && !telegramProfile) {
-            throw new NotFoundException(`Telegram profile with id: ${userId} not found!`);
+            throw new NotFoundException(`Telegram profile with id: ${id} not found!`);
         }
         return telegramProfile;
     }
 
 
-    async getTelegramProfileByTelegramUserId(telegramUserId: number, throwOnFail = true): Promise<TelegramProfile | undefined> {
+    async getTelegramProfileByTelegramUserId(telegramUserId: number, { throwOnFail = true }): Promise<TelegramProfile | undefined> {
         const telegramProfile = await this.telegramRepository.findOne({
             where: { telegramUserId }
         });
@@ -319,7 +351,7 @@ export class ProfileService {
     }
 
 
-    async getTelegramProfileByTelegramChatId(telegramChatId: number, throwOnFail = true): Promise<TelegramProfile | undefined> {
+    async getTelegramProfileByTelegramChatId(telegramChatId: number, { throwOnFail = true }): Promise<TelegramProfile | undefined> {
         const telegramProfile = await this.telegramRepository.findOne({
             where: { telegramChatId }
         });
@@ -330,26 +362,75 @@ export class ProfileService {
     }
 
 
-    // async getORCreateTelegramProfile(phone: string, telegramUserId: number, telegramChatId: number): Promise<TelegramProfile | undefined> {
-    //     // const user = await this.getUserByPhone(phone, true);
-    //     logger.log(`getORCreateTelegramProfile(), user:`, JSON.stringify(user));
+    async savePhoneNumberForTelegramUser(telegramUserId: number, phone: string): Promise<TelegramProfile | undefined> {
+        if (!phone) {
+            throw new Error("Phone number cannot be empty!");
+        }
+        let telegramProfile = await this.getTelegramProfileByTelegramUserId(telegramUserId, { throwOnFail: true });
+        telegramProfile.phone = phone;
+        return this.telegramRepository.save(telegramProfile);
+    }
 
-    //     if (!telegramUserId || !telegramChatId) {
-    //         throw new BadRequestException('Requires non empty telegramUserId and chatId');
-    //     }
-    //     let telegramProfile = await this.getTelegramProfileById(user.id, false);
-    //     if (!telegramProfile) {
-    //         telegramProfile = this.telegramRepository.create({
-    //             id: user.id,
-    //             telegramUserId,
-    //             telegramChatId
-    //         });
-    //         telegramProfile = await this.telegramRepository.save(telegramProfile);
-    //         logger.log(`Created telegram profile for user`);
-    //     }
-    //     logger.log(`returning telegram profile:`, JSON.stringify(telegramProfile));
-    //     return telegramProfile;
-    // }
+
+    async getAllDocumentsForTelegramProfile(telegramProfileId: string): Promise<Document[] | undefined> {
+        return this.documentRepository.find({
+            where: { telegramProfileId }
+        });
+    }
+
+
+    async getDocument(telegramProfileId: string, typeOfDocument: TypeOfDocument, { throwOnFail = false }): Promise<Document | undefined> {
+        const document = await this.documentRepository.findOne({
+            where: { id: telegramProfileId, typeOfDocument: typeOfDocument }
+        });
+        if (throwOnFail && !document) {
+            throw new NotFoundException(`Document with id: ${telegramProfileId} and docType: ${typeOfDocument} does not exist!`);
+        }
+        return document;
+    }
+
+
+    async uploadDocument(telegramUserId: number, fileName: string, contentType: string, typeOfDocument: TypeOfDocument, telegramFileId: string, typeOfIdProof?: TypeOfIdProof): Promise<Document | undefined> {
+        const telegramProfile = await this.getTelegramProfileByTelegramUserId(telegramUserId, { throwOnFail: true });
+
+        let document = await this.getDocument(telegramProfile.id, typeOfDocument, { throwOnFail: false });
+
+        if (document) {
+            if (document.telegramFileId !== telegramFileId) {
+                // overwrite aws S3 document with the new one using the same fileName.
+                const url = await this.awsService.uploadFileToS3(telegramProfile.id, fileName, contentType, typeOfDocument);
+
+                // update table - only telegramFileId is changed
+                document.telegramFileId = telegramFileId;
+                document.url = url;
+            }
+        } else {
+            // upload aws s3 document
+            const url = await this.awsService.uploadFileToS3(telegramProfile.id, fileName, contentType, typeOfDocument);
+
+            // update table
+            document = this.documentRepository.create({
+                id: telegramProfile.id,
+                typeOfDocument,
+                typeOfIdProof,
+                telegramFileId,
+                fileName,
+                url,
+            })
+        }
+
+        return this.documentRepository.save(document);
+    }
+
+
+    async downloadDocument(telegramUserId: number, typeOfDocument: TypeOfDocument): Promise<string | undefined> {
+
+        const telegramProfile = await this.getTelegramProfileByTelegramUserId(telegramUserId, { throwOnFail: true });
+
+        const document = await this.getDocument(telegramProfile.id, typeOfDocument, { throwOnFail: true });
+
+        return this.awsService.downloadFileFromS3(document.fileName, typeOfDocument);
+    }
 
 
     async generateS3SignedURLs(profileId: string,
@@ -390,6 +471,9 @@ export class ProfileService {
         }
         return caste;
     }
+
+
+    // Common data
 
     async seedCity() {
         // Delhi Lucknow Ghaziabad Pune Patna Mumbai Indore Bhopal Ranchi Raipur

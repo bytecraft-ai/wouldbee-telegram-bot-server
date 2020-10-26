@@ -9,10 +9,3 @@ db:
 jwt:
   secret: '-very_Khuphia-'
   expiresIn: '7d'
-
-aws:
-  S3_BUCKET_PIC: 'wb-tg-pic-production'
-  S3_BUCKET_ID: 'sa-wb-id-test'
-  S3_BUCKET_BIO: 'sa-wb-bio-test'
-  S3_BUCKET_REPORT: 'sa-wb-report-test'
-  S3_REGION: 'ap-south-1'

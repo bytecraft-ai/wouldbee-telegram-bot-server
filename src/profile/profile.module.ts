@@ -13,9 +13,17 @@ import { TelegramProfile } from './entities/telegram-profile.entity';
 import { SharedProfile } from './entities/shared-profiles.entity';
 import { AwsServiceModule } from 'src/aws-service/aws-service.module';
 import { PassportModule } from '@nestjs/passport';
+import { BioData } from './entities/bio-data.entity';
+import { IdProof } from './entities/id-proof.entity';
+import { ProfilePicture } from './entities/picture.entity';
+import { Document } from './entities/document.entity';
+import { AgentModule } from 'src/agent/agent.module';
+import { AuthModule } from 'src/auth/auth.module';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, TelegramProfile, SharedProfile]), AwsServiceModule, PassportModule.register({ defaultStrategy: 'jwt' }),],
+    imports: [AuthModule, AgentModule,
+        TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, TelegramProfile, SharedProfile, ProfilePicture, BioData, IdProof, Document,]), AwsServiceModule, PassportModule.register({ defaultStrategy: 'jwt' }),
+    ],
     providers: [ProfileService],
     controllers: [ProfileController, PreferenceController, CommonController],
     exports: [ProfileService]

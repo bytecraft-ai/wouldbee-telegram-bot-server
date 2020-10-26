@@ -9,11 +9,15 @@ import {
     JoinColumn,
     OneToOne,
     OneToMany,
+    PrimaryColumn,
 } from 'typeorm';
 import {
     Gender,
     Religion,
     AnnualIncome,
+    Occupation,
+    EmployedIn,
+    EducationDegree,
 } from '../../common/enum';
 import { IsString, Length } from 'class-validator';
 import { Country } from './country.entity';
@@ -24,6 +28,10 @@ import { PartnerPreference } from './partner-preference.entity';
 import { SharedProfile } from './shared-profiles.entity';
 import { TelegramProfile } from './telegram-profile.entity';
 import { Language, MaritalStatus } from 'src/common/enum';
+import { IdProof } from './id-proof.entity';
+import { ProfilePicture } from './picture.entity';
+import { BioData } from './bio-data.entity';
+// import { Document } from './update.entity';
 // import { User } from './user.entity';
 
 // TODO: implement table indexing on important columns
@@ -101,12 +109,39 @@ export class Profile {
     @JoinColumn()
     city: City;
 
+    @Column("smallint")
+    highestDegree: EducationDegree;
+
+    @Column("smallint")
+    employedIn: EmployedIn;
+
+    @Column("smallint")
+    occupation: Occupation;
+
     // @Column({ type: "enum", enum: AnnualIncome })
     @Column("smallint")
     annualIncome: AnnualIncome;
 
+    @Column("smallint", { nullable: true })
+    motherTongue?: Language;
+
+    @Column("smallint", { nullable: true })
+    maritalStatus?: MaritalStatus;
+
     @OneToOne(type => PartnerPreference)
     partnerPreference: PartnerPreference;
+
+    @OneToOne(type => IdProof, idProof => idProof.profile)
+    idProof: IdProof;
+
+    @OneToOne(type => ProfilePicture, picture => picture.profile)
+    picture: ProfilePicture;
+
+    @OneToOne(type => BioData, bioData => bioData.profile)
+    bioData: BioData;
+
+    // @OneToMany(type => Document, update => update.profile)
+    // updates: Document[]
 
     // profile shared with other profiles
     @OneToMany(
@@ -124,12 +159,6 @@ export class Profile {
     )
     sharedProfiles: SharedProfile[];
 
-    @Column("smallint", { nullable: true })
-    motherTongue?: Language;
-
-    @Column("smallint", { nullable: true })
-    maritalStatus?: MaritalStatus;
-
     // @Column({ default: () => `now()` })
     // lastSeen: Date;
 
@@ -141,6 +170,5 @@ export class Profile {
 
     // @Column({ unique: true, nullable: true })
     // notificationId?: string;
-
 
 }

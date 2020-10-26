@@ -11,3 +11,10 @@ jwt:
   # TODO
   secret: 'change-it-to-something-secure'
   expiresIn: '7d'
+
+aws:
+  S3_BUCKET_PIC: 'tg-dev-pic'
+  S3_BUCKET_ID: 'tg-dev-id'
+  S3_BUCKET_BIO: 'tg-dev-bio'
+  S3_BUCKET_REPORT: 'tg-dev-report'
+  S3_REGION: 'ap-south-1'

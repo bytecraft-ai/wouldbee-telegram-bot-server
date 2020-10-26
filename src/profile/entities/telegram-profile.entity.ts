@@ -5,9 +5,10 @@ import {
     CreateDateColumn,
     JoinColumn,
     OneToOne,
+    OneToMany,
 } from 'typeorm';
+import { Document } from './document.entity';
 import { Profile } from './profile.entity';
-// import { User } from './user.entity';
 
 @Entity()
 export class TelegramProfile {
@@ -25,4 +26,11 @@ export class TelegramProfile {
 
     @Column({ unique: true })
     telegramChatId: number;
+
+    // allow creating profile before phone number is verified.
+    @Column({ unique: true, nullable: true })
+    phone?: string;
+
+    @OneToMany(type => Document, document => document.telegramProfile)
+    documents: Document[]
 }

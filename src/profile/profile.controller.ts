@@ -7,6 +7,8 @@ import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express
 import { GetCitiesDto, GetCountriesDto, GetStatesDto } from './dto/location.dto';
 import { editFileName, imageOrDocFileFilter } from 'src/common/file-util';
 import { diskStorage } from 'multer';
+import { AwsService } from 'src/aws-service/aws-service.service';
+import { TypeOfDocument } from 'src/common/enum';
 
 const logger = new Logger('ProfileController');
 
@@ -14,7 +16,16 @@ const logger = new Logger('ProfileController');
 @Controller('common')
 // @UsePipes(ValidationPipe)
 export class CommonController {
-    constructor(private readonly profileService: ProfileService) { }
+    constructor(
+        private readonly profileService: ProfileService,
+        private readonly awsService: AwsService
+    ) { }
+
+    @Get('/upload')
+    async upload() {
+        const link = await this.awsService.uploadFileToS3("1e904bf2-5b84-427d-b169-c57deccd9655", "1e904bf2-5b84-427d-b169-c57deccd9655_bio.pdf", "application/pdf", TypeOfDocument.BIO_DATA);
+        return { link };
+    }
 
     @Get('/')
     async getCommonData() {

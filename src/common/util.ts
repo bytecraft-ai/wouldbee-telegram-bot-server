@@ -1,9 +1,9 @@
 // import { LRUMap } from 'lru_map';
 import { Logger, BadRequestException } from '@nestjs/common';
-import request from 'request';
 import { createWriteStream } from 'fs';
 var url = require('url');
 var http = require('http');
+var request = require("request");
 
 const logger = new Logger('util');
 
@@ -274,7 +274,7 @@ export function deDuplicateArray<T>(array: Array<T>): Array<T> {
 }
 
 
-export async function downloadFile(fileName: string, uri: string) {
+export async function downloadFile(file_url: string, fileName: string) {
 
     const downloadDir = '/tmp/'
 
@@ -285,7 +285,7 @@ export async function downloadFile(fileName: string, uri: string) {
     await new Promise((resolve, reject) => {
         let stream = request({
             /* Here you should specify the exact link to the file you are trying to download */
-            uri,
+            uri: file_url,
             headers: {
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                 'Accept-Encoding': 'gzip, deflate, br',
@@ -313,7 +313,7 @@ export async function downloadFile(fileName: string, uri: string) {
 }
 
 
-export function download_file_httpget(file_url: string) {
+export function download_file_httpget(file_url: string, file_name: string) {
     const DOWNLOAD_DIR = '/tmp/'
     var options = {
         host: url.parse(file_url).host,
@@ -321,7 +321,7 @@ export function download_file_httpget(file_url: string) {
         path: url.parse(file_url).pathname
     };
 
-    var file_name = url.parse(file_url).pathname.split('/').pop();
+    // var file_name = url.parse(file_url).pathname.split('/').pop();
     var file = createWriteStream(DOWNLOAD_DIR + file_name);
 
     http.get(options, function (res) {

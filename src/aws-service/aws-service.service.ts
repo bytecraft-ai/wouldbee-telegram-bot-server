@@ -5,8 +5,13 @@ import { TypeOfDocument } from 'src/common/enum';
 import { S3SignedUrl } from './aws-service.interface';
 import { SendEmailDto } from './aws-service.dto';
 
+// var AWS = require('aws-sdk');
+var path = require('path');
+var fs = require('fs');
+
 const awsConfig = get('aws');
 const logger = new Logger('AwsService');
+const downloadDir = '/tmp/'
 
 @Injectable()
 export class AwsService {
@@ -137,16 +142,22 @@ export class AwsService {
     }
 
 
-    validateFileNameForS3Upload(fileName: string, typeOfDocument: TypeOfDocument): boolean {
+    validateFileNameForS3Upload(fileName: string, typeOfDocument: TypeOfDocument, id: string): boolean {
+
+        if (!fileName.includes(id)) {
+            logger.log(`fileName: ${fileName}, id: ${id}`);
+            throw new Error('fileName does not contain the id');
+        }
+
         if (fileName.includes('_bio')) {
             return typeOfDocument === TypeOfDocument.BIO_DATA;
         }
         else if (fileName.includes('_id')) {
             return typeOfDocument === TypeOfDocument.ID_PROOF;
         }
-        // else if (fileName.includes('_picture')) {
-        //     return typeOfDocument === TypeOfDocument.PICTURE;
-        // }
+        else if (fileName.includes('_picture')) {
+            return typeOfDocument === TypeOfDocument.PICTURE;
+        }
         // else if (fileName.includes('_video')) {
         //     typeOfDocument = TypeOfDocument.VIDEO;
         // }
@@ -156,9 +167,9 @@ export class AwsService {
     }
 
 
-    async createSignedURL(publicId: string, fileName: string, typeOfDocument: TypeOfDocument, getTruePutFalse: boolean): Promise<S3SignedUrl | undefined> {
+    async createSignedURL(id: string, fileName: string, typeOfDocument: TypeOfDocument, getTruePutFalse: boolean): Promise<S3SignedUrl | undefined> {
 
-        this.validateFileNameForS3Upload(fileName, typeOfDocument);
+        this.validateFileNameForS3Upload(fileName, typeOfDocument, id);
 
         const S3_BUCKET = this.getS3Bucket(typeOfDocument);
 
@@ -180,6 +191,55 @@ export class AwsService {
             logger.error(err);
             throw err;
         }
+    }
+
+
+    // TODO
+    async uploadFileToS3(id: string, fileName: string, contentType: string, typeOfDocument: TypeOfDocument): Promise<string | undefined> {
+
+        logger.log(`Uploading files to the bucket. Params: ${id}, ${fileName}, ${contentType}, ${typeOfDocument}`);
+
+        this.validateFileNameForS3Upload(fileName, typeOfDocument, id);
+        const S3_BUCKET = this.getS3Bucket(typeOfDocument);
+        const fileContent = fs.readFileSync(path.join(downloadDir, fileName));
+
+        // Setting up S3 upload parameters
+        const params = {
+            Bucket: S3_BUCKET,
+            Key: fileName,
+            Body: fileContent,
+            ContentType: contentType
+        };
+
+        logger.log(`Read fileContent, bucket - ${S3_BUCKET}`);
+
+        let url: string;
+        // Uploading files to the bucket
+        this.awsS3.upload(params, (err, data) => {
+            if (err) {
+                logger.error('Could not upload file to S3, error:', err);
+                throw err;
+            }
+            url = data.Location;
+            logger.log(`File: ${fileName} uploaded successfully. ${data.Location}`);
+        });
+
+        return url;
+
+    }
+
+
+    // TODO
+    async downloadFileFromS3(fileName: string, typeOfDocument: TypeOfDocument): Promise<string> {
+        const S3_BUCKET = this.getS3Bucket(typeOfDocument);
+        var params = {
+            Bucket: S3_BUCKET,
+            Key: fileName
+        };
+        const readStream = this.awsS3.getObject(params).createReadStream();
+        const writeStream = fs.createWriteStream(path.join(downloadDir, fileName));
+        readStream.pipe(writeStream);
+        return path.join(downloadDir, fileName);
     }
 
 }

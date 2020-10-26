@@ -11,6 +11,15 @@ export enum Gender {
 }
 
 
+export enum TypeOfIdProof {
+    AADHAR = 1,
+    DRIVING_LICENSE,
+    PAN,
+    PASSPORT,
+    VOTER_ID,
+}
+
+
 export enum Religion {
     HINDU = 1,
     JAIN_DASH_DIGAMBER,
@@ -28,6 +37,187 @@ export enum MaritalStatus {
     WIDOWED,
     ANULLED,
     AWAITING_DIVORCE, // 5
+}
+
+
+export enum Mangalik {
+    NON_MANGLIK = 1,
+    MANGLIK,
+    ANGSHIK,
+    DO_NOT_KNOW,
+}
+
+
+export enum EmployedIn {
+    PRIVATE_SECTOR = 1,
+    PUBLIC_SECTOR,
+    CIVIL_SERVICES,
+    DEFENCE,
+    BUSINESS_OR_SELF_EMPLOYED, //5
+    NOT_WORKING,
+}
+
+
+export enum EducationDegree {
+    LESS_THAN_HIGH_SCHOOL = 1,
+    HIGH_SCHOOL,
+    ASSOCIATES_DEGREE,
+    TRADE_SCHOOL,
+    DIPLOMA, // 5
+    UNDER_GRADUATE,
+    BACHELORS,
+    MASTERS,
+    DOCTORATE, // 9
+    // HONOURS_DEGREE,
+}
+
+
+export enum Occupation {
+    // -- Administration --
+    ADMIN_PROFESSIONAL = 1,
+    CLERK,
+    OPERATOR_OR_TECHNICIAN,
+    SECRETARY_OR_FRONT_OFFICE,
+
+    // -- Advertising, Media & Entertainment --
+    ACTOR_OR_MODEL, // 5
+    ADVERTISING_PROFESSIONAL,
+    FILM_OR_ENTERTAINMENT_PROFESSIONAL,
+    JOURNALIST,
+    MEDIA_PROFESSIONAL,
+    PR_PROFESSIONAL,
+
+    // -- Agricultural --
+    AGRICULTURE_PROFESSIONAL, // 11
+    FARMING,
+
+    // -- Airline & Aviation --
+    AIRLINE_PROFESSIONAL, // 13
+    FLIGHT_ATTENDANT,
+    PILOT,
+
+    // -- Architecture --
+    ARCHITECT, // 16
+
+    // -- Armed Forces --
+    AIR_FORCE, // 17
+    ARMY,
+    OTHER_DEFENCE_SERVICES,
+    NAVY,
+
+    // -- BPO & Customer Service --
+    BPO_OR_ITES_PROFESSIONAL, // 21 
+    CUSTOMER_SERVICE,
+
+    // -- Banking & Finance --
+    ACCOUNTING_PROFESSIONAL,  // 23
+    AUDITOR,
+    BANKING_PROFESSIONAL,
+    CHARTERED_ACCOUNTANT,
+    FINANCE_PROFESSIONAL,
+
+    // -- Civil Services --
+    CIVIL_SERVICES_IAS_OR_IPS_OR_IRS_OR_IES_OR_IFS,  // 28
+
+    // -- Corporate Management Professionals --
+    ANALYST,  // 29
+    CONSULTANT,
+    CORPORATE_COMMUNICATION,
+    CORPORATE_PLANNING,
+    HR_PROFESSIONAL,
+    MARKETING_PROFESSIONAL,
+    OPERATIONS_MANAGEMENT,   // 35
+    PRODUCT_MANAGER,
+    PROGRAM_MANAGER,
+    PROJECT_MANAGER_DASH_IT,
+    PROJECT_MANAGER_DASH_NON_IT,
+    SALES_PROFESSIONAL,   // 40
+    SR_MANAGER_OR_MANAGER,
+    SUBJECT_MATTER_EXPERT,
+
+    // -- Education & Training --
+    // -- Science & Research --
+    EDUCATION_PROFESSIONAL,
+    EDUCATIONAL_INSTITUTION_OWNER,
+    LIBRARIAN,  // 45
+    PROFESSOR_OR_LECTURER,
+    RESEARCH_PROFESSIONAL,
+    RESEARCH_ASSISTANT,
+    PHD_STUDENT_ON_STIPEND,
+    SCIENTIST, // 50
+    TEACHER,
+
+    // -- Engineering --
+    ELECTRONICS_ENGINEER,
+    HARDWARE_OR_TELECOM_ENGINEER,
+    NON_DASH_IT_ENGINEER,
+    QUALITY_ASSURANCE_ENGINEER,  // 55
+
+    // -- Hospitality --
+    HOTELS_OR_HOSPITALITY_PROFESSIONAL,  // 56
+
+    // -- Law Enforcement --
+    LAW_ENFORCEMENT_OFFICER,  // 57
+    POLICE,
+
+    // -- Legal --
+    LAWYER_AND_LEGAL_PROFESSIONAL,  // 59
+
+    // -- Merchant Navy --
+    MARINER,   // 60
+    MERCHANT_NAVAL_OFFICER,
+
+    // -- Other Medical & Healthcare --
+    // -- Doctor --
+    DENTIST,  // 66
+    DOCTOR,
+    SURGEON,
+    MEDICAL_OR_HEALTHCARE_PROFESSIONAL,
+    NURSE,  // 70
+    PARAMEDIC,
+    PHARMACIST,
+    PHYSIOTHERAPIST,
+    PSYCHOLOGIST,
+    VETERINARY_DOCTOR,  // 75
+
+    // -- Software & IT --
+    ANIMATOR,
+    CYBER_OR_NETWORK_SECURITY,
+    PROJECT_LEAD_DASH_IT,  // 78
+    QUALITY_ASSURANCE_ENGINEER_DASH_IT,
+    SOFTWARE_PROFESSIONAL,
+    UI_OR_UX_DESIGNER,
+    WEB_OR_GRAPHIC_DESIGNER,
+
+    // -- Top Management --
+    CXO_OR_CHAIRMAN_OR_PRESIDENT_OR_DIRECTOR,  // 83
+    VP_OR_AVP_OR_GM_OR_DGM,
+
+    // -- Others --
+    AGENT,  // 85
+    ARTIST,
+    BEAUTICIAN,
+    BROKER,
+    BUSINESS_OWNER_OR_ENTREPRENEUR,
+    BUSINESSPERSON,  // 90
+    FASHION_DESIGNER,
+    FITNESS_PROFESSIONAL,
+    INTERIOR_DESIGNER,
+    POLITICIAN,
+    SECURITY_PROFESSIONAL,  // 95
+    SINGER,
+    SOCIAL_SERVICES_OR_NGO_OR_VOLUNTEER,
+    SPORTSPERSON,
+    TRAVEL_PROFESSIONAL,
+    WRITER,    // 100
+
+    // -- Not working --
+    LOOKING_FOR_JOB,   // 62
+    NOT_WORKING,
+    RETIRED,
+    STUDENT,
+
+    OTHERS,
 }
 
 
