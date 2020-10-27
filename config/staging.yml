@@ -2,7 +2,7 @@ db:
   host: 'localhost'
   username: 'developer'
   password: 'dbonfire'
-  database: 'telegram'
+  database: 'telegram-staging'
   synchronize: true
   dropSchema: false
   logging: true
@@ -11,3 +11,10 @@ jwt:
   # TODO
   secret: 'change-it-to-something-secure'
   expiresIn: '7d'
+
+aws:
+  S3_BUCKET_PIC: 'tg-stage-pic'
+  S3_BUCKET_ID: 'tg-stage-id'
+  S3_BUCKET_BIO: 'tg-stage-bio'
+  S3_BUCKET_REPORT: 'tg-stage-report'
+  S3_REGION: 'ap-south-1'
