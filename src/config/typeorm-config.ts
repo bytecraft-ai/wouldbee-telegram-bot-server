@@ -12,7 +12,7 @@ export const typeOrmConfig: TypeOrmModuleOptions = {
     database: dbConfig.database || process.env.RDS_DB_NAME,
     synchronize: dbConfig.synchronize || process.env.TYPEORM_SYNC,
     dropSchema: dbConfig.dropSchema,
-    logging: true, //["error"],
+    logging: ["error"], //true, //["error"],
     maxQueryExecutionTime: 1000, //log queries that run for more than 1 sec
     cache: {
         duration: 10000 // 10 seconds

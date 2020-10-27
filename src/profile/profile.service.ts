@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException, Logger, BadRequestException, NotFoundException, ConflictException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { femaleAgeList, Gender, maleAgeList, Religion, TypeOfDocument, TypeOfIdProof } from 'src/common/enum';
+import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, RegistrationStatus } from 'src/common/enum';
 import { deDuplicateArray, getAgeInYearsFromDOB, setDifferenceFromArrays } from 'src/common/util';
 import { Repository } from 'typeorm';
 // import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
@@ -20,6 +20,9 @@ import { AwsService } from 'src/aws-service/aws-service.service';
 import { Transactional } from 'typeorm-transactional-cls-hooked';
 import { CommonData, IList } from 'src/common/interface';
 import { Document } from './entities/document.entity';
+import { isUUID } from 'class-validator';
+import { AgentService } from 'src/agent/agent.service';
+import { Agent } from 'src/agent/entities/agent.entity';
 
 const logger = new Logger('ProfileService');
 
@@ -27,6 +30,7 @@ const logger = new Logger('ProfileService');
 export class ProfileService {
     constructor(
         private readonly awsService: AwsService,
+        private readonly agentService: AgentService,
         // @InjectRepository(User) private userRepository: Repository<User>,
         @InjectRepository(Profile) private profileRepository: Repository<Profile>,
         @InjectRepository(TelegramProfile) private telegramRepository: Repository<TelegramProfile>,
@@ -362,11 +366,11 @@ export class ProfileService {
     }
 
 
-    async savePhoneNumberForTelegramUser(telegramUserId: number, phone: string): Promise<TelegramProfile | undefined> {
+    async savePhoneNumberForTelegramUser(id: string, phone: string): Promise<TelegramProfile | undefined> {
         if (!phone) {
             throw new Error("Phone number cannot be empty!");
         }
-        let telegramProfile = await this.getTelegramProfileByTelegramUserId(telegramUserId, { throwOnFail: true });
+        let telegramProfile = await this.getTelegramProfileById(id, { throwOnFail: true });
         telegramProfile.phone = phone;
         return this.telegramRepository.save(telegramProfile);
     }
@@ -470,6 +474,70 @@ export class ProfileService {
             throw new NotFoundException(`Caste with id: ${casteId} not found!`);
         }
         return caste;
+    }
+
+
+    async getReferee(payload: string): Promise<[Referee, null | TelegramProfile | Agent]> {
+        if (!payload) {
+            return [Referee.NONE, null];
+        } else if (payload === "w8e7d872-938c-4695-9a84-3e72e9d09a7eb") {
+            return [Referee.WEBSITE, null];
+        }
+        else if (isUUID(payload, 4)) {
+            // check user
+            const telegramProfile = await this.getTelegramProfileById(payload, {
+                throwOnFail: false
+            });
+            if (telegramProfile) {
+                return [Referee.USER, telegramProfile];
+            } else {
+                // check agent
+                const agent = await this.agentService.getAgentById(payload, {
+                    throwOnFail: false
+                });
+                if (agent) {
+                    return [Referee.AGENT, agent];
+                }
+            }
+        }
+    }
+
+
+    async getRegistrationStatus(id: string): Promise<RegistrationStatus | undefined> {
+        const profile = await this.telegramRepository.findOne(id, {
+            relations: ['documents']
+        })
+
+        if (!profile) {
+            logger.log(`getRegistrationStatus(): profile ${profile} not registered!`);
+            throw new NotFoundException(`Telegram profile with id: ${profile.id} not found!`);
+        }
+
+        if (!profile.phone) {
+            return RegistrationStatus.UNREGISTERED;
+        }
+
+        const documents: Document[] = profile.documents;
+        if (!documents?.length) {
+            return RegistrationStatus.PHONE_VERIFIED;
+        }
+        else {
+            let bioUploaded = false, picUploaded = false;
+            for (let doc of documents) {
+                if (doc.typeOfDocument === TypeOfDocument.BIO_DATA) {
+                    bioUploaded = true
+                } else if (doc.typeOfDocument === TypeOfDocument.PICTURE) {
+                    picUploaded = true
+                }
+            }
+            if (!bioUploaded) {
+                return RegistrationStatus.PHONE_VERIFIED;
+            } else if (!picUploaded) {
+                return RegistrationStatus.BIO_UPLOADED;
+            } else {
+                return RegistrationStatus.PICTURE_UPLOADED;
+            }
+        }
     }
 
 

@@ -1,3 +1,19 @@
+export enum Referee {
+    USER = 1,
+    AGENT,
+    WEBSITE,
+    NONE
+}
+
+
+export enum RegistrationStatus {
+    UNREGISTERED = 1,
+    PHONE_VERIFIED,
+    BIO_UPLOADED,
+    PICTURE_UPLOADED,
+}
+
+
 export enum UserRole {
     USER = 1,
     ADMIN,
