@@ -27,7 +27,7 @@ import {
     Command,
 } from 'nestjs-telegraf';
 import { RegistrationStatus, TypeOfDocument } from 'src/common/enum';
-import { downloadFile, download_file_httpget } from 'src/common/util';
+import { downloadFile } from 'src/common/util';
 import { TelegramProfile } from 'src/profile/entities/telegram-profile.entity';
 import { ProfileService } from 'src/profile/profile.service';
 import { welcomeMessage, helpMessage } from './telegram.constants';
@@ -50,8 +50,8 @@ export class TelegramService {
         // this.greeterScene();
         // this.superWizardScene();
         this.createRegistrationWizard();
-        // this.createUploadBioWizard();
-        // this.createUploadPictureWizard();
+        this.createUploadBioWizard();
+        this.createUploadPictureWizard();
 
         // bot.on('message', ctx => ctx.reply('Please use /help command to see what this bot supports.'));
     }
@@ -145,8 +145,6 @@ export class TelegramService {
                 if (ctx.wizard.state.data.status >= RegistrationStatus.PHONE_VERIFIED) {
                     logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-2`);
                     ctx.wizard.state.data.next_without_user_input = true;
-                    ctx.wizard.next();
-                    return ctx.wizard.steps[ctx.wizard.cursor](ctx);
                 } else {
                     // console.log(ctx.update.message.contact, ctx.update);
                     const msg = ctx.update.message;
@@ -195,8 +193,8 @@ export class TelegramService {
                     }
                 }
                 logger.log('calling step-3');
-                return ctx.wizard.next();
-                // return ctx.wizard.steps[ctx.wizard.cursor](ctx);
+                ctx.wizard.next();
+                return ctx.wizard.steps[ctx.wizard.cursor](ctx);
             },
 
             // Step-3: Ask for Bio
@@ -206,7 +204,9 @@ export class TelegramService {
                 if (ctx.wizard.state.data.status >= RegistrationStatus.BIO_UPLOADED) {
                     logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-3, calling step-4`);
                 } else {
-                    await ctx.reply(`2. Upload your bio-data or type Cancel to quit.`);
+                    await ctx.reply(`2. Upload your bio-data or type Cancel to quit.
+                    
+                    Your bio-data should have the same phone number you used to register with us, otherwise it will fail the verification process.`);
                 }
 
                 ctx.wizard.state.data.next_without_user_input = true;
@@ -463,7 +463,10 @@ export class TelegramService {
         const bioWizard = new WizardScene(
             'bio-wizard',
 
+            // Step -1
             async (ctx: Context) => {
+                ctx.wizard.state.data = {};
+                logger.log(`createUploadBioWizard():: step-1`);
 
                 await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
@@ -474,11 +477,25 @@ export class TelegramService {
                     await ctx.reply(`You are not registered! To register, please type or click on /register_me command. To see the list of all available commands, use /help command.`);
 
                     return ctx.scene.leave();
+                } else {
+                    logger.log(`telegram profile: ${telegramProfile}`);
+                    ctx.wizard.state.data.telegramProfileId = telegramProfile.id;
                 }
 
-                logger.log(`telegram profile: ${telegramProfile}`);
+                await ctx.reply(`Upload your bio-data or type Cancel to quit.
+                
+                Your bio-data should have the same phone number you used to register with us, otherwise it will fail the verification process.`);
 
-                await ctx.reply(`Upload your bio-data or type Cancel to quit.`);
+                ctx.wizard.state.data.next_without_user_input = true;
+
+                logger.log('calling step-2');
+                ctx.wizard.next();
+                return ctx.wizard.steps[ctx.wizard.cursor](ctx);
+            },
+
+            // step-2: download bio, watermark, upload to aws, delete from tmp
+            async (ctx: Context) => {
+                logger.log(`createUploadBioWizard():: step-2`);
 
                 const document = ctx.message.document;
                 if (document) {
@@ -495,9 +512,9 @@ export class TelegramService {
                         const link = await ctx.telegram.getFileLink(document.file_id);
                         logger.log(`bio download link: ${link}`);
 
-                        const telegramProfile = ctx.wizard.state.data.telegramProfile;
+                        const telegramProfileId = ctx.wizard.state.data.telegramProfileId;
 
-                        let fileName = telegramProfile.id + '_bio.'
+                        let fileName = telegramProfileId + '_bio.'
                         const nameParts = link.split('.');
                         console.log('nameParts', nameParts);
 
@@ -541,11 +558,16 @@ export class TelegramService {
                     return ctx.scene.leave();
                 }
                 else {
-                    await ctx.reply(`Send bio-data or type "Cancel" to quit the registration process!`);
+                    if (ctx.wizard.state.data.next_without_user_input) {
+                        ctx.wizard.state.data.next_without_user_input = false;
+                    } else {
+                        await ctx.reply(`Send bio-data or type "Cancel" to quit the registration process!`);
+                    }
                     return;
                 }
             }
         );
+
         const stage = new Stage([bioWizard]);
         this.bot.use(stage.middleware());
         this.bot.command('upload_bio', ctx => {
@@ -558,7 +580,10 @@ export class TelegramService {
         const pictureWizard = new WizardScene(
             'picture-wizard',
 
+            // Step -1
             async (ctx: Context) => {
+                ctx.wizard.state.data = {};
+                logger.log('createUploadPictureWizard():: step-1');
 
                 await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
@@ -569,7 +594,26 @@ export class TelegramService {
                     await ctx.reply(`You are not registered! To register, please type or click on /register_me command. To see the list of all available commands, use /help command.`);
 
                     return ctx.scene.leave();
+                } else {
+                    logger.log(`telegram profile: ${telegramProfile}`);
+                    ctx.wizard.state.data.telegramProfileId = telegramProfile.id;
                 }
+
+                await ctx.reply(`Upload your Profile picture or type Cancel to quit.`);
+
+                ctx.wizard.state.data.next_without_user_input = true;
+
+                logger.log('calling step-2');
+                ctx.wizard.next();
+                return ctx.wizard.steps[ctx.wizard.cursor](ctx);
+            },
+
+            // step-2
+            async (ctx: Context) => {
+                await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+
+                // check if the user has already been registered.
+                const telegramProfile = await this.getProfile(ctx);
 
                 console.log(ctx.update.message);
                 const photos = ctx.update.message.photo;
@@ -578,13 +622,13 @@ export class TelegramService {
                 // if photo is shared by photo sharing option.
                 if (photos && photos[0]) {
                     const photo = photos[0];
-                    const telegramProfile = ctx.wizard.state.data.telegramProfile;
+                    const telegramProfileId = ctx.wizard.state.data.telegramProfileId;
                     ctx.wizard.state.data.photo_file_id = photo.file_id;
 
                     const link = await ctx.telegram.getFileLink(photo.file_id);
                     console.log('picture download link:', link);
 
-                    let fileName = telegramProfile.id + '_picture.'
+                    let fileName = telegramProfileId + '_picture.'
                     const nameParts = link.split('.');
                     console.log('nameParts', nameParts);
 
@@ -630,13 +674,13 @@ export class TelegramService {
                     || document.mime_type === 'image/png'
                 )
                 ) {
-                    const telegramProfile = ctx.wizard.state.data.telegramProfile;
-                    ctx.wizard.state.data.photo_file_id = document.file_id;
+                    const telegramProfileId = ctx.wizard.state.data.telegramProfileId;
+                    // ctx.wizard.state.data.photo_file_id = document.file_id;
 
                     const link = await ctx.telegram.getFileLink(document.file_id);
                     console.log('picture download link:', link);
 
-                    let fileName = telegramProfile.id + '_picture.'
+                    let fileName = telegramProfileId + '_picture.'
                     const nameParts: Array<string> = link.split('.');
                     let extension: string;
                     let failure = true;
@@ -676,10 +720,15 @@ export class TelegramService {
                     return ctx.scene.leave();
                 }
                 else {
-                    await ctx.reply(`Send profile picture or type "Cancel" to quit the registration process!`);
+                    if (ctx.wizard.state.data.next_without_user_input) {
+                        ctx.wizard.state.data.next_without_user_input = false;
+                    } else {
+                        await ctx.reply(`Send profile picture or type "Cancel" to quit the registration process!`);
+                    }
                     return;
                 }
             });
+
         const stage = new Stage([pictureWizard]);
         this.bot.use(stage.middleware());
         this.bot.command('upload_picture', ctx => {

@@ -1,9 +1,22 @@
 // import { LRUMap } from 'lru_map';
 import { Logger, BadRequestException } from '@nestjs/common';
 import { createWriteStream } from 'fs';
-var url = require('url');
-var http = require('http');
-var request = require("request");
+const fs = require('fs').promises;
+import { promisify } from "util"; // node-js inbuilt util 
+import { join } from 'path';
+import url from 'url';
+import http from 'http';
+import request from "request";
+import watermark from 'image-watermark';
+import { convert } from 'libreoffice-convert';
+
+const watermarkOptions = {
+    'text': 'Wouldbee.com',
+    'override-image': true,
+    'align': 'ltr'
+};
+
+const lib_convert = promisify(convert)
 
 const logger = new Logger('util');
 
@@ -274,12 +287,11 @@ export function deDuplicateArray<T>(array: Array<T>): Array<T> {
 }
 
 
-export async function downloadFile(file_url: string, fileName: string) {
-
-    const downloadDir = '/tmp/'
+export async function downloadFile(file_url: string, fileName: string,
+    DOWNLOAD_DIR = '/tmp/') {
 
     /* Create an empty file where we can save data */
-    let file = createWriteStream(downloadDir + fileName);
+    let file = createWriteStream(join(DOWNLOAD_DIR, fileName));
 
     /* Using Promises so that we can use the ASYNC AWAIT syntax */
     await new Promise((resolve, reject) => {
@@ -313,16 +325,17 @@ export async function downloadFile(file_url: string, fileName: string) {
 }
 
 
-export function download_file_httpget(file_url: string, file_name: string) {
-    const DOWNLOAD_DIR = '/tmp/'
-    var options = {
+export function download_file_http_get(file_url: string, file_name: string,
+    DOWNLOAD_DIR = '/tmp/') {
+
+    const options = {
         host: url.parse(file_url).host,
         port: 80,
         path: url.parse(file_url).pathname
     };
 
     // var file_name = url.parse(file_url).pathname.split('/').pop();
-    var file = createWriteStream(DOWNLOAD_DIR + file_name);
+    const file = createWriteStream(join(DOWNLOAD_DIR, file_name));
 
     http.get(options, function (res) {
         res.on('data', function (data) {
@@ -333,3 +346,72 @@ export function download_file_httpget(file_url: string, file_name: string) {
         });
     });
 };
+
+
+export async function deleteFile(fileName: string, DIR = '/tmp/') {
+    try {
+        await fs.unlink(join(DIR, fileName));
+    } catch (err) {
+        logger.error(`Could not delete file: ${join(DIR, fileName)}`);
+    }
+}
+
+
+export function watermarkFile(fileName: string, DIR = '/tmp/') {
+    try {
+        watermark.embedWatermark(join(DIR, fileName), watermarkOptions);
+    }
+    catch (err) {
+        logger.error(`could not watermark image: ${join(DIR, fileName)}. Error: ${JSON.stringify(err)}`,);
+    }
+
+}
+
+
+// maps file extension to MIME types
+// full list can be found here: https://www.freeformatter.com/mime-types-list.html
+export const mimeType = {
+    '.ico': 'image/x-icon',
+    '.html': 'text/html',
+    '.js': 'text/javascript',
+    '.json': 'application/json',
+    '.css': 'text/css',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.wav': 'audio/wav',
+    '.mp3': 'audio/mpeg',
+    '.svg': 'image/svg+xml',
+    '.pdf': 'application/pdf',
+    '.zip': 'application/zip',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.eot': 'application/vnd.ms-fontobject',
+    '.ttf': 'application/x-font-ttf',
+};
+
+
+export async function doc2pdf(fileName: string, DIR = '/tmp/') {
+    try {
+        const nameSplit = fileName.split('.');
+
+        const pdfFileName = `${nameSplit[0]}.pdf`
+        const extension = nameSplit.length > 1 ? nameSplit.pop() : 'no';
+
+        if (extension !== 'doc' && extension !== 'docx') {
+            logger.error(`Can only convert word files with doc/docx extension. 
+            But Received ${fileName} with ${extension} extension`);
+        }
+
+        const inputPath = join(DIR, fileName);
+        const outputPath = join(DIR,);
+
+        // Read file
+        let data = await fs.readFile(inputPath)
+        let done = await lib_convert(data, '.pdf', undefined)
+        await fs.writeFile(outputPath, done)
+        return pdfFileName;
+    } catch (err) {
+        logger.error(`could not convert ${fileName} to pdf: ${JSON.stringify(err)}`)
+        return null;
+    }
+}
