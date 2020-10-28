@@ -11,7 +11,7 @@ var fs = require('fs');
 
 const awsConfig = get('aws');
 const logger = new Logger('AwsService');
-const downloadDir = '/tmp/'
+// const downloadDir = '/tmp/'
 
 @Injectable()
 export class AwsService {
@@ -195,13 +195,13 @@ export class AwsService {
 
 
     // TODO
-    async uploadFileToS3(id: string, fileName: string, contentType: string, typeOfDocument: TypeOfDocument): Promise<string | undefined> {
+    async uploadFileToS3(id: string, fileName: string, contentType: string, typeOfDocument: TypeOfDocument, dir = '/tmp/'): Promise<string | undefined> {
 
-        logger.log(`Uploading files to the bucket. Params: ${id}, ${fileName}, ${contentType}, ${typeOfDocument}`);
+        logger.log(`Uploading files to the bucket. Params: ${id}, ${fileName}, ${contentType}, ${typeOfDocument}, ${dir}`);
 
         this.validateFileNameForS3Upload(fileName, typeOfDocument, id);
         const S3_BUCKET = this.getS3Bucket(typeOfDocument);
-        const fileContent = fs.readFileSync(path.join(downloadDir, fileName));
+        const fileContent = fs.readFileSync(path.join(dir, fileName));
 
         // Setting up S3 upload parameters
         const params = {
@@ -219,11 +219,11 @@ export class AwsService {
         return new Promise((resolve, reject) => {
             this.awsS3.upload(params, (err, data) => {
                 if (err) {
-                    logger.error('Could not upload file to S3, error:', err);
+                    console.log(`Could not upload file: ${path.join(dir, fileName)} to S3, error:`, err);
                     reject(err);
                 }
                 url = data.Location;
-                logger.log(`File: ${fileName} uploaded successfully. ${data.Location}`);
+                console.log(`File: ${fileName} uploaded successfully. ${data.Location}`);
                 resolve(url);
             });
         });
@@ -231,16 +231,16 @@ export class AwsService {
 
 
     // TODO
-    async downloadFileFromS3(fileName: string, typeOfDocument: TypeOfDocument): Promise<string> {
+    async downloadFileFromS3(fileName: string, typeOfDocument: TypeOfDocument, dir = '/tmp/'): Promise<string> {
         const S3_BUCKET = this.getS3Bucket(typeOfDocument);
         var params = {
             Bucket: S3_BUCKET,
             Key: fileName
         };
         const readStream = this.awsS3.getObject(params).createReadStream();
-        const writeStream = fs.createWriteStream(path.join(downloadDir, fileName));
+        const writeStream = fs.createWriteStream(path.join(dir, fileName));
         readStream.pipe(writeStream);
-        return path.join(downloadDir, fileName);
+        return path.join(dir, fileName);
     }
 
 }

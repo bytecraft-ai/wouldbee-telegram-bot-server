@@ -394,7 +394,7 @@ export class ProfileService {
     }
 
 
-    async uploadDocument(telegramUserId: number, fileName: string, contentType: string, typeOfDocument: TypeOfDocument, telegramFileId: string, typeOfIdProof?: TypeOfIdProof): Promise<Document | undefined> {
+    async uploadDocument(telegramUserId: number, fileName: string, dir: string, contentType: string, typeOfDocument: TypeOfDocument, telegramFileId: string, typeOfIdProof?: TypeOfIdProof): Promise<Document | undefined> {
         const telegramProfile = await this.getTelegramProfileByTelegramUserId(telegramUserId, { throwOnFail: true });
 
         let document = await this.getDocument(telegramProfile.id, typeOfDocument, { throwOnFail: false });
@@ -402,7 +402,7 @@ export class ProfileService {
         if (document) {
             if (document.telegramFileId !== telegramFileId) {
                 // overwrite aws S3 document with the new one using the same fileName.
-                const url = await this.awsService.uploadFileToS3(telegramProfile.id, fileName, contentType, typeOfDocument);
+                const url = await this.awsService.uploadFileToS3(telegramProfile.id, fileName, contentType, typeOfDocument, dir);
 
                 // update table - only telegramFileId is changed
                 document.telegramFileId = telegramFileId;
@@ -410,7 +410,7 @@ export class ProfileService {
             }
         } else {
             // upload aws s3 document
-            const url = await this.awsService.uploadFileToS3(telegramProfile.id, fileName, contentType, typeOfDocument);
+            const url = await this.awsService.uploadFileToS3(telegramProfile.id, fileName, contentType, typeOfDocument, dir);
 
             // update table
             document = this.documentRepository.create({
@@ -427,13 +427,13 @@ export class ProfileService {
     }
 
 
-    async downloadDocument(telegramUserId: number, typeOfDocument: TypeOfDocument): Promise<string | undefined> {
+    async downloadDocument(telegramUserId: number, typeOfDocument: TypeOfDocument, dir: string): Promise<string | undefined> {
 
         const telegramProfile = await this.getTelegramProfileByTelegramUserId(telegramUserId, { throwOnFail: true });
 
         const document = await this.getDocument(telegramProfile.id, typeOfDocument, { throwOnFail: true });
 
-        return this.awsService.downloadFileFromS3(document.fileName, typeOfDocument);
+        return this.awsService.downloadFileFromS3(document.fileName, typeOfDocument, dir);
     }
 
 

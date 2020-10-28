@@ -6,12 +6,22 @@ import { promisify } from "util"; // node-js inbuilt util
 import { join } from 'path';
 import url from 'url';
 import http from 'http';
-import request from "request";
-import watermark from 'image-watermark';
+const request = require("request"); // does not work with import syntax.
+const watermark = require('image-watermark');  // does not work with import syntax.
 import { convert } from 'libreoffice-convert';
+import { readFileSync } from 'fs';
+const pdftk = require('node-pdftk');
+
+pdftk.configure({
+    // bin: '/your/path/to/pdftk/bin',
+    // Promise: require('bluebird'),
+    ignoreWarnings: true,
+    tempDir: '/tmp/'
+});
+
 
 const watermarkOptions = {
-    'text': 'Wouldbee.com',
+    'text': 'wouldbee.com',
     'override-image': true,
     'align': 'ltr'
 };
@@ -312,7 +322,7 @@ export async function downloadFile(file_url: string, fileName: string,
         })
             .pipe(file)
             .on('finish', () => {
-                console.log(`The file is finished downloading.`);
+                logger.log(`Finished downloading ${fileName}`);
                 resolve();
             })
             .on('error', (error) => {
@@ -320,7 +330,7 @@ export async function downloadFile(file_url: string, fileName: string,
             })
     })
         .catch(error => {
-            console.log(`Could not download file: ${error}`);
+            logger.error(`Could not download file: ${error}`);
         });
 }
 
@@ -342,7 +352,7 @@ export function download_file_http_get(file_url: string, file_name: string,
             file.write(data);
         }).on('end', function () {
             file.end();
-            console.log(file_name + ' downloaded to ' + DOWNLOAD_DIR);
+            logger.log(file_name + ' downloaded to ' + DOWNLOAD_DIR);
         });
     });
 };
@@ -357,20 +367,43 @@ export async function deleteFile(fileName: string, DIR = '/tmp/') {
 }
 
 
-export function watermarkFile(fileName: string, DIR = '/tmp/') {
-    try {
-        watermark.embedWatermark(join(DIR, fileName), watermarkOptions);
-    }
-    catch (err) {
-        logger.error(`could not watermark image: ${join(DIR, fileName)}. Error: ${JSON.stringify(err)}`,);
-    }
+// TODO: use something else for PDF files as it produces bad quality PDF.
+export function watermarkFile(fileName: string, DIR = '/tmp/'): Promise<string | undefined> {
+    return new Promise((resolve, reject) => {
+        watermark.embedWatermarkWithCb(
+            join(DIR, fileName), watermarkOptions, function (err) {
+                if (!err) {
+                    resolve(fileName);
+                }
+                else {
+                    logger.error(`could not watermark image: ${join(DIR, fileName)}. Error: ${JSON.stringify(err)}`,);
+                    reject(err);
+                }
+            });
+    });
+}
 
+
+/**
+ * TODO: It has external dependency on pdftk server software (free though)
+ */
+export function stampFile(fileName: string, DIR = '/tmp/') {
+    pdftk
+        .input(readFileSync(join(DIR, fileName)))
+        .stamp('assets/would_bee_logo.png')
+        .output(join(DIR, fileName))
+        .catch(err => {
+            logger.log(`Could not stamp file: ${join(DIR, fileName)}`);
+            throw err;
+        });
+    logger.log('stamped file: ' + join(DIR, fileName));
+    return fileName;
 }
 
 
 // maps file extension to MIME types
 // full list can be found here: https://www.freeformatter.com/mime-types-list.html
-export const mimeType = {
+export const mimeTypes = {
     '.ico': 'image/x-icon',
     '.html': 'text/html',
     '.js': 'text/javascript',
@@ -378,6 +411,7 @@ export const mimeType = {
     '.css': 'text/css',
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
     '.wav': 'audio/wav',
     '.mp3': 'audio/mpeg',
     '.svg': 'image/svg+xml',
@@ -390,11 +424,13 @@ export const mimeType = {
 };
 
 
-export async function doc2pdf(fileName: string, DIR = '/tmp/') {
+// requires libre-office
+export async function doc2pdf(fileName: string, DIR = '/tmp/'): Promise<string | null> {
+    let pdfFileName: string;
     try {
         const nameSplit = fileName.split('.');
 
-        const pdfFileName = `${nameSplit[0]}.pdf`
+        pdfFileName = `${nameSplit[0]}.pdf`;
         const extension = nameSplit.length > 1 ? nameSplit.pop() : 'no';
 
         if (extension !== 'doc' && extension !== 'docx') {
@@ -403,15 +439,16 @@ export async function doc2pdf(fileName: string, DIR = '/tmp/') {
         }
 
         const inputPath = join(DIR, fileName);
-        const outputPath = join(DIR,);
+        const outputPath = join(DIR, pdfFileName);
 
         // Read file
-        let data = await fs.readFile(inputPath)
-        let done = await lib_convert(data, '.pdf', undefined)
-        await fs.writeFile(outputPath, done)
-        return pdfFileName;
+        let data = await fs.readFile(inputPath);
+        let done = await lib_convert(data, '.pdf', undefined);
+        await fs.writeFile(outputPath, done);
+        logger.log('converted file to pdf, path: ' + outputPath);
     } catch (err) {
-        logger.error(`could not convert ${fileName} to pdf: ${JSON.stringify(err)}`)
-        return null;
+        logger.error(`could not convert ${fileName} to pdf: ${JSON.stringify(err)}`);
+        throw err;
     }
+    return pdfFileName;
 }

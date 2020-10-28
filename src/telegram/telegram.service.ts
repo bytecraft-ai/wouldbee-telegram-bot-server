@@ -6,6 +6,10 @@
  *  2. Implement status - what does a user need to do next
  * 
  *  3. Implement sharing
+ * 
+ *  4. Implement watermarking on pdf and pictures
+ * 
+ *  5. Implement thumbnails for bio-data
  */
 
 import { Injectable, Logger } from '@nestjs/common';
@@ -27,10 +31,11 @@ import {
     Command,
 } from 'nestjs-telegraf';
 import { RegistrationStatus, TypeOfDocument } from 'src/common/enum';
-import { downloadFile } from 'src/common/util';
+import { deleteFile, doc2pdf, downloadFile, mimeTypes, watermarkFile } from 'src/common/util';
 import { TelegramProfile } from 'src/profile/entities/telegram-profile.entity';
 import { ProfileService } from 'src/profile/profile.service';
-import { welcomeMessage, helpMessage } from './telegram.constants';
+import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, registrationCancelled } from './telegram.constants';
+import { getBioDataFileName, getPictureFileName, processBioDataFile, processPictureFile, validateBioDataFileSize, validatePhotoFileSize, } from './telegram.service.helper';
 
 const { leave } = Stage
 
@@ -47,12 +52,11 @@ export class TelegramService {
         // set session middleware - required for creating wizard
         this.bot.use(session());
 
-        // this.greeterScene();
-        // this.superWizardScene();
         this.createRegistrationWizard();
         this.createUploadBioWizard();
         this.createUploadPictureWizard();
 
+        // Handle all unsupported messages.
         // bot.on('message', ctx => ctx.reply('Please use /help command to see what this bot supports.'));
     }
 
@@ -89,7 +93,7 @@ export class TelegramService {
                 logger.log(`Step-1`);
                 ctx.wizard.state.data = {};
 
-                // await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+                await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
                 // check if the user has already been registered.
                 let telegramProfile = await this.getProfile(ctx);
@@ -104,16 +108,22 @@ export class TelegramService {
                 }
 
                 if (ctx.wizard.state.data.status === RegistrationStatus.PICTURE_UPLOADED) {
-                    await ctx.reply(`You are already registered! If you'd like to update your profile picture or bio, you can use respective commands. To see the list of all available commands, use /help command.`);
+                    await ctx.reply(alreadyRegisteredMsg);
 
                     return ctx.scene.leave();
 
                 } else if (ctx.wizard.state.data.status >= RegistrationStatus.PHONE_VERIFIED) {
                     logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-1`);
                     ctx.wizard.state.data.next_without_user_input = true;
+
+                    // problem - wizard.next() does not work without user input
+                    // solution ref - https://github.com/telegraf/telegraf/issues/566#issuecomment-443209798
+                    ctx.wizard.next();
+                    return ctx.wizard.steps[ctx.wizard.cursor](ctx);
+
                 } else {
                     ctx.wizard.state.data.next_without_user_input = false;
-                    await ctx.telegram.sendMessage(ctx.chat.id, '1. Share your phone number by clicking the button below.', {
+                    await ctx.telegram.sendMessage(ctx.chat.id, 'Share your phone number by clicking the button below.', {
                         parse_mode: "Markdown",
                         reply_markup: {
                             one_time_keyboard: true,
@@ -131,11 +141,8 @@ export class TelegramService {
                     });
                 }
                 logger.log('calling step-2')
+                return ctx.wizard.next();
 
-                // problem - wizard.next() does not work without user input
-                // solution ref - https://github.com/telegraf/telegraf/issues/566#issuecomment-443209798
-                ctx.wizard.next();
-                return ctx.wizard.steps[ctx.wizard.cursor](ctx);
             },
 
             // Step-2 :: Read Phone number, update into profile
@@ -146,6 +153,9 @@ export class TelegramService {
                     logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-2`);
                     ctx.wizard.state.data.next_without_user_input = true;
                 } else {
+
+                    await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+
                     // console.log(ctx.update.message.contact, ctx.update);
                     const msg = ctx.update.message;
                     const contact = ctx.update.message.contact;
@@ -203,16 +213,19 @@ export class TelegramService {
 
                 if (ctx.wizard.state.data.status >= RegistrationStatus.BIO_UPLOADED) {
                     logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-3, calling step-4`);
+                    ctx.wizard.state.data.next_without_user_input = true;
+
+                    ctx.wizard.next();
+                    return ctx.wizard.steps[ctx.wizard.cursor](ctx);
                 } else {
-                    await ctx.reply(`2. Upload your bio-data or type Cancel to quit.
-                    
-                    Your bio-data should have the same phone number you used to register with us, otherwise it will fail the verification process.`);
+                    await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+                    await ctx.reply(askForBioUploadMsg);
                 }
 
-                ctx.wizard.state.data.next_without_user_input = true;
+
                 logger.log('calling step-4');
-                ctx.wizard.next();
-                return ctx.wizard.steps[ctx.wizard.cursor](ctx);
+                return ctx.wizard.next();
+                // return ctx.wizard.steps[ctx.wizard.cursor](ctx);
             },
 
             // Step-4 :: download bio, upload to aws.
@@ -225,73 +238,52 @@ export class TelegramService {
                     ctx.wizard.next();
                     return ctx.wizard.steps[ctx.wizard.cursor](ctx);
                 } else {
+
+                    await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+
                     const document = ctx.message.document;
                     if (document) {
-                        // ctx.wizard.state.data.bio_file_id = ctx.message.document.file_id;
 
-                        /**
-                         * file should not be more than 
-                         * (2MBs = 2 * 1024 * 1024 = 2097152)
-                         * for some tolerance, use 2.1 MB = 2202009.6
-                         */
-                        if (document.file_size > 2202009.6) {
-                            const size = (ctx.message.document.file_size / 1048576).toFixed(2);
-                            await ctx.reply(`Bio-data should not be more than 2 MB in size. The size of file you sent is ${size} MB. Please reduce the bio-data size and resend using /upload_bio command.`);
-
+                        // size check
+                        const sizeErrorMessage = validateBioDataFileSize(ctx);
+                        if (sizeErrorMessage) {
+                            await ctx.reply(sizeErrorMessage);
                             return;
                         }
 
-                        // TODO: Test doc file. docx works
-                        // file should be in one of - pdf, doc, or docx format
-                        if (document.mime_type === 'application/pdf' || document.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                        const { fileName, link, errorMessage, quitOnError } = await
+                            getBioDataFileName(ctx);
 
-                            // ref - https://github.com/telegraf/telegraf/issues/277
-                            const link = await ctx.telegram.getFileLink(document.file_id);
-                            logger.log(`bio download link: ${link}`);
-
-                            const telegramProfileId = ctx.wizard.state.data.telegramProfileId;
-
-                            let fileName = telegramProfileId + '_bio.'
-                            const nameParts = link.split('.');
-                            console.log('nameParts', nameParts);
-
-                            let extension: string;
-                            let failure = true;
-                            if (nameParts.length > 2) {
-                                extension = nameParts.pop().toLocaleLowerCase();
-                                if (extension === 'pdf'
-                                    || extension === 'doc'
-                                    || extension === 'docx') {
-                                    failure = false;
-                                }
-                            } else {
-                                extension = document.mime_type === 'application/pdf' ? 'pdf' : 'docx'
-                            }
-
-                            fileName = fileName + extension;
-                            console.log('fileName:', fileName);
+                        if (fileName) {
+                            const DIR = '../tmp/';
+                            const processToPdf = false;
+                            const mime_type = processToPdf
+                                ? mimeTypes['.pdf'] : document.mime_type
                             try {
-                                await downloadFile(link, fileName);
+                                const fileToUpload
+                                    = await processBioDataFile(link, fileName, processToPdf, DIR);
 
-                                await this.profileService.uploadDocument(ctx.from.id, fileName, document.mime_type, TypeOfDocument.BIO_DATA, document.file_id);
+                                await this.profileService.uploadDocument(ctx.from.id, fileToUpload, DIR, mime_type, TypeOfDocument.BIO_DATA, document.file_id);
+
+                                await deleteFile(fileToUpload, DIR);
+                                await ctx.reply(bioCreateSuccessMsg);
 
                             } catch (error) {
                                 logger.error("Could not download/upload the bio-data. Error:", error);
-                                await ctx.reply("Some error occurred. Please try again later!");
+                                await ctx.reply(fatalErrorMsg);
                                 return ctx.scene.leave();
                             }
-
-                            await ctx.reply(`Success! Your bio-data has been saved! You can update it anytime using the /upload_bio command.
-            
-                        Now our agent will manually verify your bio-data, which may a take a couple of days. Once verified, you will start receiving profiles.`);
-
                         } else {
-                            // document type not supported
-                            await ctx.reply(`Error: Only pdf or word files are supported for bio-data. Please retry.`);
-                            return;
+                            assert(!!errorMessage, 'Both fileName and errorMessage cannot be null/undefined');
+                            await ctx.reply(errorMessage);
+                            if (quitOnError) {
+                                return ctx.scene.leave();
+                            } else {
+                                return;
+                            }
                         }
                     } else if (ctx.message.text?.toLocaleLowerCase() === 'cancel') {
-                        await ctx.reply(`Canceling registration!`);
+                        await ctx.reply(registrationCancelled);
                         return ctx.scene.leave();
                     }
                     else {
@@ -314,13 +306,17 @@ export class TelegramService {
 
                 if (ctx.wizard.state.data.status >= RegistrationStatus.PICTURE_UPLOADED) {
                     logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-5`);
+                    ctx.wizard.state.data.next_without_user_input = true;
+                    ctx.wizard.next();
+                    return ctx.wizard.steps[ctx.wizard.cursor](ctx);
                 } else {
-                    await ctx.reply(`3. Upload your profile picture or type Cancel to quit.`);
+                    await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+                    await ctx.reply(`Upload your profile picture or type Cancel to quit.`);
                 }
-                ctx.wizard.state.data.next_without_user_input = true;
+
                 logger.log('calling step-6');
-                ctx.wizard.next();
-                return ctx.wizard.steps[ctx.wizard.cursor](ctx);
+                return ctx.wizard.next();
+                // return ctx.wizard.steps[ctx.wizard.cursor](ctx);
             },
 
             // Step-6 :: download picture, upload to aws, and finish.
@@ -328,112 +324,66 @@ export class TelegramService {
                 logger.log(`Step-6:: status-${ctx.wizard.state.data.status}`);
 
                 if (ctx.wizard.state.data.status >= RegistrationStatus.PICTURE_UPLOADED) {
-                    // return ctx.wizard.next();
                     logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-6, leaving wizard!`);
-                    // return ctx.scene.leave();
+
                 } else {
-                    console.log(ctx.update.message);
+
+                    await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+
+                    console.log('picture registration:', ctx.update.message);
                     const photos = ctx.update.message.photo;
                     const document = ctx.message.document;
+                    const photo = (photos && photos[0]) ? photos[0] : null;
 
-                    // if photo is shared by photo sharing option.
-                    if (photos && photos[0]) {
-                        const photo = photos[0];
-                        const telegramProfileId = ctx.wizard.state.data.telegramProfileId;
-                        ctx.wizard.state.data.photo_file_id = photo.file_id;
+                    if (document || photo) {
 
-                        const link = await ctx.telegram.getFileLink(photo.file_id);
-                        console.log('picture download link:', link);
-
-                        let fileName = telegramProfileId + '_picture.'
-                        const nameParts = link.split('.');
-                        console.log('nameParts', nameParts);
-
-                        let extension: string;
-                        let failure = true;
-                        if (nameParts.length > 2) {
-                            extension = nameParts.pop().toLocaleLowerCase();
-                            if (extension === 'jpg'
-                                || extension === 'jpeg'
-                                || extension === 'png') {
-                                failure = false;
-                            }
-                        }
-                        if (failure) {
-                            logger.error(`ERROR: Could not determine the extension for the file_id: ${photo.file_id} and link: ${link}`);
-
-                            await ctx.reply(`Error: Only "jpeg" and "png" files are supported for profile picture. Please resend a supported picture.`);
+                        // size check
+                        const sizeErrorMessage = validatePhotoFileSize(ctx);
+                        if (sizeErrorMessage) {
+                            await ctx.reply(sizeErrorMessage);
                             return;
                         }
 
-                        fileName = fileName + extension;
-                        const mime_type = extension === 'jpg' || extension === 'jpeg'
-                            ? 'image/jpeg' : 'image/png';
-                        logger.log(`fileName: ${fileName}, mime: ${mime_type}`);
+                        const file_id = photo ? photo.file_id : document.file_id
 
-                        try {
-                            await downloadFile(link, fileName);
+                        const { fileName, link, errorMessage, quitOnError } = await
+                            getPictureFileName(ctx);
 
-                            await this.profileService.uploadDocument(ctx.from.id, fileName, mime_type, TypeOfDocument.PICTURE, photo.file_id);
-                        } catch (error) {
-                            logger.error("Could not download/upload the bio-data. Error:", error);
-                            await ctx.reply("Some error occurred. Please try again later!");
-                            return ctx.scene.leave();
-                        }
+                        if (fileName) {
+                            const DIR = '../tmp/';
+                            const applyWatermark = true;
 
-                        await ctx.reply(`Success! Your profile picture has been saved! You can update it anytime using the /upload_picture command. Note that your picture will be manually verified before being sent to your matches.`);
+                            const extension = fileName.split('.').pop();
+                            const mime_type = extension === 'jpg' || extension === 'jpeg'
+                                ? mimeTypes['.jpg'] : mimeTypes['.png'];
 
-                    }
+                            try {
+                                const fileToUpload
+                                    = await processPictureFile(link, fileName, applyWatermark, DIR);
 
-                    // if photo is shared document
-                    else if (document && (
-                        document.mime_type === 'image/jpeg'
-                        || document.mime_type === 'image/png'
-                    )
-                    ) {
-                        const telegramProfileId = ctx.wizard.state.data.telegramProfileId;
-                        ctx.wizard.state.data.photo_file_id = document.file_id;
+                                await this.profileService.uploadDocument(ctx.from.id, fileToUpload, DIR, mime_type, TypeOfDocument.PICTURE, file_id);
 
-                        const link = await ctx.telegram.getFileLink(document.file_id);
-                        console.log('picture download link:', link);
+                                await deleteFile(fileToUpload, DIR);
+                                await ctx.reply(pictureCreateSuccessMsg);
 
-                        let fileName = telegramProfileId + '_picture.'
-                        const nameParts: Array<string> = link.split('.');
-                        let extension: string;
-                        let failure = true;
-                        if (nameParts.length > 2) {
-                            extension = nameParts.pop().toLocaleLowerCase();
-                            if (extension === 'jpg'
-                                || extension === 'jpeg'
-                                || extension === 'png') {
-                                failure = false;
+                            } catch (error) {
+                                logger.error("Could not download/upload the picture. Error:", error);
+                                await ctx.reply(fatalErrorMsg);
+                                return ctx.scene.leave();
+                            }
+                        } else {
+                            assert(!!errorMessage, 'Both fileName and errorMessage cannot be null/undefined');
+                            await ctx.reply(errorMessage);
+
+                            if (quitOnError) {
+                                return ctx.scene.leave();
+                            } else {
+                                return;
                             }
                         }
-                        if (failure) {
-                            logger.error(`ERROR: Could not determine the extension for the file_id: ${document.file_id} and link: ${link}`);
-
-                            await ctx.reply(`Error: Only "jpeg" and "png" files are supported for profile picture. Please resend a supported picture.`);
-                            return;
-                        }
-
-                        fileName = fileName + extension;
-                        logger.log(`fileName: ${fileName}, mime: ${document.mime_type}`);
-
-                        try {
-                            await downloadFile(link, fileName);
-
-                            await this.profileService.uploadDocument(ctx.from.id, fileName, document.mime_type, TypeOfDocument.PICTURE, document.file_id);
-                        } catch (error) {
-                            logger.error("Could not download/upload the bio-data. Error:", error);
-                            await ctx.reply("Some error occurred. Please try again later!");
-                            return ctx.scene.leave();
-                        }
-
-                        await ctx.reply(`Success! Your profile picture has been saved! You can update it anytime using the /upload_picture command. Note that your picture will be manually verified before being sent to your matches.`);
-
                     }
                     else if (ctx.message.text?.toLocaleLowerCase() === 'cancel') {
-                        await ctx.reply(`Canceling registration!`);
+                        await ctx.reply(registrationCancelled);
                         return ctx.scene.leave();
                     }
                     else {
@@ -444,9 +394,7 @@ export class TelegramService {
                         }
                         return;
                     }
-
-                    await ctx.reply(`Thank you for registering! You can now use /preference command to set your match preference.`);
-                    // return ctx.scene.leave();
+                    await ctx.reply(registrationSuccessMsg);
                 }
                 return ctx.scene.leave();
             }
@@ -474,95 +422,71 @@ export class TelegramService {
                 const telegramProfile = await this.getProfile(ctx);
 
                 if (!telegramProfile) {
-                    await ctx.reply(`You are not registered! To register, please type or click on /register_me command. To see the list of all available commands, use /help command.`);
-
+                    await ctx.reply(unregisteredUserMsg);
                     return ctx.scene.leave();
                 } else {
                     logger.log(`telegram profile: ${telegramProfile}`);
                     ctx.wizard.state.data.telegramProfileId = telegramProfile.id;
                 }
 
-                await ctx.reply(`Upload your bio-data or type Cancel to quit.
-                
-                Your bio-data should have the same phone number you used to register with us, otherwise it will fail the verification process.`);
-
-                ctx.wizard.state.data.next_without_user_input = true;
+                await ctx.reply(askForBioUploadMsg);
 
                 logger.log('calling step-2');
-                ctx.wizard.next();
-                return ctx.wizard.steps[ctx.wizard.cursor](ctx);
+                return ctx.wizard.next();
+
             },
 
             // step-2: download bio, watermark, upload to aws, delete from tmp
             async (ctx: Context) => {
+                await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
                 logger.log(`createUploadBioWizard():: step-2`);
 
                 const document = ctx.message.document;
                 if (document) {
-                    if (document.file_size > 2202009.6) {
-                        const size = (ctx.message.document.file_size / 1048576).toFixed(2);
-                        await ctx.reply(`Bio-data should not be more than 2 MB in size. The size of file you sent is ${size} MB. Please reduce the bio-data size and resend using /upload_bio command.`);
-
+                    const sizeErrorMessage = validateBioDataFileSize(ctx);
+                    if (sizeErrorMessage) {
+                        await ctx.reply(sizeErrorMessage);
                         return;
                     }
 
-                    if (document.mime_type === 'application/pdf' || document.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                    const { fileName, link, errorMessage, quitOnError } = await
+                        getBioDataFileName(ctx);
 
-                        // ref - https://github.com/telegraf/telegraf/issues/277
-                        const link = await ctx.telegram.getFileLink(document.file_id);
-                        logger.log(`bio download link: ${link}`);
-
-                        const telegramProfileId = ctx.wizard.state.data.telegramProfileId;
-
-                        let fileName = telegramProfileId + '_bio.'
-                        const nameParts = link.split('.');
-                        console.log('nameParts', nameParts);
-
-                        let extension: string;
-                        let failure = true;
-                        if (nameParts.length > 2) {
-                            extension = nameParts.pop().toLocaleLowerCase();
-                            if (extension === 'pdf'
-                                || extension === 'doc'
-                                || extension === 'docx') {
-                                failure = false;
-                            }
-                        } else {
-                            extension = document.mime_type === 'application/pdf' ? 'pdf' : 'docx'
-                        }
-
-                        fileName = fileName + extension;
-                        console.log('fileName:', fileName);
+                    if (fileName) {
+                        const DIR = '../tmp/';
+                        const processToPdf = false;
+                        const mime_type = processToPdf
+                            ? mimeTypes['.pdf'] : document.mime_type
                         try {
-                            await downloadFile(link, fileName);
+                            const fileToUpload
+                                = await processBioDataFile(link, fileName, processToPdf, DIR);
 
-                            await this.profileService.uploadDocument(ctx.from.id, fileName, document.mime_type, TypeOfDocument.BIO_DATA, document.file_id);
+                            await this.profileService.uploadDocument(ctx.from.id, fileToUpload, DIR, mime_type, TypeOfDocument.BIO_DATA, document.file_id);
+
+                            await deleteFile(fileToUpload, DIR);
+                            await ctx.reply(bioCreateSuccessMsg);
+                            return ctx.scene.leave();
 
                         } catch (error) {
                             logger.error("Could not download/upload the bio-data. Error:", error);
-                            await ctx.reply("Some error occurred. Please try again later!");
+                            await ctx.reply(fatalErrorMsg);
                             return ctx.scene.leave();
                         }
-
-                        await ctx.reply(`Success! Your bio-data has been saved! You can update it anytime using the /upload_bio command.
-
-                        Now our agent will manually verify your bio-data, which may a take a couple of days. Once verified, you will start receiving profiles.`);
-                        return ctx.scene.leave();
                     } else {
-                        // document type not supported
-                        await ctx.reply(`Error: Only pdf or word files are supported for bio-data. Please retry.`);
-                        return;
+                        assert(!!errorMessage, 'Both fileName and errorMessage cannot be null/undefined');
+                        await ctx.reply(errorMessage);
+                        if (quitOnError) {
+                            return ctx.scene.leave();
+                        } else {
+                            return;
+                        }
                     }
                 } else if (ctx.message.text?.toLocaleLowerCase() === 'cancel') {
-                    await ctx.reply(`Canceling registration!`);
+                    await ctx.reply('Cancelled');
                     return ctx.scene.leave();
                 }
                 else {
-                    if (ctx.wizard.state.data.next_without_user_input) {
-                        ctx.wizard.state.data.next_without_user_input = false;
-                    } else {
-                        await ctx.reply(`Send bio-data or type "Cancel" to quit the registration process!`);
-                    }
+                    await ctx.reply(`Send bio-data or type "Cancel" to quit the registration process!`);
                     return;
                 }
             }
@@ -591,7 +515,7 @@ export class TelegramService {
                 const telegramProfile = await this.getProfile(ctx);
 
                 if (!telegramProfile) {
-                    await ctx.reply(`You are not registered! To register, please type or click on /register_me command. To see the list of all available commands, use /help command.`);
+                    await ctx.reply(unregisteredUserMsg);
 
                     return ctx.scene.leave();
                 } else {
@@ -601,130 +525,71 @@ export class TelegramService {
 
                 await ctx.reply(`Upload your Profile picture or type Cancel to quit.`);
 
-                ctx.wizard.state.data.next_without_user_input = true;
-
                 logger.log('calling step-2');
-                ctx.wizard.next();
-                return ctx.wizard.steps[ctx.wizard.cursor](ctx);
+                return ctx.wizard.next();
             },
 
             // step-2
             async (ctx: Context) => {
                 await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-
-                // check if the user has already been registered.
-                const telegramProfile = await this.getProfile(ctx);
-
-                console.log(ctx.update.message);
+                // console.log(ctx.update.message);
                 const photos = ctx.update.message.photo;
                 const document = ctx.message.document;
+                const photo = (photos && photos[0]) ? photos[0] : null;
 
-                // if photo is shared by photo sharing option.
-                if (photos && photos[0]) {
-                    const photo = photos[0];
-                    const telegramProfileId = ctx.wizard.state.data.telegramProfileId;
-                    ctx.wizard.state.data.photo_file_id = photo.file_id;
+                if (document || photo) {
 
-                    const link = await ctx.telegram.getFileLink(photo.file_id);
-                    console.log('picture download link:', link);
-
-                    let fileName = telegramProfileId + '_picture.'
-                    const nameParts = link.split('.');
-                    console.log('nameParts', nameParts);
-
-                    let extension: string;
-                    let failure = true;
-                    if (nameParts.length > 2) {
-                        extension = nameParts.pop().toLocaleLowerCase();
-                        if (extension === 'jpg'
-                            || extension === 'jpeg'
-                            || extension === 'png') {
-                            failure = false;
-                        }
-                    }
-                    if (failure) {
-                        logger.error(`ERROR: Could not determine the extension for the file_id: ${photo.file_id} and link: ${link}`);
-
-                        await ctx.reply(`Error: Only "jpeg" and "png" files are supported for profile picture. Please resend a supported picture.`);
+                    // size check
+                    const sizeErrorMessage = validatePhotoFileSize(ctx);
+                    if (sizeErrorMessage) {
+                        await ctx.reply(sizeErrorMessage);
                         return;
                     }
 
-                    fileName = fileName + extension;
-                    const mime_type = extension === 'jpg' || extension === 'jpeg'
-                        ? 'image/jpeg' : 'image/png';
-                    logger.log(`fileName: ${fileName}, mime: ${mime_type}`);
+                    const { fileName, link, errorMessage, quitOnError } = await
+                        getPictureFileName(ctx);
 
-                    try {
-                        await downloadFile(link, fileName);
+                    if (fileName) {
+                        const DIR = '../tmp/';
+                        const applyWatermark = false;
+                        const file_id = photo ? photo.file_id : document.file_id
 
-                        await this.profileService.uploadDocument(ctx.from.id, fileName, mime_type, TypeOfDocument.PICTURE, photo.file_id);
-                    } catch (error) {
-                        logger.error("Could not download/upload the bio-data. Error:", error);
-                        await ctx.reply("Some error occurred. Please try again later!");
-                        return ctx.scene.leave();
-                    }
+                        const extension = fileName.split('.').pop();
+                        const mime_type = extension === 'jpg' || extension === 'jpeg'
+                            ? mimeTypes['.jpg'] : mimeTypes['.png'];
 
-                    await ctx.reply(`Success! Your profile picture has been saved! You can update it anytime using the /upload_picture command. Note that your picture will be manually verified before being sent to your matches.`);
+                        try {
+                            const fileToUpload
+                                = await processPictureFile(link, fileName, applyWatermark, DIR);
 
-                }
+                            await this.profileService.uploadDocument(ctx.from.id, fileToUpload, DIR, mime_type, TypeOfDocument.PICTURE, file_id);
 
-                // if photo is shared document
-                else if (document && (
-                    document.mime_type === 'image/jpeg'
-                    || document.mime_type === 'image/png'
-                )
-                ) {
-                    const telegramProfileId = ctx.wizard.state.data.telegramProfileId;
-                    // ctx.wizard.state.data.photo_file_id = document.file_id;
+                            await deleteFile(fileToUpload, DIR);
+                            await ctx.reply(pictureCreateSuccessMsg);
+                            return ctx.scene.leave();
 
-                    const link = await ctx.telegram.getFileLink(document.file_id);
-                    console.log('picture download link:', link);
+                        } catch (error) {
+                            logger.error("Could not download/upload the picture. Error:", error);
+                            await ctx.reply(fatalErrorMsg);
+                            return ctx.scene.leave();
+                        }
+                    } else {
+                        assert(!!errorMessage, 'Both fileName and errorMessage cannot be null/undefined');
+                        await ctx.reply(errorMessage);
 
-                    let fileName = telegramProfileId + '_picture.'
-                    const nameParts: Array<string> = link.split('.');
-                    let extension: string;
-                    let failure = true;
-                    if (nameParts.length > 2) {
-                        extension = nameParts.pop().toLocaleLowerCase();
-                        if (extension === 'jpg'
-                            || extension === 'jpeg'
-                            || extension === 'png') {
-                            failure = false;
+                        if (quitOnError) {
+                            return ctx.scene.leave();
+                        } else {
+                            return;
                         }
                     }
-                    if (failure) {
-                        logger.error(`ERROR: Could not determine the extension for the file_id: ${document.file_id} and link: ${link}`);
-
-                        await ctx.reply(`Error: Only "jpeg" and "png" files are supported for profile picture. Please resend a supported picture.`);
-                        return;
-                    }
-
-                    fileName = fileName + extension;
-                    logger.log(`fileName: ${fileName}, mime: ${document.mime_type}`);
-
-                    try {
-                        await downloadFile(link, fileName);
-
-                        await this.profileService.uploadDocument(ctx.from.id, fileName, document.mime_type, TypeOfDocument.PICTURE, document.file_id);
-                    } catch (error) {
-                        logger.error("Could not download/upload the bio-data. Error:", error);
-                        await ctx.reply("Some error occurred. Please try again later!");
-                        return ctx.scene.leave();
-                    }
-
-                    await ctx.reply(`Success! Your profile picture has been saved! You can update it anytime using the /upload_picture command. Note that your picture will be manually verified before being sent to your matches.`);
-                    return ctx.scene.leave();
                 }
                 else if (ctx.message.text?.toLocaleLowerCase() === 'cancel') {
-                    await ctx.reply(`Canceling registration!`);
+                    await ctx.reply('Cancelled');
                     return ctx.scene.leave();
                 }
                 else {
-                    if (ctx.wizard.state.data.next_without_user_input) {
-                        ctx.wizard.state.data.next_without_user_input = false;
-                    } else {
-                        await ctx.reply(`Send profile picture or type "Cancel" to quit the registration process!`);
-                    }
+                    await ctx.reply(`Send profile picture or type "Cancel" to quit the registration process!`);
                     return;
                 }
             });
