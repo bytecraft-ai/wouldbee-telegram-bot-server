@@ -19,10 +19,13 @@ import { ProfilePicture } from './entities/picture.entity';
 import { Document } from './entities/document.entity';
 import { AgentModule } from 'src/agent/agent.module';
 import { AuthModule } from 'src/auth/auth.module';
+import { Match } from './entities/match.entity';
+import { AwsDocument } from './entities/aws-document.entity';
+import { InvalidDocument } from './entities/invalid-document.entity';
 
 @Module({
     imports: [AuthModule, AgentModule,
-        TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, TelegramProfile, SharedProfile, ProfilePicture, BioData, IdProof, Document,]), AwsServiceModule, PassportModule.register({ defaultStrategy: 'jwt' }),
+        TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, TelegramProfile, SharedProfile, ProfilePicture, BioData, IdProof, Document, Match, AwsDocument, InvalidDocument]), AwsServiceModule, PassportModule.register({ defaultStrategy: 'jwt' }),
     ],
     providers: [ProfileService],
     controllers: [ProfileController, PreferenceController, CommonController],

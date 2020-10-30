@@ -1,8 +1,8 @@
-export const welcomeMessage = `Hi, I am Would Bee Matrimony bot! To avail my services, please register by sharing your phone number and bio-data. I will then share with you the bio-data of your "Would Bees" (prospective matches) regularly. Similarly, your bio-data will be shared with them.
+export const welcomeMessage = `Hi, I am Would Bee Matrimony bot! To avail my services, please register by sharing your phone number and bio-data. I will then share with you the bio-data of your "Would Bees" (prospective matches) regularly. Similarly, your bio-data will be shared with them. 
 
-To get started, please type or click on /register_me
+ - By using this service, you agree to our terms of use, available on www.wouldbee.com
 
-You can unsubscribe anytime by typing or clicking /unsubscribe.`
+ - To get started, please type or click on /register_me`
 
 
 export const helpMessage = `Hi there. You can use the following command to avail my services -

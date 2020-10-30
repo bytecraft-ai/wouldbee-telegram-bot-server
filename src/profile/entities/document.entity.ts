@@ -6,41 +6,35 @@ import {
     UpdateDateColumn,
     CreateDateColumn,
     JoinColumn,
-    PrimaryColumn,
     DeleteDateColumn,
+    OneToOne,
 } from 'typeorm';
-import { State } from './state.entity';
-import { IsString, Length } from 'class-validator';
-import { fileNameMaxLength, fileNameMinLength, urlMaxLength } from 'src/common/field-length';
-import { Agent } from 'http';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import { urlMaxLength } from 'src/common/field-length';
 import { TypeOfDocument, TypeOfIdProof } from 'src/common/enum';
-import { Profile } from './profile.entity';
 import { TelegramProfile } from './telegram-profile.entity';
+import { Verifiable } from './abstract-verifiable.entity';
+import { AwsDocument } from './aws-document.entity';
+import { InvalidDocument } from './invalid-document.entity';
 
 @Entity()
-export class Document {
-    @PrimaryGeneratedColumn("uuid")
-    id?: string;
+export class Document extends Verifiable {
+    @PrimaryGeneratedColumn()
+    id?: number;
+
+    @Column("uuid")
+    telegramProfileId: string;
 
     @ManyToOne(
         type => TelegramProfile,
         telegramProfile => telegramProfile.documents,
-        {
-            // Can't use as part of composite primary key without this.
-            nullable: false,
-        }
+        { nullable: false }
     )
     @JoinColumn({
-        name: "id",
+        name: "telegramProfileId",
         referencedColumnName: "id",
     })
     telegramProfile: TelegramProfile;
-
-    @PrimaryColumn("smallint")
-    typeOfDocument: TypeOfDocument;
-
-    @Column("smallint", { nullable: true })
-    typeOfIdProof: TypeOfIdProof;
 
     @CreateDateColumn()
     createdOn?: Date;
@@ -49,19 +43,27 @@ export class Document {
     updatedOn?: Date;
 
     @DeleteDateColumn()
-    deletedOn: Date;
+    deletedOn?: Date;
 
-    @Length(fileNameMinLength, fileNameMaxLength)
-    @IsString()
-    @Column("varchar", { length: fileNameMaxLength })
-    fileName: string;
+    @Column("smallint")
+    typeOfDocument: TypeOfDocument;
 
-    @Length(40, urlMaxLength)
-    @IsString()
-    @Column("varchar", { length: urlMaxLength })
-    url: string;
+    @Column("smallint", { nullable: true })
+    typeOfIdProof?: TypeOfIdProof;
 
     @IsString()
     @Column("varchar", { length: urlMaxLength })
     telegramFileId: string;
+
+    // null - unverified, false - invalid/old and not in use, true - currently in use 
+    @IsOptional()
+    @IsBoolean()
+    @Column({ nullable: true })
+    active?: boolean;
+
+    @OneToOne(type => AwsDocument, awsDocument => awsDocument.document)
+    awsDocument?: AwsDocument;
+
+    @OneToOne(type => InvalidDocument, invalidDoc => invalidDoc.document)
+    invalidDocument?: InvalidDocument;
 }

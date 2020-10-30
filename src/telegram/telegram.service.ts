@@ -5,7 +5,7 @@
  * 
  *  2. Implement status - what does a user need to do next
  * 
- *  3. Implement sharing
+ *  3. Implement sharing of bio-data with user
  * 
  *  4. Implement watermarking on pdf and pictures
  * 

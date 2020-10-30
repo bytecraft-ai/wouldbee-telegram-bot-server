@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, Logger, BadRequestException, NotFoundException, ConflictException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger, BadRequestException, NotFoundException, ConflictException, InternalServerErrorException, NotImplementedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, RegistrationStatus } from 'src/common/enum';
 import { deDuplicateArray, getAgeInYearsFromDOB, setDifferenceFromArrays } from 'src/common/util';
@@ -12,7 +12,7 @@ import { PartnerPreference } from './entities/partner-preference.entity';
 import { Profile } from './entities/profile.entity';
 import { State } from './entities/state.entity';
 // import { User } from './entities/user.entity';
-import { GetCityOptions, GetStateOptions } from './profile.interface';
+import { GetAllDocumentsOption, GetCityOptions, GetStateOptions, GetTelegramProfilesOption } from './profile.interface';
 import { createHash, createHmac } from 'crypto';
 import { TelegramProfile } from './entities/telegram-profile.entity';
 import { SharedProfile } from './entities/shared-profiles.entity';
@@ -23,6 +23,10 @@ import { Document } from './entities/document.entity';
 import { isUUID } from 'class-validator';
 import { AgentService } from 'src/agent/agent.service';
 import { Agent } from 'src/agent/entities/agent.entity';
+import { assert } from 'console';
+import { InvalidDocument } from './entities/invalid-document.entity';
+import { AwsDocument } from './entities/aws-document.entity';
+import { isNil } from 'lodash';
 
 const logger = new Logger('ProfileService');
 
@@ -38,6 +42,8 @@ export class ProfileService {
         @InjectRepository(PartnerPreference) private prefRepository: Repository<PartnerPreference>,
 
         @InjectRepository(Document) private documentRepository: Repository<Document>,
+        @InjectRepository(AwsDocument) private awsDocumentRepository: Repository<AwsDocument>,
+        @InjectRepository(InvalidDocument) private invalidDocumentRepository: Repository<InvalidDocument>,
 
         @InjectRepository(Caste) private casteRepository: Repository<Caste>,
         @InjectRepository(City) private cityRepository: Repository<City>,
@@ -335,6 +341,95 @@ export class ProfileService {
     }
 
 
+    async getTelegramProfiles(options?: GetTelegramProfilesOption, skip = 0, take = 20): Promise<IList<TelegramProfile> | undefined> {
+
+        if (take < 1 || take > 100) {
+            throw new Error('1 ≤ take ≥ 100');
+        }
+
+        const { isValid, withPhone, withBio, withPhoto, withIdProof } = options;
+        const query = this.telegramRepository.createQueryBuilder('tel_profile');
+
+        // TODO: Implement using INTERSECT clause within sub-queries and fix this.
+        if (!isNil(withPhoto) || !isNil(withIdProof)) {
+            throw new NotImplementedException('withPhoto and withIdProof options are not yet implemented!')
+            /**
+             * TODO: Refactor documents into separate tables - BioData, IdProof, 
+             * Picture, etc. This will allow join to create a single row, e.g.
+             * (id1, chatId1, phone1, idProof1, bio1, photo1)
+             *  BUT if we have all docTypes in one document, then we get multi-row
+             *  join for each id, e.g. (which is harder to query bcz of attributes
+             *  being in separate rows.)
+             *  [   
+             *      (id2, chatId2, phone2, bio2),
+             *      (id2, chatId2, phone2, photo2),
+             *      (id2, chatId2, phone2, idProof2),
+             *  ]
+             */
+        }
+
+        if (!isNil(withBio) || !isNil(withPhoto) || !isNil(withIdProof))
+            query.leftJoin('tel_profile.documents', 'document');
+
+        if (!isNil(isValid))
+            query.where('tel_profile.isValid = :isValid', { isValid });
+
+        if (!isNil(withPhone) && withPhone === false)
+            query.andWhere('tel_profile.phone IS NULL');
+        else if (withPhone)
+            query.andWhere('tel_profile.phone IS NOT NULL');
+
+        if (withBio)
+            query.andWhere('document.typeOfDocument = :docTypeBio', { docTypeBio: TypeOfDocument.BIO_DATA });
+        else if (!isNil(withBio) && withBio === false) {
+            query.andWhere(qb => {
+                const subQuery = qb.subQuery()
+                    .select("t_document.telegramProfileId")
+                    .from(Document, "t_document")
+                    .where("t_document.typeOfDocument = :docTypeBio")
+                    .getQuery();
+                return "tel_profile.id NOT IN " + subQuery;
+            })
+            query.setParameter("docTypeBio", TypeOfDocument.BIO_DATA);
+        }
+
+        // if (withPhoto)
+        //     query.andWhere('document.typeOfDocument = :docTypePhoto', { docTypePhoto: TypeOfDocument.PICTURE });
+        // else if (!isNil(withPhoto) && withPhoto === false) {
+        //     query.andWhere(qb => {
+        //         const subQuery = qb.subQuery()
+        //             .select("t_document.telegramProfileId")
+        //             .from(Document, "t_document")
+        //             .where("t_document.typeOfDocument = :docTypePhoto")
+        //             .getQuery();
+        //         return "tel_profile.id NOT IN " + subQuery;
+        //     })
+        //     query.setParameter("docTypePhoto", TypeOfDocument.PICTURE);
+        // }
+
+        // if (withIdProof)
+        //     query.andWhere('document.typeOfDocument = :docTypeId', { docTypeId: TypeOfDocument.ID_PROOF });
+        // else if (!isNil(withIdProof) && withIdProof === false) {
+        //     query.andWhere(qb => {
+        //         const subQuery = qb.subQuery()
+        //             .select("t_document.telegramProfileId")
+        //             .from(Document, "t_document")
+        //             .where("t_document.typeOfDocument = :docTypeId")
+        //             .getQuery();
+        //         return "tel_profile.id NOT IN " + subQuery;
+        //     })
+        //     query.setParameter("docTypeId", TypeOfDocument.ID_PROOF);
+        // }
+
+        const [telegramProfiles, count] = await query.skip(skip).take(take).getManyAndCount();
+
+        return {
+            count,
+            values: telegramProfiles
+        };
+    }
+
+
     async getTelegramProfileById(id: string, { throwOnFail = true }): Promise<TelegramProfile | undefined> {
         const telegramProfile = await this.telegramRepository.findOne(id);
         if (throwOnFail && !telegramProfile) {
@@ -376,54 +471,108 @@ export class ProfileService {
     }
 
 
-    async getAllDocumentsForTelegramProfile(telegramProfileId: string): Promise<Document[] | undefined> {
-        return this.documentRepository.find({
-            where: { telegramProfileId }
+    async getAllDocuments(options?: GetAllDocumentsOption, skip = 0, take = 20): Promise<IList<Document> | undefined> {
+        const { telegramProfileId, typeOfDocument } = options;
+        const [values, count] = await this.documentRepository.findAndCount({
+            where: { telegramProfileId },
+            skip,
+            take
         });
+
+        return {
+            count,
+            values
+        }
     }
 
 
-    async getDocument(telegramProfileId: string, typeOfDocument: TypeOfDocument, { throwOnFail = false }): Promise<Document | undefined> {
+    async getDocument(telegramProfileId: string, typeOfDocument: TypeOfDocument, { throwOnFail = false,
+        awsDocument = false,
+        invalidDocument = false
+    }): Promise<Document | undefined> {
+
+        const relations: string[] = [];
+        if (awsDocument)
+            relations.push('awsDocument');
+        if (invalidDocument)
+            relations.push('invalidDocument');
+
         const document = await this.documentRepository.findOne({
-            where: { id: telegramProfileId, typeOfDocument: typeOfDocument }
+            where: { id: telegramProfileId, typeOfDocument: typeOfDocument },
+            relations
         });
+
         if (throwOnFail && !document) {
             throw new NotFoundException(`Document with id: ${telegramProfileId} and docType: ${typeOfDocument} does not exist!`);
         }
+
         return document;
     }
 
 
+    @Transactional()
     async uploadDocument(telegramUserId: number, fileName: string, dir: string, contentType: string, typeOfDocument: TypeOfDocument, telegramFileId: string, typeOfIdProof?: TypeOfIdProof): Promise<Document | undefined> {
-        const telegramProfile = await this.getTelegramProfileByTelegramUserId(telegramUserId, { throwOnFail: true });
+        try {
+            const telegramProfile = await this.getTelegramProfileByTelegramUserId(telegramUserId, { throwOnFail: true });
 
-        let document = await this.getDocument(telegramProfile.id, typeOfDocument, { throwOnFail: false });
+            // let document = await this.getDocument(telegramProfile.id, typeOfDocument, { throwOnFail: false });
 
-        if (document) {
-            if (document.telegramFileId !== telegramFileId) {
+            let unverifiedDocument = await this.documentRepository.findOne({
+                where: { id: telegramProfile.id, typeOfDocument: typeOfDocument, isValid: null },
+                relations: ['awsDocument']
+            });
+
+            if (unverifiedDocument) {
+                assert(!!unverifiedDocument.awsDocument, 'Unverified document should have an associated awsDocument!');
+
+                // mark old unverified document as inactive;
+                unverifiedDocument.active = false;
+
+                // Need to delete AWS document after the new one is uploaded.
+
+                // Save repo
+                await this.documentRepository.save(unverifiedDocument);
+
                 // overwrite aws S3 document with the new one using the same fileName.
-                const url = await this.awsService.uploadFileToS3(telegramProfile.id, fileName, contentType, typeOfDocument, dir);
+                // const url = await this.awsService.uploadFileToS3(telegramProfile.id, fileName, contentType, typeOfDocument, dir);
 
-                // update table - only telegramFileId is changed
-                document.telegramFileId = telegramFileId;
-                document.url = url;
+                // // update Document table - only telegramFileId is changed
+                // unverifiedDocument.telegramFileId = telegramFileId;
+
+                // // update AwsDocument table (which is redundant actually)
+                // unverifiedDocument.awsDocument.url = url;
             }
-        } else {
+
             // upload aws s3 document
             const url = await this.awsService.uploadFileToS3(telegramProfile.id, fileName, contentType, typeOfDocument, dir);
 
             // update table
-            document = this.documentRepository.create({
-                id: telegramProfile.id,
+            const awsDocument = this.awsDocumentRepository.create({
+                fileName,
+                url,
+                mimeType: contentType
+            });
+
+            let document = this.documentRepository.create({
+                telegramProfileId: telegramProfile.id,
                 typeOfDocument,
                 typeOfIdProof,
                 telegramFileId,
-                fileName,
-                url,
-            })
-        }
+                awsDocument
+            });
 
-        return this.documentRepository.save(document);
+            document = await this.documentRepository.save(document);
+
+            // Now delete old unverified document from aws S3 and AwsDocument table
+            await this.awsService.deleteFileFromS3(fileName, typeOfDocument);
+            await this.awsDocumentRepository.delete(unverifiedDocument.awsDocument.id);
+
+            return document;
+        }
+        catch (error) {
+            logger.error(`Could not upload document. Error: ${error}`);
+            throw error;
+        }
     }
 
 
@@ -431,9 +580,58 @@ export class ProfileService {
 
         const telegramProfile = await this.getTelegramProfileByTelegramUserId(telegramUserId, { throwOnFail: true });
 
-        const document = await this.getDocument(telegramProfile.id, typeOfDocument, { throwOnFail: true });
+        const document = await this.getDocument(telegramProfile.id, typeOfDocument, { throwOnFail: true, awsDocument: true });
 
-        return this.awsService.downloadFileFromS3(document.fileName, typeOfDocument, dir);
+        if (!document.awsDocument)
+            throw new Error('This document does not exist on AWS!');
+
+        return this.awsService.downloadFileFromS3(document.awsDocument.fileName, typeOfDocument, dir);
+    }
+
+
+    @Transactional()
+    async verifyDocument(documentId: number, agent: Agent): Promise<Document | undefined> {
+        try {
+            let document = await this.documentRepository.findOne(documentId);
+
+            if (!document) {
+                throw new NotFoundException(`Document with id: ${documentId} does not exist!`);
+            }
+
+            // handle case when a new document has been uploaded during the verification process and this one has been marked as old. 
+            if (document?.active === false) {
+                throw new Error('Document is inactive and does not require validation!');
+            }
+
+            // find current active document, mark as inactive and delete from AWS in the end
+            const currentActiveDocument = await this.documentRepository.findOne({
+                where: {
+                    telegramProfileId: document.telegramProfileId,
+                    typeOfDocument: document.typeOfDocument,
+                    active: true
+                },
+                relations: ['awsDocument']
+            });
+            currentActiveDocument.active = false
+
+            const currentActiveAwsDocument = currentActiveDocument.awsDocument;
+            await this.awsDocumentRepository.delete(currentActiveAwsDocument.id);
+
+
+            document.active = true;
+            document.verifierId = agent.id;
+            document.verifiedOn = new Date();
+            const documents = await this.documentRepository.save([currentActiveDocument, document]);
+
+            // delete old active document from AWS.
+            this.awsService.deleteFileFromS3(currentActiveAwsDocument.fileName, currentActiveDocument.typeOfDocument);
+
+            return documents.find(doc => doc.id === documentId)
+        }
+        catch (error) {
+            logger.error(`Could not verify document. Error: ${error}`);
+            throw error;
+        }
     }
 
 

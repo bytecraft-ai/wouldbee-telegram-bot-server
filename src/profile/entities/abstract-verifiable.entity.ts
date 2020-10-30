@@ -13,15 +13,15 @@ export abstract class Verifiable {
     //
     // @Column({ "nullable": true, "default": () => null })
     @Column({ "nullable": true })
-    isVerified: boolean;
+    isValid?: boolean;
 
     @Column({ "nullable": true })
-    verifiedOn: Date;
+    verifiedOn?: Date;
 
-    @Column({ nullable: true })
-    verifierId: number;
+    @Column("uuid", { nullable: true })
+    verifierId?: string;
 
     @ManyToOne(type => Agent, { nullable: true })
     @JoinColumn({ name: "verifierId" })
-    verifiedBy: Agent;
+    verifiedBy?: Agent;
 }

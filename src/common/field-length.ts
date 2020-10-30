@@ -24,4 +24,8 @@ export const phoneCodeMaxLength = 20;
 // Files & urls
 export const fileNameMinLength = 32; // at least profile-public-id-length
 export const fileNameMaxLength = 200;
-export const urlMaxLength = 1000;
+export const urlMaxLength = 700;
+export const mimeMaxLength = 100;
+
+// rejection-reason
+export const bioRejectionReasonMaxLength = 200;

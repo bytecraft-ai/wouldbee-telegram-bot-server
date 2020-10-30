@@ -6,12 +6,15 @@ import {
     JoinColumn,
     OneToOne,
     OneToMany,
+    UpdateDateColumn,
+    DeleteDateColumn,
 } from 'typeorm';
+import { Verifiable } from './abstract-verifiable.entity';
 import { Document } from './document.entity';
 import { Profile } from './profile.entity';
 
 @Entity()
-export class TelegramProfile {
+export class TelegramProfile extends Verifiable {
     @PrimaryGeneratedColumn("uuid")
     id: string;
 
@@ -20,6 +23,12 @@ export class TelegramProfile {
 
     @CreateDateColumn()
     createdOn?: Date;
+
+    @UpdateDateColumn()
+    updatedOn?: Date;
+
+    @DeleteDateColumn()
+    deletedOn?: Date;
 
     @Column({ unique: true })
     telegramUserId: number;

@@ -273,6 +273,21 @@ export enum Language {
 }
 
 
+export enum BioRejectionReason {
+    NOT_A_BIO = 1,
+    MISSING_NAME,
+    MISSING_GENDER,
+    MISSING_DOB,
+    MISSING_RELIGION,
+    MISSING_CASTE,
+    MISSING_INCOME,
+    MISSING_CITY,
+    INVALID_CONTACT,
+    OBSCENE_OR_OFFENSIVE,
+    OTHER,
+}
+
+
 export enum AccountDeletionReason {
     FOUND_MATCH_HERE = 1,
     FOUND_MATCH_ELSEWHERE_FAMILY,

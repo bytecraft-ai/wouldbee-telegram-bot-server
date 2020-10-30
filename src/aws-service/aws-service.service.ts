@@ -194,7 +194,6 @@ export class AwsService {
     }
 
 
-    // TODO
     async uploadFileToS3(id: string, fileName: string, contentType: string, typeOfDocument: TypeOfDocument, dir = '/tmp/'): Promise<string | undefined> {
 
         logger.log(`Uploading files to the bucket. Params: ${id}, ${fileName}, ${contentType}, ${typeOfDocument}, ${dir}`);
@@ -230,7 +229,7 @@ export class AwsService {
     }
 
 
-    // TODO
+    // TODO: test
     async downloadFileFromS3(fileName: string, typeOfDocument: TypeOfDocument, dir = '/tmp/'): Promise<string> {
         const S3_BUCKET = this.getS3Bucket(typeOfDocument);
         var params = {
@@ -242,5 +241,29 @@ export class AwsService {
         readStream.pipe(writeStream);
         return path.join(dir, fileName);
     }
+
+
+    // TODO: test
+    async deleteFileFromS3(fileName: string, typeOfDocument: TypeOfDocument) {
+        const S3_BUCKET = this.getS3Bucket(typeOfDocument);
+        var params = {
+            Bucket: S3_BUCKET,
+            Key: fileName
+        };
+        return new Promise((resolve, reject) => {
+            this.awsS3.deleteObject(params, function (err, data) {
+                if (err) {
+                    logger.log(`Could not delete aws file: ${fileName}. Error: ${err}`);
+                    reject(err);
+                }
+                else {
+                    logger.log(`Successfully deleted ${fileName} from bucket`);
+                }
+                logger.log(data);
+                resolve();
+            });
+        });
+    }
+
 
 }
