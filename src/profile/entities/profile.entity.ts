@@ -28,9 +28,9 @@ import { PartnerPreference } from './partner-preference.entity';
 import { SharedProfile } from './shared-profiles.entity';
 import { TelegramProfile } from './telegram-profile.entity';
 import { Language, MaritalStatus } from 'src/common/enum';
-import { IdProof } from './id-proof.entity';
-import { ProfilePicture } from './picture.entity';
-import { BioData } from './bio-data.entity';
+// import { IdProof } from './id-proof.entity';
+// import { ProfilePicture } from './picture.entity';
+// import { BioData } from './bio-data.entity';
 // import { Document } from './update.entity';
 // import { User } from './user.entity';
 
@@ -56,10 +56,10 @@ export class Profile {
     telegramProfile: TelegramProfile;
 
     @CreateDateColumn()
-    createdOn: Date;
+    createdOn?: Date;
 
     @UpdateDateColumn()
-    updatedOn: Date;
+    updatedOn?: Date;
 
     @DeleteDateColumn()
     deletedOn?: Date;
@@ -68,11 +68,11 @@ export class Profile {
     // email: string;
 
     @Column("int")
-    countryId: number;
+    countryId?: number;
 
-    @ManyToOne(type => Country, { eager: true })
+    @ManyToOne(type => Country)
     @JoinColumn()
-    country: Country;
+    country?: Country;
 
     @Column({ unique: true })
     @Length(10, 10, { message: 'Phone number must be of 10 digits only!' })
@@ -131,14 +131,14 @@ export class Profile {
     @OneToOne(type => PartnerPreference)
     partnerPreference: PartnerPreference;
 
-    @OneToOne(type => IdProof, idProof => idProof.profile)
-    idProof: IdProof;
+    // @OneToOne(type => IdProof, idProof => idProof.profile)
+    // idProof: IdProof;
 
-    @OneToOne(type => ProfilePicture, picture => picture.profile)
-    picture: ProfilePicture;
+    // @OneToOne(type => ProfilePicture, picture => picture.profile)
+    // picture: ProfilePicture;
 
-    @OneToOne(type => BioData, bioData => bioData.profile)
-    bioData: BioData;
+    // @OneToOne(type => BioData, bioData => bioData.profile)
+    // bioData: BioData;
 
     // @OneToMany(type => Document, update => update.profile)
     // updates: Document[]

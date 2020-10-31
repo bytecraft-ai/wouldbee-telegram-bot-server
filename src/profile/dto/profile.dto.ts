@@ -1,5 +1,6 @@
+import { Language } from 'aws-sdk/clients/support';
 import { IsNotEmpty, IsString, MinLength, MaxLength, Matches, IsNumberString, Length, IsEmail, IsInt, IsOptional, Min, Max, IsPositive, IsUUID, IsNumber, IsIn } from 'class-validator';
-import { AnnualIncome, Gender, Religion, TypeOfDocument } from 'src/common/enum';
+import { AnnualIncome, EducationDegree, EmployedIn, Gender, MaritalStatus, Occupation, Religion, TypeOfDocument } from 'src/common/enum';
 import { nameMaxLength, nameMinLength } from 'src/common/field-length';
 
 
@@ -131,6 +132,23 @@ export class CreateProfileDto {
     @IsNotEmpty()
     @IsInt()
     cityId: number;
+
+    // optional params
+
+    @IsInt()
+    highestDegree?: EducationDegree;
+
+    @IsInt()
+    employedIn?: EmployedIn;
+
+    @IsInt()
+    occupation?: Occupation;
+
+    @IsInt()
+    motherTongue?: Language;
+
+    @IsInt()
+    maritalStatus?: MaritalStatus;
 }
 
 

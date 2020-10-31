@@ -20,11 +20,11 @@ export class AgentController {
     ) { }
 
 
-    @Post()
-    async registerAgent(@Body() registrationDto: AgentRegistrationDto): Promise<Agent> {
-        logger.log('controller:registerAgent - registrationDto:', JSON.stringify(registrationDto));
-        return this.agentService.registerAgent(registrationDto);
-    }
+    // @Post()
+    // async registerAgent(@Body() registrationDto: AgentRegistrationDto): Promise<Agent> {
+    //     logger.log('controller:registerAgent - registrationDto:', JSON.stringify(registrationDto));
+    //     return this.agentService.registerAgent(registrationDto);
+    // }
 
 
     @Get('/')
@@ -42,6 +42,41 @@ export class AgentController {
         // console.log('request:', req);
         console.log('agent:', agent);
         return { test: 'success' };
+    }
+
+
+    @Get('/init')
+    async init() {
+        const rahul: AgentRegistrationDto = {
+            email: "rahul@wouldbee.com",
+            phone: "9611121073",
+            name: "Rahul Gupta",
+            password: "crazy-strong-password",
+            role: UserRole.ADMIN
+        }
+        const charul: AgentRegistrationDto = {
+            email: "charul@wouldbee.com",
+            phone: "97030726206",
+            name: "Kritika Agrawal",
+            password: "password",
+            role: UserRole.AGENT
+        }
+
+        try {
+            await this.agentService.registerAgent(rahul);
+        } catch (err) {
+            logger.log(`Could not init Admin: rahul. Error: ${err}`);
+        }
+
+        try {
+            await this.agentService.registerAgent(charul);
+        } catch (err) {
+            logger.log(`Could not init Agent: charul. Error: ${err}`);
+        }
+
+        return {
+            message: 'initialized admins and agents'
+        };
     }
 
 }

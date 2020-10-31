@@ -12,7 +12,8 @@ import { TypeOfIdProof } from 'src/common/enum'
 import { Profile } from './profile.entity';
 import { Verifiable } from './abstract-verifiable.entity';
 import { IsString, IsUrl, Length } from 'class-validator';
-import { fileNameMaxLength, fileNameMinLength, urlMaxLength } from 'src/common/field-length';
+import { fileNameMaxLength, fileNameMinLength, mimeMaxLength, urlMaxLength } from 'src/common/field-length';
+import { TelegramProfile } from './telegram-profile.entity';
 
 // TODO: implement table indexing on important columns
 
@@ -26,10 +27,9 @@ export class IdProof extends Verifiable {
     id: string;
 
     @OneToOne(
-        type => Profile,
-        profile => profile.idProof,
+        type => TelegramProfile,
+        tProfile => tProfile.idProof,
         {
-            // primary: true, 
             nullable: false,
         }
     )
@@ -37,9 +37,8 @@ export class IdProof extends Verifiable {
         name: "id",
         referencedColumnName: "id",
     })
-    profile: Profile;
+    telegramProfile: TelegramProfile;
 
-    // @Column("enum", { enum: TypeOfIdProof })
     @Column("smallint")
     type: TypeOfIdProof;
 
@@ -52,8 +51,11 @@ export class IdProof extends Verifiable {
     @Column({ length: urlMaxLength })
     url: string;
 
+    @Column("varchar", { length: mimeMaxLength })
+    mimeType: string;
+
     @CreateDateColumn()
-    uploadedOn: Date;
+    uploadedOn?: Date;
 
     @DeleteDateColumn()
     deletedOn?: Date;

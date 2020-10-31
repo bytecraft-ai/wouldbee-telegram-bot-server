@@ -9,14 +9,16 @@ import {
     DeleteDateColumn,
     OneToOne,
 } from 'typeorm';
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
-import { urlMaxLength } from 'src/common/field-length';
-import { TypeOfDocument, TypeOfIdProof } from 'src/common/enum';
+import { IsBoolean, IsOptional, IsString, Length } from 'class-validator';
+import { bioRejectionReasonMaxLength, fileNameMaxLength, fileNameMinLength, mimeMaxLength, urlMaxLength } from 'src/common/field-length';
+import { BioRejectionReason, TypeOfDocument, TypeOfIdProof } from 'src/common/enum';
 import { TelegramProfile } from './telegram-profile.entity';
 import { Verifiable } from './abstract-verifiable.entity';
 import { AwsDocument } from './aws-document.entity';
 import { InvalidDocument } from './invalid-document.entity';
 
+
+// Records all document updates.
 @Entity()
 export class Document extends Verifiable {
     @PrimaryGeneratedColumn()
@@ -61,9 +63,28 @@ export class Document extends Verifiable {
     @Column({ nullable: true })
     active?: boolean;
 
-    @OneToOne(type => AwsDocument, awsDocument => awsDocument.document)
-    awsDocument?: AwsDocument;
+    // @OneToOne(type => AwsDocument, awsDocument => awsDocument.document)
+    // awsDocument?: AwsDocument;
 
-    @OneToOne(type => InvalidDocument, invalidDoc => invalidDoc.document)
-    invalidDocument?: InvalidDocument;
+    // @OneToOne(type => InvalidDocument, invalidDoc => invalidDoc.document)
+    // invalidDocument?: InvalidDocument;
+
+    @Length(fileNameMinLength, fileNameMaxLength)
+    @IsString()
+    @Column("varchar", { length: fileNameMaxLength })
+    fileName: string;
+
+    @Length(40, urlMaxLength)
+    @IsString()
+    @Column("varchar", { length: urlMaxLength })
+    url: string;
+
+    @Column("varchar", { length: mimeMaxLength })
+    mimeType: string;
+
+    @Column({ type: "smallint" })
+    invalidationReason: BioRejectionReason;
+
+    @Column("varchar", { nullable: true, length: bioRejectionReasonMaxLength })
+    invalidationDescription: BioRejectionReason;
 }

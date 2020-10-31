@@ -23,9 +23,9 @@ import { Document } from './entities/document.entity';
 import { isUUID } from 'class-validator';
 import { AgentService } from 'src/agent/agent.service';
 import { Agent } from 'src/agent/entities/agent.entity';
-import { assert } from 'console';
-import { InvalidDocument } from './entities/invalid-document.entity';
-import { AwsDocument } from './entities/aws-document.entity';
+// import { assert } from 'console';
+// import { InvalidDocument } from './entities/invalid-document.entity';
+// import { AwsDocument } from './entities/aws-document.entity';
 import { isNil } from 'lodash';
 
 const logger = new Logger('ProfileService');
@@ -42,8 +42,8 @@ export class ProfileService {
         @InjectRepository(PartnerPreference) private prefRepository: Repository<PartnerPreference>,
 
         @InjectRepository(Document) private documentRepository: Repository<Document>,
-        @InjectRepository(AwsDocument) private awsDocumentRepository: Repository<AwsDocument>,
-        @InjectRepository(InvalidDocument) private invalidDocumentRepository: Repository<InvalidDocument>,
+        // @InjectRepository(AwsDocument) private awsDocumentRepository: Repository<AwsDocument>,
+        // @InjectRepository(InvalidDocument) private invalidDocumentRepository: Repository<InvalidDocument>,
 
         @InjectRepository(Caste) private casteRepository: Repository<Caste>,
         @InjectRepository(City) private cityRepository: Repository<City>,
@@ -152,7 +152,7 @@ export class ProfileService {
 
 
     async createProfile(profileDto: CreateProfileDto): Promise<Profile | undefined> {
-        const { userId, name, gender, dob, religion, casteId, annualIncome, cityId } = profileDto;
+        const { userId, name, gender, dob, religion, casteId, annualIncome, cityId, highestDegree, employedIn, occupation, motherTongue, maritalStatus } = profileDto;
         let profile = await this.profileRepository.findOne(userId);
         if (profile) {
             throw new
@@ -486,20 +486,11 @@ export class ProfileService {
     }
 
 
-    async getDocument(telegramProfileId: string, typeOfDocument: TypeOfDocument, { throwOnFail = false,
-        awsDocument = false,
-        invalidDocument = false
+    async getDocument(telegramProfileId: string, typeOfDocument: TypeOfDocument, { throwOnFail = false
     }): Promise<Document | undefined> {
-
-        const relations: string[] = [];
-        if (awsDocument)
-            relations.push('awsDocument');
-        if (invalidDocument)
-            relations.push('invalidDocument');
 
         const document = await this.documentRepository.findOne({
             where: { id: telegramProfileId, typeOfDocument: typeOfDocument },
-            relations
         });
 
         if (throwOnFail && !document) {
@@ -519,53 +510,36 @@ export class ProfileService {
 
             let unverifiedDocument = await this.documentRepository.findOne({
                 where: { id: telegramProfile.id, typeOfDocument: typeOfDocument, isValid: null },
-                relations: ['awsDocument']
             });
-
-            if (unverifiedDocument) {
-                assert(!!unverifiedDocument.awsDocument, 'Unverified document should have an associated awsDocument!');
-
-                // mark old unverified document as inactive;
-                unverifiedDocument.active = false;
-
-                // Need to delete AWS document after the new one is uploaded.
-
-                // Save repo
-                await this.documentRepository.save(unverifiedDocument);
-
-                // overwrite aws S3 document with the new one using the same fileName.
-                // const url = await this.awsService.uploadFileToS3(telegramProfile.id, fileName, contentType, typeOfDocument, dir);
-
-                // // update Document table - only telegramFileId is changed
-                // unverifiedDocument.telegramFileId = telegramFileId;
-
-                // // update AwsDocument table (which is redundant actually)
-                // unverifiedDocument.awsDocument.url = url;
-            }
 
             // upload aws s3 document
             const url = await this.awsService.uploadFileToS3(telegramProfile.id, fileName, contentType, typeOfDocument, dir);
-
-            // update table
-            const awsDocument = this.awsDocumentRepository.create({
-                fileName,
-                url,
-                mimeType: contentType
-            });
 
             let document = this.documentRepository.create({
                 telegramProfileId: telegramProfile.id,
                 typeOfDocument,
                 typeOfIdProof,
                 telegramFileId,
-                awsDocument
+                fileName,
+                url,
+                mimeType: contentType
             });
 
             document = await this.documentRepository.save(document);
 
-            // Now delete old unverified document from aws S3 and AwsDocument table
-            await this.awsService.deleteFileFromS3(fileName, typeOfDocument);
-            await this.awsDocumentRepository.delete(unverifiedDocument.awsDocument.id);
+            // Now delete old unverified document from aws S3 and table
+            if (unverifiedDocument) {
+
+                // mark old unverified document as inactive;
+                unverifiedDocument.active = false;
+                unverifiedDocument.url = null;
+                unverifiedDocument.fileName = null;
+                unverifiedDocument.mimeType = null;
+
+                // Save repo & delete file from aws
+                await this.documentRepository.save(unverifiedDocument);
+                await this.awsService.deleteFileFromS3(fileName, typeOfDocument);
+            }
 
             return document;
         }
@@ -580,12 +554,12 @@ export class ProfileService {
 
         const telegramProfile = await this.getTelegramProfileByTelegramUserId(telegramUserId, { throwOnFail: true });
 
-        const document = await this.getDocument(telegramProfile.id, typeOfDocument, { throwOnFail: true, awsDocument: true });
+        const document = await this.getDocument(telegramProfile.id, typeOfDocument, { throwOnFail: true });
 
-        if (!document.awsDocument)
+        if (!document.fileName)
             throw new Error('This document does not exist on AWS!');
 
-        return this.awsService.downloadFileFromS3(document.awsDocument.fileName, typeOfDocument, dir);
+        return this.awsService.downloadFileFromS3(document.fileName, typeOfDocument, dir);
     }
 
 
@@ -598,25 +572,19 @@ export class ProfileService {
                 throw new NotFoundException(`Document with id: ${documentId} does not exist!`);
             }
 
-            // handle case when a new document has been uploaded during the verification process and this one has been marked as old. 
-            if (document?.active === false) {
-                throw new Error('Document is inactive and does not require validation!');
-            }
-
             // find current active document, mark as inactive and delete from AWS in the end
             const currentActiveDocument = await this.documentRepository.findOne({
                 where: {
                     telegramProfileId: document.telegramProfileId,
                     typeOfDocument: document.typeOfDocument,
                     active: true
-                },
-                relations: ['awsDocument']
+                }
             });
-            currentActiveDocument.active = false
-
-            const currentActiveAwsDocument = currentActiveDocument.awsDocument;
-            await this.awsDocumentRepository.delete(currentActiveAwsDocument.id);
-
+            currentActiveDocument.active = false;
+            const currentActiveDocumentFileName = currentActiveDocument.fileName;
+            currentActiveDocument.fileName = null;
+            currentActiveDocument.url = null;
+            currentActiveDocument.mimeType = null;
 
             document.active = true;
             document.verifierId = agent.id;
@@ -624,7 +592,7 @@ export class ProfileService {
             const documents = await this.documentRepository.save([currentActiveDocument, document]);
 
             // delete old active document from AWS.
-            this.awsService.deleteFileFromS3(currentActiveAwsDocument.fileName, currentActiveDocument.typeOfDocument);
+            this.awsService.deleteFileFromS3(currentActiveDocumentFileName, currentActiveDocument.typeOfDocument);
 
             return documents.find(doc => doc.id === documentId)
         }
@@ -702,30 +670,36 @@ export class ProfileService {
 
 
     async getRegistrationStatus(id: string): Promise<RegistrationStatus | undefined> {
-        const profile = await this.telegramRepository.findOne(id, {
+        const telegramProfile = await this.telegramRepository.findOne(id, {
             relations: ['documents']
         })
 
-        if (!profile) {
-            logger.log(`getRegistrationStatus(): profile ${profile} not registered!`);
-            throw new NotFoundException(`Telegram profile with id: ${profile.id} not found!`);
+        if (!telegramProfile) {
+            logger.log(`getRegistrationStatus(): profile ${telegramProfile} not registered!`);
+            throw new NotFoundException(`Telegram profile with id: ${telegramProfile.id} not found!`);
         }
 
-        if (!profile.phone) {
+        if (!telegramProfile.phone) {
             return RegistrationStatus.UNREGISTERED;
         }
 
-        const documents: Document[] = profile.documents;
+        const documents: Document[] = telegramProfile.documents;
         if (!documents?.length) {
             return RegistrationStatus.PHONE_VERIFIED;
         }
         else {
-            let bioUploaded = false, picUploaded = false;
+            let bioUploaded = false, bioVerified = false, picUploaded = false, picVerified = false;
             for (let doc of documents) {
                 if (doc.typeOfDocument === TypeOfDocument.BIO_DATA) {
-                    bioUploaded = true
+                    bioUploaded = true;
+                    if (doc.isValid) {
+                        bioVerified = true;
+                    }
                 } else if (doc.typeOfDocument === TypeOfDocument.PICTURE) {
-                    picUploaded = true
+                    picUploaded = true;
+                    if (doc.isValid) {
+                        picVerified = true;
+                    }
                 }
             }
             if (!bioUploaded) {

@@ -10,7 +10,10 @@ import {
     DeleteDateColumn,
 } from 'typeorm';
 import { Verifiable } from './abstract-verifiable.entity';
+import { BioData } from './bio-data.entity';
 import { Document } from './document.entity';
+import { IdProof } from './id-proof.entity';
+import { ProfilePicture } from './picture.entity';
 import { Profile } from './profile.entity';
 
 @Entity()
@@ -41,5 +44,14 @@ export class TelegramProfile extends Verifiable {
     phone?: string;
 
     @OneToMany(type => Document, document => document.telegramProfile)
-    documents: Document[]
+    documents?: Document[];
+
+    @OneToOne(type => BioData, bioData => bioData.telegramProfile)
+    bioData?: BioData;
+
+    @OneToOne(type => ProfilePicture, picture => picture.telegramProfile)
+    picture?: ProfilePicture;
+
+    @OneToOne(type => IdProof, idProof => idProof.telegramProfile)
+    idProof?: IdProof;
 }

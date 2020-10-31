@@ -13,31 +13,31 @@ import { Profile } from './profile.entity';
 // import { PictureMLValidation } from './picture-validation.entity';
 import { Verifiable } from './abstract-verifiable.entity';
 import { IsBoolean, IsString, IsUrl, Length } from 'class-validator';
-import { fileNameMaxLength, fileNameMinLength, urlMaxLength } from 'src/common/field-length';
+import { fileNameMaxLength, fileNameMinLength, mimeMaxLength, urlMaxLength } from 'src/common/field-length';
+import { TelegramProfile } from './telegram-profile.entity';
 
 // TODO: implement table indexing on important columns
 
 @Entity()
 export class ProfilePicture extends Verifiable {
-    // @PrimaryGeneratedColumn()
-    // id: number;
+    @PrimaryGeneratedColumn()
+    id: number;
 
-    @PrimaryGeneratedColumn("uuid")
-    id: string;
+    @Column("uuid")
+    telegramProfileId: string;
 
     @OneToOne(
-        type => Profile,
-        profile => profile.picture,
+        type => TelegramProfile,
+        tProfile => tProfile.bioData,
         {
-            // primary: true, 
             nullable: false,
         }
     )
     @JoinColumn({
-        name: "id",
+        name: "telegramProfileId",
         referencedColumnName: "id",
     })
-    profile: Profile;
+    telegramProfile: TelegramProfile;
 
     @Length(fileNameMinLength, fileNameMaxLength)
     @IsString()
@@ -48,12 +48,18 @@ export class ProfilePicture extends Verifiable {
     @Column({ length: urlMaxLength })
     url: string;
 
+    @Column("varchar", { length: mimeMaxLength })
+    mimeType: string;
+
     // @IsBoolean()
     // @Column()
     // isDP: boolean; // Only one pic can be the display pic
 
     @CreateDateColumn()
-    uploadedOn: Date;
+    uploadedOn?: Date;
+
+    @DeleteDateColumn()
+    deletedOn?: Date;
 
     // @Column({ "nullable": true, "default": () => null })
     // isReportedSpam: boolean;
@@ -63,8 +69,5 @@ export class ProfilePicture extends Verifiable {
 
     // @OneToOne(type => PictureMLValidation, pv => pv.profilePicture)
     // pictureMLValidation: PictureMLValidation;
-
-    @DeleteDateColumn()
-    deletedOn?: Date;
 }
 

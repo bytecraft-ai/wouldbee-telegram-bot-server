@@ -12,32 +12,32 @@ import {
 import { Profile } from './profile.entity';
 import { Verifiable } from './abstract-verifiable.entity';
 import { IsString, IsUrl, Length } from 'class-validator';
-import { fileNameMaxLength, fileNameMinLength, urlMaxLength } from 'src/common/field-length';
+import { fileNameMaxLength, fileNameMinLength, mimeMaxLength, urlMaxLength } from 'src/common/field-length';
+import { TelegramProfile } from './telegram-profile.entity';
 
 // TODO: implement table indexing on important columns
 
 @Entity()
 export class BioData extends Verifiable {
 
-    // @PrimaryColumn("int")
-    // id: number
+    @PrimaryGeneratedColumn()
+    id: number;
 
-    @PrimaryGeneratedColumn("uuid")
-    id: string;
+    @Column("uuid")
+    telegramProfileId: string;
 
     @OneToOne(
-        type => Profile,
-        profile => profile.bioData,
+        type => TelegramProfile,
+        tProfile => tProfile.bioData,
         {
-            // primary: true, 
             nullable: false,
         }
     )
     @JoinColumn({
-        name: "id",
+        name: "telegramProfileId",
         referencedColumnName: "id",
     })
-    profile: Profile;
+    telegramProfile: TelegramProfile;
 
     @Length(fileNameMinLength, fileNameMaxLength)
     @IsString()
@@ -48,8 +48,11 @@ export class BioData extends Verifiable {
     @Column({ length: urlMaxLength })
     url: string;
 
+    @Column("varchar", { length: mimeMaxLength })
+    mimeType: string;
+
     @CreateDateColumn()
-    uploadedOn: Date;
+    uploadedOn?: Date;
 
     @DeleteDateColumn()
     deletedOn?: Date;
