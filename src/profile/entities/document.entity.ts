@@ -9,7 +9,7 @@ import {
     DeleteDateColumn,
     OneToOne,
 } from 'typeorm';
-import { IsBoolean, IsOptional, IsString, Length } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsPositive, IsString, Length } from 'class-validator';
 import { bioRejectionReasonMaxLength, fileNameMaxLength, fileNameMinLength, mimeMaxLength, urlMaxLength } from 'src/common/field-length';
 import { BioRejectionReason, TypeOfDocument, TypeOfIdProof } from 'src/common/enum';
 import { TelegramProfile } from './telegram-profile.entity';
@@ -69,22 +69,31 @@ export class Document extends Verifiable {
     // @OneToOne(type => InvalidDocument, invalidDoc => invalidDoc.document)
     // invalidDocument?: InvalidDocument;
 
+    @IsOptional()
     @Length(fileNameMinLength, fileNameMaxLength)
     @IsString()
-    @Column("varchar", { length: fileNameMaxLength })
+    @Column("varchar", { length: fileNameMaxLength, nullable: true })
     fileName: string;
 
+    @IsOptional()
     @Length(40, urlMaxLength)
     @IsString()
-    @Column("varchar", { length: urlMaxLength })
+    @Column("varchar", { length: urlMaxLength, nullable: true })
     url: string;
 
-    @Column("varchar", { length: mimeMaxLength })
+    @IsOptional()
+    @Column("varchar", { length: mimeMaxLength, nullable: true })
     mimeType: string;
 
-    @Column({ type: "smallint" })
-    invalidationReason: BioRejectionReason;
+    @IsOptional()
+    @IsPositive()
+    @IsInt()
+    @Column("smallint", { nullable: true })
+    invalidationReason?: BioRejectionReason;
 
+    @IsOptional()
+    @IsPositive()
+    @IsInt()
     @Column("varchar", { nullable: true, length: bioRejectionReasonMaxLength })
-    invalidationDescription: BioRejectionReason;
+    invalidationDescription?: BioRejectionReason;
 }

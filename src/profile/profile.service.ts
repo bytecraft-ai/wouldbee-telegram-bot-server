@@ -490,7 +490,7 @@ export class ProfileService {
     }): Promise<Document | undefined> {
 
         const document = await this.documentRepository.findOne({
-            where: { id: telegramProfileId, typeOfDocument: typeOfDocument },
+            where: { telegramProfileId, typeOfDocument },
         });
 
         if (throwOnFail && !document) {
@@ -509,7 +509,7 @@ export class ProfileService {
             // let document = await this.getDocument(telegramProfile.id, typeOfDocument, { throwOnFail: false });
 
             let unverifiedDocument = await this.documentRepository.findOne({
-                where: { id: telegramProfile.id, typeOfDocument: typeOfDocument, isValid: null },
+                where: { telegramProfileId: telegramProfile.id, typeOfDocument: typeOfDocument, isValid: null },
             });
 
             // upload aws s3 document

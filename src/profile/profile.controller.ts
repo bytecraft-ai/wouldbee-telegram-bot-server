@@ -4,11 +4,13 @@ import { CreateProfileDto, CreateUserDto, FileUploadDto, PartnerPreferenceDto, R
 import { ProfileService } from './profile.service';
 // import { User } from './entities/user.entity';
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
-import { GetCitiesDto, GetCountriesDto, GetStatesDto } from './dto/location.dto';
+import { GetCitiesDto, GetCountriesDto, GetStatesDto, GetTelegramProfilesDto } from './dto/location.dto';
 import { editFileName, imageOrDocFileFilter } from 'src/common/file-util';
 import { diskStorage } from 'multer';
 import { AwsService } from 'src/aws-service/aws-service.service';
 import { TypeOfDocument } from 'src/common/enum';
+import { TelegramProfile } from './entities/telegram-profile.entity';
+import { IList } from 'src/common/interface';
 
 const logger = new Logger('ProfileController');
 
@@ -179,6 +181,37 @@ export class CommonController {
 // }
 
 // }
+
+
+@Controller('telegram-profile')
+@UsePipes(ValidationPipe)
+export class TelegramProfileController {
+    constructor(private readonly profileService: ProfileService) { }
+
+    @Get('/')
+    async getTelegramProfiles(@Query() options: GetTelegramProfilesDto): Promise<IList<TelegramProfile>> {
+        console.log('get all telegram profiles');
+        return this.profileService.getTelegramProfiles({
+            isValid: options?.isValid
+        },
+            options?.skip, options?.take
+        );
+    }
+
+
+    @Get(':id')
+    async getTelegramProfile(@Param('id') id: string): Promise<TelegramProfile | undefined> {
+        console.log('get profile with id', id);
+        return this.profileService.getTelegramProfileById(id, { throwOnFail: true });
+    }
+
+
+    @Post('/')
+    async createProfile(@Body() createProfileDto: CreateProfileDto) {
+        console.log('create profile with', createProfileDto);
+        return this.profileService.createProfile(createProfileDto);
+    }
+}
 
 
 @Controller('profile')

@@ -1,6 +1,29 @@
 import { ParseArrayPipe } from "@nestjs/common";
 import { Transform, Type } from "class-transformer";
-import { IsInt, IsOptional, IsPositive, IsString, Length, Max, Min } from "class-validator";
+import { IsBoolean, IsInt, IsOptional, IsPositive, IsString, Length, Max, Min } from "class-validator";
+
+export class PaginationDto {
+    @IsOptional()
+    @Max(20)
+    @Min(1)
+    @IsInt()
+    @Transform(value => Number(value))
+    take?: number = 20;
+
+    @IsOptional()
+    @Min(0)
+    @IsInt()
+    @Transform(value => Number(value))
+    skip?: number = 0;
+}
+
+
+export class GetTelegramProfilesDto extends PaginationDto {
+    @IsOptional()
+    @IsBoolean()
+    isValid?: boolean
+}
+
 
 export class GetCountriesDto {
     @IsOptional()
