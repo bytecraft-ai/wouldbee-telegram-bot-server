@@ -51,14 +51,14 @@ export class AgentController {
             email: "rahul@wouldbee.com",
             phone: "9611121073",
             name: "Rahul Gupta",
-            password: "crazy-strong-password",
+            password: "Password-1",
             role: UserRole.ADMIN
         }
         const charul: AgentRegistrationDto = {
             email: "charul@wouldbee.com",
             phone: "97030726206",
             name: "Kritika Agrawal",
-            password: "password",
+            password: "Password-1",
             role: UserRole.AGENT
         }
 

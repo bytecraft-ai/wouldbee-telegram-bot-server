@@ -1,10 +1,13 @@
+server:
+  port: 3040
+
 db:
   host: 'localhost'
   username: 'developer'
   password: 'dbonfire'
-  database: 'telegram-staging'
+  database: 'telegram_staging'
   synchronize: true
-  dropSchema: false
+  dropSchema: true
   logging: true
 
 jwt:
