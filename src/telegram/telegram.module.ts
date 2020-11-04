@@ -1,5 +1,5 @@
 import { BullModule } from '@nestjs/bull';
-import { Logger, Module } from '@nestjs/common';
+import { forwardRef, Logger, Module } from '@nestjs/common';
 import { TelegrafModule } from 'nestjs-telegraf';
 import { ProfileModule } from 'src/profile/profile.module';
 import { TelegramService } from './telegram.service';
@@ -24,8 +24,9 @@ logger.log(`STAGING_BOT_TOKEN: ${process.env.STAGING_BOT_TOKEN}`);
         name: 'send-profile',
       }
     ),
-    ProfileModule
+    forwardRef(() => ProfileModule),
   ],
-  providers: [TelegramService]
+  providers: [TelegramService],
+  exports: [TelegramService]
 })
 export class TelegramModule { }

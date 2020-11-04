@@ -61,6 +61,13 @@ export class AgentController {
             password: "Password-1",
             role: UserRole.AGENT
         }
+        const nusrat: AgentRegistrationDto = {
+            email: "njnusrat53@gmail.com",
+            phone: "1883001002",
+            name: "Nusrat Jahan",
+            password: "Password-123",
+            role: UserRole.AGENT
+        }
 
         try {
             await this.agentService.registerAgent(rahul);

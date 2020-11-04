@@ -12,7 +12,7 @@
  *  5. Implement thumbnails for bio-data
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { assert } from 'console';
 import {
     Start,
@@ -51,8 +51,9 @@ export class TelegramService {
 
     constructor(
         @InjectQueue('send-profile') private sendProfileQueue: Queue,
-
         @InjectBot() private bot: TelegrafProvider,
+
+        @Inject(forwardRef(() => ProfileService))
         private readonly profileService: ProfileService
     ) {
 

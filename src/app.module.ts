@@ -44,11 +44,9 @@ import { SeederModule } from './seeder/seeder.module';
       }
     ),
     TypeOrmModule.forRoot({ ...typeOrmConfig, autoLoadEntities: true }),
-    ProfileModule, AwsServiceModule,
-    // TelegrafModule.forRoot({
-    //   token: process.env.BOT_TOKEN,
-    // }),
     TelegramModule,
+    ProfileModule,
+    AwsServiceModule,
     AgentModule,
     AuthModule,
     SeederModule,

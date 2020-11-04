@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, Logger, BadRequestException, NotFoundException, ConflictException, InternalServerErrorException, NotImplementedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger, BadRequestException, NotFoundException, ConflictException, InternalServerErrorException, NotImplementedException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, RegistrationStatus, MaritalStatus, ProfileSharedWith } from 'src/common/enum';
 import { deDuplicateArray, getAgeInYearsFromDOB, setDifferenceFromArrays } from 'src/common/util';
@@ -31,6 +31,7 @@ import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
 import { Match } from './entities/match.entity';
 import _ from 'lodash';
+import { TelegramService } from 'src/telegram/telegram.service';
 
 const logger = new Logger('ProfileService');
 
@@ -39,6 +40,9 @@ export class ProfileService {
     constructor(
         private readonly awsService: AwsService,
         private readonly agentService: AgentService,
+
+        @Inject(forwardRef(() => TelegramService))
+        private readonly telegramService: TelegramService,
 
         @InjectQueue('find-match') private matchFinderQueue: Queue,
 
@@ -459,6 +463,9 @@ export class ProfileService {
 
         const femaleTeleProfile = await this.getTelegramProfileForSending(femaleProfile);
 
+        await this.telegramService.sendProfile(maleTeleProfile, femaleProfile, femaleTeleProfile);
+
+        await this.telegramService.sendProfile(femaleTeleProfile, maleProfile, maleTeleProfile);
     }
 
 

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ProfileService } from './profile.service';
 import { CommonController, PreferenceController, ProfileController, TelegramProfileController } from './profile.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -21,6 +21,7 @@ import { AgentModule } from 'src/agent/agent.module';
 import { AuthModule } from 'src/auth/auth.module';
 import { Match } from './entities/match.entity';
 import { BullModule } from '@nestjs/bull';
+import { TelegramModule } from 'src/telegram/telegram.module';
 // import { AwsDocument } from './entities/aws-document.entity';
 // import { InvalidDocument } from './entities/invalid-document.entity';
 
@@ -33,6 +34,7 @@ import { BullModule } from '@nestjs/bull';
                 name: 'find-match',
             }
         ),
+        forwardRef(() => TelegramModule)
     ],
     providers: [ProfileService],
     controllers: [ProfileController, PreferenceController, CommonController, TelegramProfileController],
