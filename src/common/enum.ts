@@ -1,3 +1,11 @@
+export enum ProfileSharedWith {
+    NONE = 1,
+    MALE,
+    FEMALE,
+    BOTH,
+}
+
+
 export enum Referee {
     USER = 1,
     AGENT,

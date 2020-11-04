@@ -32,10 +32,15 @@ import {
 } from 'nestjs-telegraf';
 import { RegistrationStatus, TypeOfDocument } from 'src/common/enum';
 import { deleteFile, doc2pdf, downloadFile, mimeTypes, watermarkFile } from 'src/common/util';
+import { Profile } from 'src/profile/entities/profile.entity';
 import { TelegramProfile } from 'src/profile/entities/telegram-profile.entity';
 import { ProfileService } from 'src/profile/profile.service';
 import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, registrationCancelled } from './telegram.constants';
 import { getBioDataFileName, getPictureFileName, processBioDataFile, processPictureFile, validateBioDataFileSize, validatePhotoFileSize, } from './telegram.service.helper';
+import { Cron } from '@nestjs/schedule';
+import { Queue } from 'bull';
+import { InjectQueue } from '@nestjs/bull';
+
 
 const { leave } = Stage
 
@@ -45,6 +50,8 @@ const logger = new Logger('TelegramService');
 export class TelegramService {
 
     constructor(
+        @InjectQueue('send-profile') private sendProfileQueue: Queue,
+
         @InjectBot() private bot: TelegrafProvider,
         private readonly profileService: ProfileService
     ) {
@@ -621,7 +628,7 @@ export class TelegramService {
                 logger.log('payload:', payload)
                 // TODO: Check whose referral is this
                 // 1 - another user
-                const referee = await this.profileService.getProfile(payload, false);
+                const referee = await this.profileService.getProfile(payload, { throwOnFail: false });
                 if (referee) {
                     // TODO: mark as referee
                     logger.log(`referee: [${referee[0]}, ${referee[1]}]`);
@@ -673,6 +680,27 @@ export class TelegramService {
     async feedback(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         await ctx.reply('This feature will be released soon.')
+    }
+
+
+    // ref- https://crontab.guru/#15_8-20/3_*_*_*
+    @Cron('* 5 8-21/3 * * *')
+    handleCron() {
+        logger.debug('Called when the current minute is 45');
+        this.sendProfileQueue.add({ task: 'send' })
+    }
+
+
+    async sendProfile(sendToTelegramProfile: TelegramProfile, profileToSend: Profile, TelegramProfileToSend: TelegramProfile,) {
+        const chatId = sendToTelegramProfile.telegramChatId;
+        const photoFileId = TelegramProfileToSend.picture.telegramFileId;
+        const bioFileId = TelegramProfileToSend.bioData.telegramFileId;
+
+        await this.bot.telegram.sendMessage(chatId, `Hi. Here's a new match for you.\nName: ${profileToSend.name}\nDoB: ${profileToSend.dob}`)
+
+        await this.bot.telegram.sendPhoto(chatId, photoFileId, { caption: profileToSend.name });
+
+        await this.bot.telegram.sendDocument(chatId, bioFileId, { caption: profileToSend.name });
     }
 
 

@@ -13,7 +13,7 @@ import {
 import { IsOptional, IsString, Length, MaxLength } from 'class-validator';
 import { City } from './city.entity';
 import { Profile } from './profile.entity';
-import { AnnualIncome, Religion } from 'src/common/enum';
+import { AnnualIncome, MaritalStatus, Religion } from 'src/common/enum';
 import { Caste } from './caste.entity';
 import { Country } from './country.entity';
 import { State } from './state.entity';
@@ -84,8 +84,8 @@ export class PartnerPreference {
     @DeleteDateColumn()
     deletedOn?: Date;
 
-    // @Column("enum", { enum: MaritalStatus, array: true, nullable: true })
-    // maritalStatuses: MaritalStatus[];
+    @Column("enum", { enum: MaritalStatus, array: true, nullable: true })
+    maritalStatuses: MaritalStatus[];
 
     // @IsOptional()
     // @Length(5, 15)

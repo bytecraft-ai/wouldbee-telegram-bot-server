@@ -4,7 +4,8 @@ import {
     JoinColumn,
     ManyToOne,
     OneToMany,
-    PrimaryGeneratedColumn
+    PrimaryGeneratedColumn,
+    PrimaryColumn
 } from 'typeorm';
 import { IsString, Length, MaxLength } from 'class-validator';
 import { stateCodeMaxLength, stateMaxLength, stateMinLength } from 'src/common/field-length';
@@ -16,7 +17,7 @@ import { City } from './city.entity';
 
 @Entity()
 export class State {
-    @PrimaryGeneratedColumn()
+    @PrimaryColumn()
     id?: number;
 
     @Length(stateMinLength, stateMaxLength)

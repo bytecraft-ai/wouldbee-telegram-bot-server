@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ProfileService } from './profile.service';
-import { CommonController, PreferenceController, ProfileController } from './profile.controller';
+import { CommonController, PreferenceController, ProfileController, TelegramProfileController } from './profile.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Caste } from './entities/caste.entity';
 import { City } from './entities/city.entity';
@@ -10,7 +10,7 @@ import { Profile } from './entities/profile.entity';
 import { State } from './entities/state.entity';
 // import { User } from './entities/user.entity';
 import { TelegramProfile } from './entities/telegram-profile.entity';
-import { SharedProfile } from './entities/shared-profiles.entity';
+// import { SharedMatch } from './entities/shared-profiles.entity';
 import { AwsServiceModule } from 'src/aws-service/aws-service.module';
 import { PassportModule } from '@nestjs/passport';
 import { BioData } from './entities/bio-data.entity';
@@ -20,15 +20,22 @@ import { Document } from './entities/document.entity';
 import { AgentModule } from 'src/agent/agent.module';
 import { AuthModule } from 'src/auth/auth.module';
 import { Match } from './entities/match.entity';
-import { AwsDocument } from './entities/aws-document.entity';
-import { InvalidDocument } from './entities/invalid-document.entity';
+import { BullModule } from '@nestjs/bull';
+// import { AwsDocument } from './entities/aws-document.entity';
+// import { InvalidDocument } from './entities/invalid-document.entity';
 
 @Module({
     imports: [AuthModule, AgentModule,
-        TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, TelegramProfile, SharedProfile, ProfilePicture, BioData, IdProof, Document, Match, AwsDocument, InvalidDocument]), AwsServiceModule, PassportModule.register({ defaultStrategy: 'jwt' }),
+        TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, TelegramProfile, ProfilePicture, BioData, IdProof, Document, Match]), AwsServiceModule,
+        PassportModule.register({ defaultStrategy: 'jwt' }),
+        BullModule.registerQueue(
+            {
+                name: 'find-match',
+            }
+        ),
     ],
     providers: [ProfileService],
-    controllers: [ProfileController, PreferenceController, CommonController],
+    controllers: [ProfileController, PreferenceController, CommonController, TelegramProfileController],
     exports: [ProfileService]
 })
 export class ProfileModule { }

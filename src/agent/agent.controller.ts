@@ -5,7 +5,7 @@ import {
 import { AgentService } from './agent.service';
 import { AgentRegistrationDto, AgentSignInDto } from './dto/agent-register.dto';
 import { Agent } from './entities/agent.entity';
-import { GetUser } from '../auth/get-user.decorator'
+import { GetAgent } from '../auth/get-agent.decorator'
 import { Roles } from '../auth/set-role.decorator';
 import { UserRole } from 'src/common/enum';
 import { RolesGuard } from '../auth/role.guard';
@@ -37,7 +37,7 @@ export class AgentController {
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     test(
         // @Req() req,
-        @GetUser() agent: Agent
+        @GetAgent() agent: Agent
     ) {
         // console.log('request:', req);
         console.log('agent:', agent);

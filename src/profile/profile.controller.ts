@@ -1,16 +1,19 @@
 import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Render, Param, Logger, UseInterceptors, UploadedFiles, Query, DefaultValuePipe, ParseIntPipe, ParseArrayPipe } from '@nestjs/common';
 import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
-import { CreateProfileDto, CreateUserDto, FileUploadDto, PartnerPreferenceDto, RegistrationDto } from './dto/profile.dto';
+import { CreateCasteDto, CreateProfileDto, CreateUserDto, FileUploadDto, PartnerPreferenceDto, RegistrationDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
 // import { User } from './entities/user.entity';
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
-import { GetCitiesDto, GetCountriesDto, GetStatesDto, GetTelegramProfilesDto } from './dto/location.dto';
+import { DocumentDto, DocumentTypeDto, GetCitiesDto, GetCountriesDto, GetStatesDto, GetTelegramProfilesDto } from './dto/location.dto';
 import { editFileName, imageOrDocFileFilter } from 'src/common/file-util';
 import { diskStorage } from 'multer';
 import { AwsService } from 'src/aws-service/aws-service.service';
-import { TypeOfDocument } from 'src/common/enum';
+import { TypeOfDocument, UserRole } from 'src/common/enum';
 import { TelegramProfile } from './entities/telegram-profile.entity';
 import { IList } from 'src/common/interface';
+import { Roles } from 'src/auth/set-role.decorator';
+import { GetAgent } from 'src/auth/get-agent.decorator';
+import { Agent } from 'src/agent/entities/agent.entity';
 
 const logger = new Logger('ProfileController');
 
@@ -45,6 +48,12 @@ export class CommonController {
     @Get('/caste')
     async getCastes() {
         return this.profileService.getCastes();
+    }
+
+
+    @Post('/caste')
+    async createCaste(@Body() createCasteDto: CreateCasteDto) {
+        return this.profileService.createCaste(createCasteDto);
     }
 
 
@@ -188,6 +197,13 @@ export class CommonController {
 export class TelegramProfileController {
     constructor(private readonly profileService: ProfileService) { }
 
+    @Get('/test')
+    test() {
+        return {
+            test: 'success'
+        };
+    }
+
     @Get('/')
     async getTelegramProfiles(@Query() options: GetTelegramProfilesDto): Promise<IList<TelegramProfile>> {
         console.log('get all telegram profiles');
@@ -206,10 +222,22 @@ export class TelegramProfileController {
     }
 
 
-    @Post('/')
-    async createProfile(@Body() createProfileDto: CreateProfileDto) {
-        console.log('create profile with', createProfileDto);
-        return this.profileService.createProfile(createProfileDto);
+    // TODO: implement caching on client side
+    @Get('/url/:id')
+    async getSignedUrl(@Param('id') id: string, @Query() query: DocumentTypeDto): Promise<{ url: string }> {
+        return {
+            url: await this.profileService.getSignedUrl(id, query.documentType)
+        }
+    }
+
+
+    @Post('/validate/:id')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
+    async validateDocument(
+        @GetAgent() agent: Agent,
+        @Param('id') id: string,
+        @Query() body: DocumentDto) {
+        await this.profileService.verifyDocument(body.documentId, agent);
     }
 }
 
@@ -229,7 +257,7 @@ export class ProfileController {
     @Get(':id')
     async getProfile(@Param('id') id: string) {
         console.log('get profile with id', id);
-        return this.profileService.getProfile(id);
+        return this.profileService.getProfile(id, { throwOnFail: true });
     }
 
 

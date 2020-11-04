@@ -39,6 +39,10 @@ export class ProfilePicture extends Verifiable {
     })
     telegramProfile: TelegramProfile;
 
+    @IsString()
+    @Column("varchar", { length: urlMaxLength })
+    telegramFileId: string;
+
     @Length(fileNameMinLength, fileNameMaxLength)
     @IsString()
     @Column({ length: fileNameMaxLength })

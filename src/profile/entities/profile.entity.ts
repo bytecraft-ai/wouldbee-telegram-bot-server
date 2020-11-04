@@ -25,7 +25,7 @@ import { nameMaxLength, nameMinLength } from 'src/common/field-length';
 import { Caste } from './caste.entity';
 import { City } from './city.entity';
 import { PartnerPreference } from './partner-preference.entity';
-import { SharedProfile } from './shared-profiles.entity';
+// import { SharedMatch } from './shared-profiles.entity';
 import { TelegramProfile } from './telegram-profile.entity';
 import { Language, MaritalStatus } from 'src/common/enum';
 // import { IdProof } from './id-proof.entity';
@@ -38,7 +38,7 @@ import { Language, MaritalStatus } from 'src/common/enum';
 
 @Entity()
 export class Profile {
-    @PrimaryGeneratedColumn("uuid")
+    @PrimaryColumn("uuid")
     id: string;
 
     @OneToOne(
@@ -70,13 +70,13 @@ export class Profile {
     @Column("int")
     countryId?: number;
 
-    @ManyToOne(type => Country)
-    @JoinColumn()
-    country?: Country;
+    // @ManyToOne(type => Country)
+    // @JoinColumn()
+    // country?: Country;
 
-    @Column({ unique: true })
-    @Length(10, 10, { message: 'Phone number must be of 10 digits only!' })
-    phone: string;
+    // @Column({ unique: true })
+    // @Length(10, 10, { message: 'Phone number must be of 10 digits only!' })
+    // phone?: string;
 
     @Length(nameMinLength, nameMaxLength)
     @IsString()
@@ -143,21 +143,21 @@ export class Profile {
     // @OneToMany(type => Document, update => update.profile)
     // updates: Document[]
 
-    // profile shared with other profiles
-    @OneToMany(
-        type => SharedProfile,
-        sharedProfile => sharedProfile.sharedProfile,
-        { nullable: true }
-    )
-    sharedWithProfiles: SharedProfile[];
+    // // profile shared with other profiles
+    // @OneToMany(
+    //     type => SharedMatch,
+    //     sharedProfile => sharedProfile.sharedProfile,
+    //     { nullable: true }
+    // )
+    // sharedWithProfiles: SharedMatch[];
 
-    // profiles shared with this profile
-    @OneToMany(
-        type => SharedProfile,
-        sharedProfile => sharedProfile.sentToProfile,
-        { nullable: true }
-    )
-    sharedProfiles: SharedProfile[];
+    // // profiles shared with this profile
+    // @OneToMany(
+    //     type => SharedMatch,
+    //     sharedProfile => sharedProfile.sentToProfile,
+    //     { nullable: true }
+    // )
+    // sharedProfiles: SharedMatch[];
 
     // @Column({ default: () => `now()` })
     // lastSeen: Date;

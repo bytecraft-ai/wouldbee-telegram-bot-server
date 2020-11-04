@@ -4,7 +4,8 @@ import {
     Column,
     ManyToOne,
     JoinColumn,
-    PrimaryGeneratedColumn
+    PrimaryGeneratedColumn,
+    PrimaryColumn
 } from 'typeorm';
 import { State } from './state.entity';
 import { IsNumber, Length, Max, Min } from 'class-validator';
@@ -15,7 +16,7 @@ import { cityMaxLength, cityMinLength } from 'src/common/field-length';
 
 @Entity()
 export class City {
-    @PrimaryGeneratedColumn()
+    @PrimaryColumn()
     id?: number;
 
     @Length(cityMinLength, cityMaxLength)

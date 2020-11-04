@@ -1,6 +1,6 @@
 import { ParseArrayPipe } from "@nestjs/common";
 import { Transform, Type } from "class-transformer";
-import { IsBoolean, IsInt, IsOptional, IsPositive, IsString, Length, Max, Min } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsOptional, IsPositive, IsString, IsUUID, Length, Max, Min } from "class-validator";
 
 export class PaginationDto {
     @IsOptional()
@@ -22,6 +22,24 @@ export class GetTelegramProfilesDto extends PaginationDto {
     @IsOptional()
     @IsBoolean()
     isValid?: boolean
+}
+
+
+export class DocumentTypeDto {
+    @IsIn(['bio-data', 'picture', 'id-proof'])
+    @IsString()
+    documentType: string
+}
+
+
+export class DocumentDto {
+    @IsInt()
+    documentId: number;
+
+    // @IsOptional()
+    // @IsIn(['bio-data', 'picture', 'id-proof'])
+    // @IsString()
+    // documentType?: string
 }
 
 

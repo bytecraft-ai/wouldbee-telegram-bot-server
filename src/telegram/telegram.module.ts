@@ -1,3 +1,4 @@
+import { BullModule } from '@nestjs/bull';
 import { Logger, Module } from '@nestjs/common';
 import { TelegrafModule } from 'nestjs-telegraf';
 import { ProfileModule } from 'src/profile/profile.module';
@@ -17,7 +18,13 @@ logger.log(`STAGING_BOT_TOKEN: ${process.env.STAGING_BOT_TOKEN}`);
         : process.env.NODE_ENV === 'development'
           ? process.env.DEV_BOT_TOKEN
           : process.env.STAGING_BOT_TOKEN,
-    }), ProfileModule
+    }),
+    BullModule.registerQueue(
+      {
+        name: 'send-profile',
+      }
+    ),
+    ProfileModule
   ],
   providers: [TelegramService]
 })

@@ -24,9 +24,26 @@ deployment
 -(setting up nginx)
 https://www.tecmint.com/nginx-as-reverse-proxy-for-nodejs-app/#:~:text=%20How%20to%20Configure%20Nginx%20as%20Reverse%20Proxy,create%20a%20server%20block%20configuration%20file...%20More%20
 
+-(serving react build on nginx)
+https://thealphadollar.me/tech/2019/09/29/react_nginx.html#:~:text=%20Serving%20React%20With%20Nginx%20%201%20Build,distribution%20but%20can%20be%20used%20with...%20More%20
+
 
 python example (has some potential, not seen yet)
  - https://stackoverflow.com/questions/31042219/how-do-i-get-authentication-in-a-telegram-bot
  - https://github.com/jlmadurga/django-telegram-bot
  - https://github.com/jlmadurga/django-telegram-bot-demo
  
+
+Scheduling & Queueing
+  > 1. Finding profile matches and saving into 'match' table.
+    - On new profile verification, queue a 'find-match' task with profile.id
+    - Processor dequeues 'find-match' event and finds matches for the profile and saves them into the match table.
+
+  > 1a. Update Profile/Preference
+    - queue 'update-match' task,
+    - process 'update-match', remove existing matches for this profile, and insert the newly find matches.
+  
+  > 2. Sending profiles
+    - Scheduler schedules bio-data sending from 8am to 8pm in every 3 hours in 'send-profile' queue.
+    - 'Processor' processes send-profile event, and starts processing each row in the matches table to sends profiles.
+    

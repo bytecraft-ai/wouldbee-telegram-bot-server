@@ -5,6 +5,7 @@ import {
     Column,
     OneToMany,
     PrimaryGeneratedColumn,
+    PrimaryColumn,
 } from 'typeorm';
 import { State } from './state.entity';
 
@@ -13,7 +14,7 @@ import { State } from './state.entity';
 @Entity()
 export class Country {
 
-    @PrimaryGeneratedColumn()
+    @PrimaryColumn()
     id?: number;
 
     @Length(countryMinLength, countryMaxLength)

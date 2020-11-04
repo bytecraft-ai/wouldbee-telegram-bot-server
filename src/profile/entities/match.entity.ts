@@ -1,3 +1,4 @@
+import { ProfileSharedWith } from 'src/common/enum';
 import {
     Entity,
     Column,
@@ -7,14 +8,15 @@ import {
     OneToOne,
     ManyToOne,
     DeleteDateColumn,
+    PrimaryColumn,
 } from 'typeorm';
 import { Profile } from './profile.entity';
 // import { User } from './user.entity';
 
 @Entity()
 export class Match {
-    @PrimaryGeneratedColumn()
-    id: number;
+    // @PrimaryGeneratedColumn()
+    // id: number;
 
     @CreateDateColumn()
     createdOn?: Date;
@@ -22,19 +24,22 @@ export class Match {
     @DeleteDateColumn()
     deletedOn?: Date;
 
-    // @PrimaryColumn()
-    @Column()
+    @PrimaryColumn()
+    // @Column()
     maleProfileId: string;
 
-    @ManyToOne(type => Profile, { eager: false })
+    @ManyToOne(type => Profile, { eager: false, nullable: false, })
     @JoinColumn({ name: "maleProfileId" })
     maleProfile: Profile;
 
-    // @PrimaryColumn()
-    @Column()
+    @PrimaryColumn()
+    // @Column()
     femaleProfileId: string;
 
-    @ManyToOne(type => Profile, { eager: false })
+    @ManyToOne(type => Profile, { eager: false, nullable: false, })
     @JoinColumn({ name: "femaleProfileId" })
     femaleProfile: Profile;
+
+    @Column("smallint", { default: ProfileSharedWith.NONE })
+    profileSharedWith: ProfileSharedWith;
 }

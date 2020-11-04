@@ -80,7 +80,7 @@ export async function getBioDataFileName(ctx: Context):
         link = await ctx.telegram.getFileLink(document.file_id);
         logger.log(`bio download link: ${link}`);
 
-        fileName = telegramProfileId + '_bio.'
+        fileName = telegramProfileId + `_${Date.now().toString()}` + '_bio.'
         const nameParts = link.split('.');
         // console.log('nameParts', nameParts);
 
@@ -179,7 +179,7 @@ export async function getPictureFileName(ctx: Context): Promise<{
         }
     }
 
-    fileName = telegramProfileId + '_picture.'
+    fileName = telegramProfileId + `_${Date.now().toString()}` + '_picture.'
     const nameParts: Array<string> = link.split('.');
     let extension: string;
     let failure = true;

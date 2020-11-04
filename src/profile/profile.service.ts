@@ -1,10 +1,10 @@
 import { Injectable, UnauthorizedException, Logger, BadRequestException, NotFoundException, ConflictException, InternalServerErrorException, NotImplementedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, RegistrationStatus } from 'src/common/enum';
+import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, RegistrationStatus, MaritalStatus, ProfileSharedWith } from 'src/common/enum';
 import { deDuplicateArray, getAgeInYearsFromDOB, setDifferenceFromArrays } from 'src/common/util';
 import { Repository } from 'typeorm';
 // import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
-import { PartnerPreferenceDto, CreateUserDto, CreateProfileDto, RegistrationDto } from './dto/profile.dto';
+import { PartnerPreferenceDto, CreateUserDto, CreateProfileDto, RegistrationDto, CreateCasteDto } from './dto/profile.dto';
 import { Caste } from './entities/caste.entity';
 import { City } from './entities/city.entity';
 import { Country } from './entities/country.entity';
@@ -15,7 +15,7 @@ import { State } from './entities/state.entity';
 import { GetAllDocumentsOption, GetCityOptions, GetStateOptions, GetTelegramProfilesOption } from './profile.interface';
 import { createHash, createHmac } from 'crypto';
 import { TelegramProfile } from './entities/telegram-profile.entity';
-import { SharedProfile } from './entities/shared-profiles.entity';
+// import { SharedMatch } from './entities/shared-profiles.entity';
 import { AwsService } from 'src/aws-service/aws-service.service';
 import { Transactional } from 'typeorm-transactional-cls-hooked';
 import { CommonData, IList } from 'src/common/interface';
@@ -27,6 +27,10 @@ import { Agent } from 'src/agent/entities/agent.entity';
 // import { InvalidDocument } from './entities/invalid-document.entity';
 // import { AwsDocument } from './entities/aws-document.entity';
 import { isNil } from 'lodash';
+import { Queue } from 'bull';
+import { InjectQueue } from '@nestjs/bull';
+import { Match } from './entities/match.entity';
+import _ from 'lodash';
 
 const logger = new Logger('ProfileService');
 
@@ -35,10 +39,14 @@ export class ProfileService {
     constructor(
         private readonly awsService: AwsService,
         private readonly agentService: AgentService,
+
+        @InjectQueue('find-match') private matchFinderQueue: Queue,
+
         // @InjectRepository(User) private userRepository: Repository<User>,
         @InjectRepository(Profile) private profileRepository: Repository<Profile>,
         @InjectRepository(TelegramProfile) private telegramRepository: Repository<TelegramProfile>,
-        @InjectRepository(SharedProfile) private sharedProfileRepository: Repository<SharedProfile>,
+        // @InjectRepository(SharedMatch) private sharedProfileRepository: Repository<SharedMatch>,
+        @InjectRepository(Match) private matchRepository: Repository<Match>,
         @InjectRepository(PartnerPreference) private prefRepository: Repository<PartnerPreference>,
 
         @InjectRepository(Document) private documentRepository: Repository<Document>,
@@ -152,8 +160,8 @@ export class ProfileService {
 
 
     async createProfile(profileDto: CreateProfileDto): Promise<Profile | undefined> {
-        const { userId, name, gender, dob, religion, casteId, annualIncome, cityId, highestDegree, employedIn, occupation, motherTongue, maritalStatus } = profileDto;
-        let profile = await this.profileRepository.findOne(userId);
+        const { telegramProfileId, name, gender, dob, religion, casteId, annualIncome, cityId, highestDegree, employedIn, occupation, motherTongue, maritalStatus } = profileDto;
+        let profile = await this.profileRepository.findOne(telegramProfileId);
         if (profile) {
             throw new
                 ConflictException('profile already exists!');
@@ -161,16 +169,29 @@ export class ProfileService {
         const caste = await this.getCaste(casteId, true);
         const city = await this.getCity(cityId, { throwOnFail: true });
         profile = this.profileRepository.create({
-            id: userId,
+            id: telegramProfileId,
             name,
             gender,
             dob,
             religion,
             caste,
             annualIncome,
-            city
+            city,
+            highestDegree,
+            employedIn,
+            occupation,
+            motherTongue,
+            maritalStatus,
         })
-        return this.profileRepository.save(profile);
+        const savedProfile = await this.profileRepository.save(profile);
+
+        // add match-finding job to queue for create profile
+        await this.matchFinderQueue.add('create',
+            { profileId: savedProfile.id },
+            { delay: 3000 }, // 3 seconds delayed
+        );
+
+        return savedProfile;
     }
 
 
@@ -179,7 +200,7 @@ export class ProfileService {
     }
 
 
-    async getProfile(id: string, throwOnFail = true): Promise<Profile | undefined> {
+    async getProfile(id: string, { throwOnFail = true }): Promise<Profile | undefined> {
         const profile = await this.profileRepository.findOne(id);
         if (throwOnFail && !profile) {
             throw new NotFoundException(`Profile with id: ${id} not found`);
@@ -204,7 +225,7 @@ export class ProfileService {
 
     async savePartnerPreference(preferenceInput: PartnerPreferenceDto): Promise<PartnerPreference> {
         let { id, minAge, maxAge, religions, casteIds, minimumIncome, cityIds, stateIds, countryIds } = preferenceInput;
-        const profile = await this.getProfile(id);
+        const profile = await this.getProfile(id, { throwOnFail: true });
 
         let pref = await this.getPreference(id);
         if (!pref) {
@@ -264,7 +285,205 @@ export class ProfileService {
         logger.log(`saved preference for profile: ${JSON.stringify(profile)}`);
         logger.log(JSON.stringify(pref));
 
+        // add match-finding job to queue for update profile
+        await this.matchFinderQueue.add('update',
+            { profileId: profile.id },
+            { delay: 3000 }, // 3 seconds delayed
+        );
+
         return pref;
+    }
+
+
+    async getMatches(profileId: string, skip = 0, take = 20): Promise<IList<Profile>> {
+        const profile = await this.profileRepository.findOne(profileId, {
+            relations: ["partnerPreference", "caste", "city"]
+        });
+        if (!profile) {
+            throw new NotFoundException(`Profile with id: ${profileId} not found`);
+        }
+
+        const partnerPref = profile.partnerPreference;
+        const caste = profile.caste;
+        const city = profile.city;
+        const oppGender = profile.gender === Gender.MALE ? Gender.FEMALE : Gender.MALE
+
+        const matchQuery = this.profileRepository.createQueryBuilder("t_profile")
+            .leftJoin("t_profile.partnerPreference", "t_partner_pref")
+            .leftJoin("t_partner_pref.castes", "t_pref_castes")
+            .leftJoin("t_profile.city", "t_city");
+
+        matchQuery.where('t_profile.gender = :oppGender', { oppGender });
+
+        let preferredMaritalStatuses = []
+        if (partnerPref?.maritalStatuses?.length) {
+            preferredMaritalStatuses = partnerPref.maritalStatuses;
+            matchQuery.andWhere("t_profile.maritalStatus IN (:...ms)", { ms: preferredMaritalStatuses });
+        } else {
+            if (profile?.maritalStatus) {
+                matchQuery.addSelect(`CASE 
+                WHEN t_profile."maritalStatus" = ${MaritalStatus.NEVER_MARRIED} THEN 1 
+                WHEN t_profile."maritalStatus" = ${MaritalStatus.ANULLED} THEN 2 
+                ELSE 9
+                END`, "_marital_status_rank");
+
+                // sort on added field
+                matchQuery.orderBy("_marital_status_rank",
+                    (profile.maritalStatus === MaritalStatus.NEVER_MARRIED)
+                        ? 'ASC' : 'DESC');
+            }
+        }
+
+        // reverse check - match's partner pref should have this profile's marital status
+        matchQuery.andWhere("(t_partner_pref.maritalStatuses IS NULL OR t_partner_pref.maritalStatuses && :maritalStatuses)", { maritalStatuses: [profile.maritalStatus] });
+
+        // religion check
+        if (partnerPref.religions && partnerPref.religions.length > 0) {
+            matchQuery.andWhere("t_profile.religion IN (:...religions)", { religions: partnerPref.religions });
+        }
+
+        // reverse religion check
+        matchQuery.andWhere("(t_partner_pref.religions IS NULL OR t_partner_pref.religions && :religion)", { religion: [profile.religion] });
+
+
+        // gotra
+        // if (partnerPref.leaveSelfGotra && profile.gotraId !== null) {
+        //     matchQuery.andWhere("t_social.gotraId != :selfGotra", { selfGotra: profile.socialDetails.gotraId });
+        // }
+
+        // caste & sub-caste policy -
+        // 1. if user has not set any preference, show all castes but show profiles from his caste first.
+        // 2. if user has set a preference then use that.
+        if (partnerPref?.castes?.length) {
+            const casteIdList = partnerPref.castes.map(c => c.id)
+            matchQuery.andWhere("t_profile.casteId IN (:...c)", { c: casteIdList });
+        }
+
+        // reverse caste check
+        if (profile.casteId) {
+            matchQuery.andWhere("(t_pref_castes.id IS NULL OR t_pref_castes.id = :casteId)", { casteId: profile.casteId });
+        }
+
+        const [matches, count] = await
+            matchQuery.skip(skip).take(take).getManyAndCount();
+
+        return {
+            count,
+            values: matches
+        };
+    }
+
+
+    async saveMatches(profileId: string, matches: Profile[]): Promise<Match[]> {
+        const profile = await this.getProfile(profileId, { throwOnFail: true });
+        const toSave: Match[] = [];
+        if (profile.gender === Gender.MALE) {
+            for (const match of matches) {
+                toSave.push(this.matchRepository.create({
+                    maleProfile: profile,
+                    femaleProfile: match
+                }));
+            }
+        } else {
+            for (const match of matches) {
+                toSave.push(this.matchRepository.create({
+                    maleProfile: match,
+                    femaleProfile: profile
+                }));
+            }
+        }
+        return this.matchRepository.save(toSave);
+    }
+
+
+    @Transactional()
+    async updateMatches(profileId: string, matches: Profile[]): Promise<Match[]> {
+        const profile = await this.getProfile(profileId, { throwOnFail: true });
+
+        // remove existing matches which have not been shared.
+        await this.matchRepository.delete(profile.gender === Gender.MALE ?
+            {
+                maleProfileId: profileId,
+                profileSharedWith: ProfileSharedWith.NONE
+            } :
+            {
+                femaleProfileId: profileId,
+                profileSharedWith: ProfileSharedWith.NONE
+            })
+
+        const sentMatches = await this.matchRepository.find({
+            where: profile.gender === Gender.MALE ?
+                { maleProfileId: profileId } :
+                { femaleProfileId: profileId },
+        });
+
+        if (sentMatches?.length) {
+            const matchProfileId = profile.gender === Gender.FEMALE
+                ? 'maleProfileId' : 'femaleProfileId';
+
+            const sentMatchesIds = sentMatches.map(
+                sentMatch => sentMatch[matchProfileId]);
+
+            matches = matches.filter(match =>
+                !(sentMatchesIds.find(matchProfileId =>
+                    matchProfileId === match.id
+                )))
+        }
+        return this.saveMatches(profileId, matches)
+    }
+
+
+    async getTelegramProfileForSending(profile: Profile): Promise<TelegramProfile | undefined> {
+        const telegramProfile = await
+            this.telegramRepository.findOne(profile.id, {
+                relations: ['bioData', 'picture', 'idProof']
+            });
+        if (!telegramProfile) {
+            logger.error(`Could not get telegram profile for profile with id: ${profile.id}`);
+            throw new NotFoundException(`Could not get telegram profile for profile with id: ${profile.id}`)
+        }
+        return telegramProfile;
+    }
+
+
+    async sendMatch(match: Match) {
+        if (!match?.maleProfile || !match.femaleProfile) {
+            throw new Error('match object does not contain male or/and female profiles');
+        }
+
+        const maleProfile = match.maleProfile;
+        const femaleProfile = match.femaleProfile;
+
+        const maleTeleProfile = await this.getTelegramProfileForSending
+            (maleProfile);
+
+        const femaleTeleProfile = await this.getTelegramProfileForSending(femaleProfile);
+
+    }
+
+
+    async sendMatches() {
+        let skip = 0
+        const take = 50;
+        let [profiles, count] = await this.profileRepository.findAndCount({
+            where: { gender: Gender.FEMALE },
+            skip, take
+        });
+        do {
+            const matches = this.matchRepository.find({
+                where: { femaleProfile: profiles }
+            })
+
+            skip += take;
+            [profiles, count] = await this.profileRepository.findAndCount({
+                where: { gender: Gender.FEMALE },
+                skip, take
+            });
+
+        } while (skip < count)
+        // const [matches, count] = this.matchRepository.createQueryBuilder('match')
+        //     .where()
+
     }
 
 
@@ -433,6 +652,7 @@ export class ProfileService {
     async getTelegramProfileById(id: string, { throwOnFail = true }): Promise<TelegramProfile | undefined> {
         const telegramProfile = await this.telegramRepository.findOne(id);
         if (throwOnFail && !telegramProfile) {
+            logger.log(`Telegram profile with id: ${id} not found!`);
             throw new NotFoundException(`Telegram profile with id: ${id} not found!`);
         }
         return telegramProfile;
@@ -603,13 +823,57 @@ export class ProfileService {
     }
 
 
-    async generateS3SignedURLs(profileId: string,
+    async generateS3SignedURLs(telegramProfileId: string,
         fileName: string,
         typeOfDocument: TypeOfDocument): Promise<string | undefined> {
 
-        const urlObj = await this.awsService.createSignedURL(profileId, fileName, typeOfDocument, false);
+        const urlObj = await this.awsService.createSignedURL(telegramProfileId, fileName, typeOfDocument, false);
 
         return urlObj.preSignedUrl;
+    }
+
+
+    async getSignedUrl(telegramProfileId: string, docType: string): Promise<string | undefined> {
+        if (!docType) {
+            throw new BadRequestException('docType is required!')
+        }
+
+        let typeOfDocument: TypeOfDocument;
+        switch (docType) {
+            case 'bio-data':
+                typeOfDocument = TypeOfDocument.BIO_DATA;
+                break;
+            case 'picture':
+                typeOfDocument = TypeOfDocument.PICTURE;
+                break;
+            case 'id-proof':
+                typeOfDocument = TypeOfDocument.ID_PROOF;
+                break;
+            default:
+                throw new BadRequestException(`docType should be one of [bio-data, picture, id-proof]`);
+        }
+
+        const telegramProfile = await this.getTelegramProfileById(telegramProfileId, { throwOnFail: true });
+
+        const document = await this.documentRepository.createQueryBuilder('doc')
+            .where('doc.telegramProfileId = :telegramProfileId', { telegramProfileId })
+            .andWhere('doc.typeOfDocument = :typeOfDocument', { typeOfDocument })
+            .andWhere('doc.active IS NULL')
+            .orderBy('doc.createdOn DESC')
+            .getOne();
+
+        if (!document) {
+            throw new NotFoundException(`Document for telegram profile with id: ${telegramProfileId} and docType: ${typeOfDocument} does not exist!`);
+        }
+
+        try {
+            const urlObj = await this.awsService.createSignedURL(telegramProfileId, document.fileName, document.typeOfDocument, false);
+            return urlObj.preSignedUrl;
+        }
+        catch (err) {
+            logger.error(`Could not generate signed url for telegramProfileId: ${telegramProfileId}, and docType: ${docType}. Error: ${err}`);
+            throw err;
+        };
     }
 
 
@@ -631,6 +895,39 @@ export class ProfileService {
 
     async getCastes(): Promise<Caste[]> {
         return this.casteRepository.find();
+    }
+
+
+    async createCastes(casteNames: string[], religion: Religion): Promise<Caste[]> {
+        const castes: Caste[] = [];
+        for (let name of casteNames) {
+            castes.push(this.casteRepository.create({
+                name,
+                religion
+            }));
+        }
+        return this.casteRepository.save(castes);
+    }
+
+
+    async createCaste(createCasteDto: CreateCasteDto): Promise<Caste> {
+        let caste = await this.casteRepository.findOne({
+            where: {
+                name: createCasteDto.casteName,
+                religion: createCasteDto.religion
+            }
+        });
+
+        if (caste) {
+            throw new ConflictException(`Caste with name: ${createCasteDto.casteName} already exists`);
+        }
+
+        caste = this.casteRepository.create({
+            name: createCasteDto.casteName,
+            religion: createCasteDto.religion
+        });
+
+        return this.casteRepository.save(caste);
     }
 
 
@@ -1042,6 +1339,51 @@ export class ProfileService {
             'SELECT id FROM city TABLESAMPLE SYSTEM_ROWS($1);', [take]);
 
         return results.map(result => result.id);
+    }
+
+
+    async createCountry(country: Object): Promise<Country | undefined> {
+        const countryEntity = this.countryRepository.create({
+            id: country['id'],
+            iso2: country['iso2'],
+            iso3: country['iso3'],
+            name: country['name'],
+            phoneCode: country['phone_code'],
+        })
+        return this.countryRepository.save(countryEntity);
+    }
+
+
+    async createStates(states: Object[], countryId: number): Promise<State[] | undefined> {
+        const stateEntities: State[] = [];
+        for (let state of states) {
+            const stateEntity = this.stateRepository.create({
+                id: state['id'],
+                name: state['name'],
+                stateCode: state['state_code'],
+                countryId
+            });
+            stateEntities.push(stateEntity);
+        }
+        return this.stateRepository.save(stateEntities);
+    }
+
+
+    async createCities(cities: Object[], stateId: number): Promise<City[] | undefined> {
+        const cityEntities: City[] = [];
+        for (let city of cities) {
+            // console.log(city['id'], city['name'], city['latitude'], city['longitude'], stateId);
+            const cityEntity = this.cityRepository.create({
+                id: city['id'],
+                name: city['name'],
+                latitude: city['latitude'],
+                longitude: city['longitude'],
+                stateId
+            });
+            cityEntities.push(cityEntity)
+        }
+
+        return this.cityRepository.save(cityEntities);
     }
 
 

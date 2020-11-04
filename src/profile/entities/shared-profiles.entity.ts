@@ -1,36 +1,40 @@
-import {
-    Entity,
-    Column,
-    PrimaryGeneratedColumn,
-    CreateDateColumn,
-    JoinColumn,
-    OneToOne,
-    ManyToOne,
-} from 'typeorm';
-import { Profile } from './profile.entity';
-// import { User } from './user.entity';
+// import { ProfileSharedWith } from 'src/common/enum';
+// import {
+//     Entity,
+//     Column,
+//     PrimaryGeneratedColumn,
+//     CreateDateColumn,
+//     JoinColumn,
+//     ManyToOne,
+//     PrimaryColumn,
+// } from 'typeorm';
+// import { Profile } from './profile.entity';
+// // import { User } from './user.entity';
 
-@Entity()
-export class SharedProfile {
-    @PrimaryGeneratedColumn()
-    id: number;
+// @Entity()
+// export class SharedMatch {
+//     @PrimaryGeneratedColumn()
+//     id: number;
 
-    @CreateDateColumn()
-    sentOn?: Date;
+//     @CreateDateColumn()
+//     createdOn?: Date;
 
-    // @PrimaryColumn()
-    @Column()
-    sharedProfileId: string;
+//     @PrimaryColumn()
+//     // @Column()
+//     maleProfileId: string;
 
-    @ManyToOne(type => Profile, { eager: true })
-    @JoinColumn({ name: "sharedProfileId" })
-    sharedProfile: Profile;
+//     @ManyToOne(type => Profile, { eager: false, nullable: false, })
+//     @JoinColumn({ name: "maleProfileId" })
+//     maleProfile: Profile;
 
-    // @PrimaryColumn()
-    @Column()
-    sentToProfileId: string;
+//     @PrimaryColumn()
+//     // @Column()
+//     femaleProfileId: string;
 
-    @ManyToOne(type => Profile, { eager: true })
-    @JoinColumn({ name: "sentToProfileId" })
-    sentToProfile: Profile;
-}
+//     @ManyToOne(type => Profile, { eager: false, nullable: false, })
+//     @JoinColumn({ name: "femaleProfileId" })
+//     femaleProfile: Profile;
+
+//     @Column("smallint")
+//     profileSharedWith: ProfileSharedWith;
+// }
