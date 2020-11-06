@@ -67,8 +67,8 @@ export class Profile {
     // @Column({ unique: true })
     // email: string;
 
-    @Column("int")
-    countryId?: number;
+    // @Column("int")
+    // countryId?: number;
 
     // @ManyToOne(type => Country)
     // @JoinColumn()

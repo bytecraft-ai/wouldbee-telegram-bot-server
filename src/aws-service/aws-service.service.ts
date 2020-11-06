@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotAcceptableException } from '@nestjs/common';
 import { get } from 'config'
 import { S3, SES, SNS, config, Credentials } from 'aws-sdk';
-import { TypeOfDocument } from 'src/common/enum';
+import { S3Option, TypeOfDocument } from 'src/common/enum';
 import { S3SignedUrl } from './aws-service.interface';
 import { SendEmailDto } from './aws-service.dto';
 
@@ -25,10 +25,10 @@ export class AwsService {
         config.region = process.env.S3_REGION || awsConfig.S3_REGION;
         config.credentials = new Credentials(process.env.AWS_ACCESS_KEY_ID, process.env.AWS_SECRET_ACCESS_KEY)
 
-        this.awsSnsObject = new SNS({
-            apiVersion: '2010-03-31',
-        })
-        this.awsS3 = new S3();
+        // this.awsSnsObject = new SNS({
+        //     apiVersion: '2010-03-31',
+        // })
+        this.awsS3 = new S3({ apiVersion: 'latest' });
         this.awsSesObject = new SES();
     }
 
@@ -167,7 +167,7 @@ export class AwsService {
     }
 
 
-    async createSignedURL(id: string, fileName: string, typeOfDocument: TypeOfDocument, getTruePutFalse: boolean): Promise<S3SignedUrl | undefined> {
+    async createSignedURL(id: string, fileName: string, typeOfDocument: TypeOfDocument, getOrPut: S3Option): Promise<S3SignedUrl | undefined> {
 
         this.validateFileNameForS3Upload(fileName, typeOfDocument, id);
 
@@ -176,14 +176,14 @@ export class AwsService {
         const s3Params = {
             Bucket: S3_BUCKET,
             Key: fileName,
-            Expires: parseInt(process.env.S3_URL_EXPIRES_IN) || 30,  // 30 seconds
+            Expires: parseInt(process.env.S3_URL_EXPIRES_IN) || 300,  // 30 seconds
         };
 
         try {
             const urlObject = {
                 url: `https://${S3_BUCKET}.s3.amazonaws.com/${fileName}`,
                 preSignedUrl: await this.awsS3.getSignedUrlPromise(
-                    getTruePutFalse ? 'getObject' : 'putObject',
+                    getOrPut === S3Option.GET ? 'getObject' : 'putObject',
                     s3Params)
             };
             return urlObject;

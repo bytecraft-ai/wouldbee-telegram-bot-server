@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException, Logger, BadRequestException, NotFoundException, ConflictException, InternalServerErrorException, NotImplementedException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, RegistrationStatus, MaritalStatus, ProfileSharedWith } from 'src/common/enum';
+import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, RegistrationStatus, MaritalStatus, ProfileSharedWith, S3Option } from 'src/common/enum';
 import { deDuplicateArray, getAgeInYearsFromDOB, setDifferenceFromArrays } from 'src/common/util';
 import { Repository } from 'typeorm';
 // import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
@@ -323,7 +323,8 @@ export class ProfileService {
         if (partnerPref?.maritalStatuses?.length) {
             preferredMaritalStatuses = partnerPref.maritalStatuses;
             matchQuery.andWhere("t_profile.maritalStatus IN (:...ms)", { ms: preferredMaritalStatuses });
-        } else {
+        }
+        else {
             if (profile?.maritalStatus) {
                 matchQuery.addSelect(`CASE 
                 WHEN t_profile."maritalStatus" = ${MaritalStatus.NEVER_MARRIED} THEN 1 
@@ -477,9 +478,17 @@ export class ProfileService {
             skip, take
         });
         do {
-            const matches = this.matchRepository.find({
-                where: { femaleProfile: profiles }
-            })
+            // const matches = await this.matchRepository.find({
+            //     where: { femaleProfile: profiles }
+            // });
+
+            const matches = await this.matchRepository.createQueryBuilder('match')
+                .select('DISTINCT ON (femaleProfileId) id, maleProfileId, femaleProfileId, profileSharedWith')
+                .where('match.profileSharedWith = :none',
+                    { none: ProfileSharedWith.NONE })
+                .andWhere('match.femaleProfileId in (...:femaleProfileIds)',
+                    { femaleProfileIds: profiles.map(profile => profile.id) })
+                .getMany();
 
             skip += take;
             [profiles, count] = await this.profileRepository.findAndCount({
@@ -830,17 +839,17 @@ export class ProfileService {
     }
 
 
-    async generateS3SignedURLs(telegramProfileId: string,
-        fileName: string,
-        typeOfDocument: TypeOfDocument): Promise<string | undefined> {
+    // async generateS3SignedURLs(telegramProfileId: string,
+    //     fileName: string,
+    //     typeOfDocument: TypeOfDocument): Promise<string | undefined> {
 
-        const urlObj = await this.awsService.createSignedURL(telegramProfileId, fileName, typeOfDocument, false);
+    //     const urlObj = await this.awsService.createSignedURL(telegramProfileId, fileName, typeOfDocument, false);
 
-        return urlObj.preSignedUrl;
-    }
+    //     return urlObj.preSignedUrl;
+    // }
 
 
-    async getSignedUrl(telegramProfileId: string, docType: string): Promise<string | undefined> {
+    async getSignedDownloadUrl(telegramProfileId: string, docType: string): Promise<string | undefined> {
         if (!docType) {
             throw new BadRequestException('docType is required!')
         }
@@ -866,7 +875,7 @@ export class ProfileService {
             .where('doc.telegramProfileId = :telegramProfileId', { telegramProfileId })
             .andWhere('doc.typeOfDocument = :typeOfDocument', { typeOfDocument })
             .andWhere('doc.active IS NULL')
-            .orderBy('doc.createdOn DESC')
+            .orderBy('doc.createdOn', 'DESC')
             .getOne();
 
         if (!document) {
@@ -874,7 +883,7 @@ export class ProfileService {
         }
 
         try {
-            const urlObj = await this.awsService.createSignedURL(telegramProfileId, document.fileName, document.typeOfDocument, false);
+            const urlObj = await this.awsService.createSignedURL(telegramProfileId, document.fileName, document.typeOfDocument, S3Option.GET);
             return urlObj.preSignedUrl;
         }
         catch (err) {

@@ -31,7 +31,7 @@ import {
     Command,
 } from 'nestjs-telegraf';
 import { RegistrationStatus, TypeOfDocument } from 'src/common/enum';
-import { deleteFile, doc2pdf, downloadFile, mimeTypes, watermarkFile } from 'src/common/util';
+import { deleteFile, mimeTypes } from 'src/common/util';
 import { Profile } from 'src/profile/entities/profile.entity';
 import { TelegramProfile } from 'src/profile/entities/telegram-profile.entity';
 import { ProfileService } from 'src/profile/profile.service';
@@ -705,17 +705,17 @@ export class TelegramService {
     }
 
 
-    // @On('video')
-    // @On('animation')
-    // @On('sticker')
-    // @On('photo')
-    // @On('document')
-    // @On('audio')
-    // @On('voice')
+    @On('video')
+    @On('animation')
+    @On('sticker')
+    @On('photo')
+    @On('document')
+    @On('audio')
+    @On('voice')
     // @Hears('')
-    // onUnsupportedCommand(ctx: Context) {
-    //     ctx.reply('Please use /help command to see what this bot supports.');
-    // }
+    onUnsupportedCommand(ctx: Context) {
+        ctx.reply('Please use /help command to see what this bot supports.');
+    }
 
 
 

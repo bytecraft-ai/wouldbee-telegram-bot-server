@@ -224,9 +224,10 @@ export class TelegramProfileController {
 
     // TODO: implement caching on client side
     @Get('/url/:id')
-    async getSignedUrl(@Param('id') id: string, @Query() query: DocumentTypeDto): Promise<{ url: string }> {
+    async getSignedDownloadUrl(@Param('id') id: string, @Query() query: DocumentTypeDto): Promise<{ url: string }> {
+        console.log('id:', id, 'docType:', query);
         return {
-            url: await this.profileService.getSignedUrl(id, query.documentType)
+            url: await this.profileService.getSignedDownloadUrl(id, query.documentType)
         }
     }
 

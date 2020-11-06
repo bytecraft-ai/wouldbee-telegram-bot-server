@@ -16,7 +16,7 @@ import {
     Command,
 } from 'nestjs-telegraf';
 import { TypeOfDocument } from 'src/common/enum';
-import { deleteFile, doc2pdf, downloadFile, mimeTypes, stampFile, watermarkFile } from 'src/common/util';
+import { deleteFile, doc2pdf, downloadFile, mimeTypes, watermarkFile } from 'src/common/util';
 import { bioCreateSuccessMsg, fatalErrorMsg, unsupportedBioFormat, unsupportedPictureFormat } from './telegram.constants';
 
 const logger = new Logger('TelegramServiceHelper');

@@ -9,16 +9,15 @@ import http from 'http';
 const request = require("request"); // does not work with import syntax.
 const watermark = require('image-watermark');  // does not work with import syntax.
 import { convert } from 'libreoffice-convert';
+// const pdftk = require('node-pdftk');
 import { readFileSync } from 'fs';
-const pdftk = require('node-pdftk');
 
-pdftk.configure({
-    // bin: '/your/path/to/pdftk/bin',
-    // Promise: require('bluebird'),
-    ignoreWarnings: true,
-    tempDir: '/tmp/'
-});
-
+// pdftk.configure({
+//     // bin: '/your/path/to/pdftk/bin',
+//     // Promise: require('bluebird'),
+//     ignoreWarnings: true,
+//     tempDir: '/tmp/'
+// });
 
 const watermarkOptions = {
     'text': 'wouldbee.com',
@@ -387,18 +386,18 @@ export function watermarkFile(fileName: string, DIR = '/tmp/'): Promise<string |
 /**
  * TODO: It has external dependency on pdftk server software (free though)
  */
-export function stampFile(fileName: string, DIR = '/tmp/') {
-    pdftk
-        .input(readFileSync(join(DIR, fileName)))
-        .stamp('assets/would_bee_logo.png')
-        .output(join(DIR, fileName))
-        .catch(err => {
-            logger.log(`Could not stamp file: ${join(DIR, fileName)}`);
-            throw err;
-        });
-    logger.log('stamped file: ' + join(DIR, fileName));
-    return fileName;
-}
+// export function stampFile(fileName: string, DIR = '/tmp/') {
+//     pdftk
+//         .input(readFileSync(join(DIR, fileName)))
+//         .stamp('assets/would_bee_logo.png')
+//         .output(join(DIR, fileName))
+//         .catch(err => {
+//             logger.log(`Could not stamp file: ${join(DIR, fileName)}`);
+//             throw err;
+//         });
+//     logger.log('stamped file: ' + join(DIR, fileName));
+//     return fileName;
+// }
 
 
 // maps file extension to MIME types

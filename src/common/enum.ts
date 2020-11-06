@@ -1,3 +1,9 @@
+export enum S3Option {
+    GET = 1,
+    PUT
+}
+
+
 export enum ProfileSharedWith {
     NONE = 1,
     MALE,
