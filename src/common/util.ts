@@ -10,6 +10,8 @@ const request = require("request"); // does not work with import syntax.
 const watermark = require('image-watermark');  // does not work with import syntax.
 import { convert } from 'libreoffice-convert';
 // const pdftk = require('node-pdftk');
+// import { readFileSync } from 'fs';
+import { degrees, PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { readFileSync } from 'fs';
 
 // pdftk.configure({
@@ -367,7 +369,7 @@ export async function deleteFile(fileName: string, DIR = '/tmp/') {
 
 
 // TODO: use something else for PDF files as it produces bad quality PDF.
-export function watermarkFile(fileName: string, DIR = '/tmp/'): Promise<string | undefined> {
+export function watermarkImage(fileName: string, DIR = '/tmp/'): Promise<string | undefined> {
     return new Promise((resolve, reject) => {
         watermark.embedWatermarkWithCb(
             join(DIR, fileName), watermarkOptions, function (err) {
@@ -450,4 +452,58 @@ export async function doc2pdf(fileName: string, DIR = '/tmp/'): Promise<string |
         throw err;
     }
     return pdfFileName;
+}
+
+
+export async function watermarkPdf(fileName: string, DIR = '/tmp/'): Promise<string | null> {
+    // const url = 'https://pdf-lib.js.org/assets/with_update_sections.pdf'
+    // const existingPdfBytes = await fetch(url).then(res => res.arrayBuffer())
+
+    const existingPdfBytes = await fs.readFile(join(DIR, fileName));
+    const pngImageBytes = await fs.readFile('assets/would_bee_logo.png');
+    // let data = await fs.readFile(join(DIR, fileName));
+    // let existingPdfBytes = data.arrayBuffer();
+
+    const pdfDoc = await PDFDocument.load(existingPdfBytes);
+    const pngImage = await pdfDoc.embedPng(pngImageBytes);
+    const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+    const pages = pdfDoc.getPages();
+    for (const page of pages) {
+        const { width, height } = page.getSize();
+
+        page.drawImage(pngImage, {
+            x: width / 2 - 25,
+            y: 20,
+            height: 50, width: 50
+        });
+        // page.drawText('wouldbee.com', {
+        //     x: 25,
+        //     // y: height / 2 + 300,
+        //     y: height - 20,
+        //     size: 12,
+        //     font: helveticaFont,
+        //     // color: rgb(0.95, 0.1, 0.1),
+        //     color: rgb(0.9531, 0, 0.4375),
+        //     // rotate: degrees(-45),
+        //     rotate: degrees(0),
+        // });
+
+        page.drawText('wouldbee.com', {
+            x: width - 10,
+            y: height / 2,
+            size: 12,
+            font: helveticaFont,
+            color: rgb(0.9531, 0, 0.4375),
+            rotate: degrees(90),
+        });
+
+
+
+    }
+
+
+    const pdfBytes = await pdfDoc.save()
+    await fs.writeFile(join('/Users/rahul/downloads/', 'wm----' + fileName), pdfBytes);
+    return fileName;
 }

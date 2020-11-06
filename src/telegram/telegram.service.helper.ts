@@ -1,37 +1,24 @@
 import { Logger } from '@nestjs/common';
-import {
-    Start,
-    Help,
-    On,
-    Hears,
-    Context,
-    InjectBot,
-    TelegrafProvider,
-    Composer,
-    Markup,
-    WizardScene,
-    session,
-    Stage,
-    BaseScene,
-    Command,
-} from 'nestjs-telegraf';
-import { TypeOfDocument } from 'src/common/enum';
-import { deleteFile, doc2pdf, downloadFile, mimeTypes, watermarkFile } from 'src/common/util';
+import { Context } from 'nestjs-telegraf';
+import { deleteFile, doc2pdf, downloadFile, mimeTypes, watermarkImage, watermarkPdf } from 'src/common/util';
 import { bioCreateSuccessMsg, fatalErrorMsg, unsupportedBioFormat, unsupportedPictureFormat } from './telegram.constants';
 
 const logger = new Logger('TelegramServiceHelper');
 
+/**
+ * file should not be more than
+ * (2MBs = 2 * 1024 * 1024 = 2097152)
+ * for some tolerance, use 2.1 MB = 2202009.6
+ */
+const fileSizeLimit = 2202009.6
+const ONE_MB = 1048576; // 1024*1024
 
 export function validateBioDataFileSize(ctx: Context) {
     const document = ctx.message.document;
     let errorMessage: string;
-    /**
-     * file should not be more than
-     * (2MBs = 2 * 1024 * 1024 = 2097152)
-     * for some tolerance, use 2.1 MB = 2202009.6
-     */
-    if (document.file_size > 2202009.6) {
-        const size = (document.file_size / 1048576).toFixed(2);
+
+    if (document.file_size > fileSizeLimit) {
+        const size = (document.file_size / ONE_MB).toFixed(2);
         errorMessage = `Bio-data should not be more than 2 MB in size. The size of file you sent is ${size} MB. Please reduce the bio-data size and resend using /upload_bio command.`;
     }
     return errorMessage;
@@ -43,13 +30,8 @@ export function validatePhotoFileSize(ctx: Context) {
     const photo = ctx.message.photo?.length > 0 ? ctx.message.photo[0] : undefined;
     const file_size = photo ? photo.file_size : document.file_size;
 
-    /**
-     * file size should not be more than
-     * (2MBs = 2 * 1024 * 1024 = 2097152)
-     * for some tolerance, use 2.1 MB = 2202009.6
-     */
-    if (file_size > 2202009.6) {
-        const size = (file_size / 1048576).toFixed(2);
+    if (file_size > fileSizeLimit) {
+        const size = (file_size / ONE_MB).toFixed(2);
         const errMessage = `Profile Picture should not be more than 2 MB in size. The size of file you sent is ${size} MB. Please reduce its size and resend using /upload_picture command.`;
         return errMessage;
     }
@@ -126,21 +108,22 @@ export async function getBioDataFileName(ctx: Context):
 }
 
 
-export async function processBioDataFile(link: string, fileName: string, process = false, DIR: string = '/tmp/'): Promise<string | undefined> {
+export async function processBioDataFile(link: string, fileName: string, DIR: string, convertToPdf = false, watermark = false): Promise<string | undefined> {
 
     await downloadFile(link, fileName, DIR);
-    if (process) {
-        if (!fileName.endsWith('.pdf')) {
-            const originalFileName = fileName;
-            fileName = await doc2pdf(fileName, DIR);
+    if (convertToPdf && !fileName.endsWith('.pdf')) {
 
-            const extension = fileName.split('.').pop();
-            logger.log(`converted ${extension} file to pdf!`);
+        const originalFileName = fileName;
+        fileName = await doc2pdf(fileName, DIR);
 
-            await deleteFile(originalFileName, DIR);
-        }
+        const extension = fileName.split('.').pop();
+        logger.log(`converted ${extension} file to pdf!`);
 
-        await watermarkFile(fileName, DIR);
+        await deleteFile(originalFileName, DIR);
+    }
+
+    if (watermark && fileName.endsWith('.pdf')) {
+        fileName = await watermarkPdf(fileName, DIR);
         logger.log('water marked file!');
     }
     return fileName;
@@ -220,10 +203,10 @@ export async function getPictureFileName(ctx: Context): Promise<{
 }
 
 
-export async function processPictureFile(link: string, fileName: string, watermark = false, DIR: string = '/tmp/'): Promise<string | undefined> {
+export async function processPictureFile(link: string, fileName: string, watermark = false, DIR: string): Promise<string | undefined> {
     await downloadFile(link, fileName, DIR);
     if (watermark) {
-        await watermarkFile(fileName, DIR);
+        await watermarkImage(fileName, DIR);
         logger.log('water marked picture!');
     }
     return fileName;

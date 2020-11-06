@@ -41,10 +41,11 @@ import { Cron } from '@nestjs/schedule';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
 
-
-const { leave } = Stage
-
 const logger = new Logger('TelegramService');
+
+const DIR = '/tmp/'; // dir to use for file downloads and processing
+const applyWatermark = true;
+const processToPdf = true;
 
 @Injectable()
 export class TelegramService {
@@ -263,13 +264,11 @@ export class TelegramService {
                             getBioDataFileName(ctx);
 
                         if (fileName) {
-                            const DIR = '../tmp/';
-                            const processToPdf = false;
                             const mime_type = processToPdf
                                 ? mimeTypes['.pdf'] : document.mime_type
                             try {
                                 const fileToUpload
-                                    = await processBioDataFile(link, fileName, processToPdf, DIR);
+                                    = await processBioDataFile(link, fileName, DIR, processToPdf, applyWatermark);
 
                                 await this.profileService.uploadDocument(ctx.from.id, fileToUpload, DIR, mime_type, TypeOfDocument.BIO_DATA, document.file_id);
 
@@ -358,9 +357,6 @@ export class TelegramService {
                             getPictureFileName(ctx);
 
                         if (fileName) {
-                            const DIR = '../tmp/';
-                            const applyWatermark = true;
-
                             const extension = fileName.split('.').pop();
                             const mime_type = extension === 'jpg' || extension === 'jpeg'
                                 ? mimeTypes['.jpg'] : mimeTypes['.png'];
@@ -461,13 +457,11 @@ export class TelegramService {
                         getBioDataFileName(ctx);
 
                     if (fileName) {
-                        const DIR = '../tmp/';
-                        const processToPdf = false;
                         const mime_type = processToPdf
                             ? mimeTypes['.pdf'] : document.mime_type
                         try {
                             const fileToUpload
-                                = await processBioDataFile(link, fileName, processToPdf, DIR);
+                                = await processBioDataFile(link, fileName, DIR, processToPdf, applyWatermark);
 
                             await this.profileService.uploadDocument(ctx.from.id, fileToUpload, DIR, mime_type, TypeOfDocument.BIO_DATA, document.file_id);
 
@@ -558,8 +552,6 @@ export class TelegramService {
                         getPictureFileName(ctx);
 
                     if (fileName) {
-                        const DIR = '../tmp/';
-                        const applyWatermark = false;
                         const file_id = photo ? photo.file_id : document.file_id
 
                         const extension = fileName.split('.').pop();
