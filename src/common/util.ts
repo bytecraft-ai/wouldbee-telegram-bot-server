@@ -497,13 +497,9 @@ export async function watermarkPdf(fileName: string, DIR = '/tmp/'): Promise<str
             color: rgb(0.9531, 0, 0.4375),
             rotate: degrees(90),
         });
-
-
-
     }
 
-
     const pdfBytes = await pdfDoc.save()
-    await fs.writeFile(join('/Users/rahul/downloads/', 'wm----' + fileName), pdfBytes);
+    await fs.writeFile(join(DIR, fileName), pdfBytes);
     return fileName;
 }
