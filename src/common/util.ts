@@ -9,10 +9,7 @@ import http from 'http';
 const request = require("request"); // does not work with import syntax.
 const watermark = require('image-watermark');  // does not work with import syntax.
 import { convert } from 'libreoffice-convert';
-// const pdftk = require('node-pdftk');
-// import { readFileSync } from 'fs';
 import { degrees, PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { readFileSync } from 'fs';
 
 // pdftk.configure({
 //     // bin: '/your/path/to/pdftk/bin',

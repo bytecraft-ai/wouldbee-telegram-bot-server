@@ -765,7 +765,7 @@ export class ProfileService {
 
             // Now delete old unverified document from aws S3 and table
             if (unverifiedDocument) {
-
+                const oldFileName = unverifiedDocument.fileName;
                 // mark old unverified document as inactive;
                 unverifiedDocument.active = false;
                 unverifiedDocument.url = null;
@@ -774,7 +774,7 @@ export class ProfileService {
 
                 // Save repo & delete file from aws
                 await this.documentRepository.save(unverifiedDocument);
-                await this.awsService.deleteFileFromS3(fileName, typeOfDocument);
+                await this.awsService.deleteFileFromS3(oldFileName, typeOfDocument);
             }
 
             return document;
