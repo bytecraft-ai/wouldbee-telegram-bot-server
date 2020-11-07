@@ -4,7 +4,7 @@ import { CreateCasteDto, CreateProfileDto, CreateUserDto, FileUploadDto, Partner
 import { ProfileService } from './profile.service';
 // import { User } from './entities/user.entity';
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
-import { DocumentDto, DocumentTypeDto, GetCitiesDto, GetCountriesDto, GetStatesDto, GetTelegramProfilesDto } from './dto/location.dto';
+import { DocumentDto, DocumentTypeDto, GetCitiesDto, GetCountriesDto, GetStatesDto, GetTelegramProfilesDto, PaginationDto } from './dto/location.dto';
 import { editFileName, imageOrDocFileFilter } from 'src/common/file-util';
 import { diskStorage } from 'multer';
 import { AwsService } from 'src/aws-service/aws-service.service';
@@ -26,11 +26,11 @@ export class CommonController {
         private readonly awsService: AwsService
     ) { }
 
-    @Get('/upload')
-    async upload() {
-        const link = await this.awsService.uploadFileToS3("1e904bf2-5b84-427d-b169-c57deccd9655", "1e904bf2-5b84-427d-b169-c57deccd9655_bio.pdf", "application/pdf", TypeOfDocument.BIO_DATA);
-        return { link };
-    }
+    // @Get('/upload')      // meant for testing
+    // async upload() {
+    //     const link = await this.awsService.uploadFileToS3("1e904bf2-5b84-427d-b169-c57deccd9655", "1e904bf2-5b84-427d-b169-c57deccd9655_bio.pdf", "application/pdf", TypeOfDocument.BIO_DATA);
+    //     return { link };
+    // }
 
     @Get('/')
     async getCommonData() {
@@ -38,16 +38,16 @@ export class CommonController {
     }
 
 
-    @Get('/seed')
-    async seed() {
-        await this.profileService.seedCaste();
-        return this.getCastes();
-    }
+    // @Get('/seed')
+    // async seed() {
+    //     await this.profileService.seedCaste();
+    //     return this.getCastes();
+    // }
 
 
     @Get('/caste')
-    async getCastes() {
-        return this.profileService.getCastes();
+    async getCastes(@Query() options: GetCitiesDto,) {
+        return this.profileService.getCastesLike(options?.like, options?.skip, options?.take);
     }
 
 

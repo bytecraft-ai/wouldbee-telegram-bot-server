@@ -28,4 +28,4 @@ export const urlMaxLength = 700;
 export const mimeMaxLength = 100;
 
 // rejection-reason
-export const bioRejectionReasonMaxLength = 200;
+export const docRejectionReasonMaxLength = 200;

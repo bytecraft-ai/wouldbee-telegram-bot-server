@@ -7,15 +7,15 @@ import {
     CreateDateColumn,
     JoinColumn,
     DeleteDateColumn,
-    OneToOne,
+    // OneToOne,
 } from 'typeorm';
 import { IsBoolean, IsInt, IsOptional, IsPositive, IsString, Length } from 'class-validator';
-import { bioRejectionReasonMaxLength, fileNameMaxLength, fileNameMinLength, mimeMaxLength, urlMaxLength } from 'src/common/field-length';
-import { BioRejectionReason, TypeOfDocument, TypeOfIdProof } from 'src/common/enum';
+import { docRejectionReasonMaxLength, fileNameMaxLength, fileNameMinLength, mimeMaxLength, urlMaxLength } from 'src/common/field-length';
+import { DocRejectionReason, TypeOfDocument, TypeOfIdProof } from 'src/common/enum';
 import { TelegramProfile } from './telegram-profile.entity';
 import { Verifiable } from './abstract-verifiable.entity';
-import { AwsDocument } from './aws-document.entity';
-import { InvalidDocument } from './invalid-document.entity';
+// import { AwsDocument } from './aws-document.entity';
+// import { InvalidDocument } from './invalid-document.entity';
 
 
 // Records all document updates.
@@ -89,11 +89,11 @@ export class Document extends Verifiable {
     @IsPositive()
     @IsInt()
     @Column("smallint", { nullable: true })
-    invalidationReason?: BioRejectionReason;
+    invalidationReason?: DocRejectionReason;
 
     @IsOptional()
     @IsPositive()
     @IsInt()
-    @Column("varchar", { nullable: true, length: bioRejectionReasonMaxLength })
-    invalidationDescription?: BioRejectionReason;
+    @Column("varchar", { nullable: true, length: docRejectionReasonMaxLength })
+    invalidationDescription?: DocRejectionReason;
 }

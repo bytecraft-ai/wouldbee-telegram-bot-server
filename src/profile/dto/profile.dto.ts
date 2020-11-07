@@ -182,12 +182,14 @@ export class PartnerPreferenceDto {
     @Min(18)
     @Max(100)
     @IsInt()
+    @Transform(value => Number(value))
     minAge?: number;
 
     @IsOptional()
     @Min(21)
     @Max(100)
     @IsInt()
+    @Transform(value => Number(value))
     maxAge?: number;
 
     @IsOptional()
@@ -199,6 +201,8 @@ export class PartnerPreferenceDto {
     casteIds?: number[];
 
     @IsOptional()
+    @IsInt()
+    @Transform(value => Number(value))
     minimumIncome?: AnnualIncome;
 
     @IsOptional()

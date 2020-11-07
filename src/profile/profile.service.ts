@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException, Logger, BadRequestException, NotFoun
 import { InjectRepository } from '@nestjs/typeorm';
 import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, RegistrationStatus, MaritalStatus, ProfileSharedWith, S3Option } from 'src/common/enum';
 import { deDuplicateArray, getAgeInYearsFromDOB, setDifferenceFromArrays } from 'src/common/util';
-import { Repository } from 'typeorm';
+import { IsNull, Not, Repository } from 'typeorm';
 // import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
 import { PartnerPreferenceDto, CreateUserDto, CreateProfileDto, RegistrationDto, CreateCasteDto } from './dto/profile.dto';
 import { Caste } from './entities/caste.entity';
@@ -745,7 +745,7 @@ export class ProfileService {
             // let document = await this.getDocument(telegramProfile.id, typeOfDocument, { throwOnFail: false });
 
             let unverifiedDocument = await this.documentRepository.findOne({
-                where: { telegramProfileId: telegramProfile.id, typeOfDocument: typeOfDocument, isValid: null },
+                where: { telegramProfileId: telegramProfile.id, typeOfDocument: typeOfDocument, isValid: IsNull(), fileName: Not(IsNull()) },
             });
 
             // upload aws s3 document
@@ -765,6 +765,7 @@ export class ProfileService {
 
             // Now delete old unverified document from aws S3 and table
             if (unverifiedDocument) {
+                console.log('unverifiedDocument:', unverifiedDocument);
                 const oldFileName = unverifiedDocument.fileName.slice();
                 // mark old unverified document as inactive;
                 unverifiedDocument.active = false;
@@ -909,8 +910,16 @@ export class ProfileService {
     }
 
 
-    async getCastes(): Promise<Caste[]> {
-        return this.casteRepository.find();
+    async getCastesLike(like: string, skip = 0, take = 20): Promise<Caste[]> {
+        if (take > 100) {
+            throw new Error('Maximum value allowed for take is 100');
+        }
+
+        let query = this.casteRepository.createQueryBuilder("caste");
+        if (like) {
+            query = query.where("caste.name ILIKE :pattern", { like: `${like}%` });
+        }
+        return query.skip(skip).take(take).getMany();
     }
 
 
@@ -1153,6 +1162,10 @@ export class ProfileService {
 
     async getStatesLike(pattern: string, countryIds: number[], skip = 0, take = 20): Promise<IList<State>> {
 
+        if (take > 100) {
+            throw new Error('Maximum value allowed for take is 100');
+        }
+
         const query = this.stateRepository.createQueryBuilder("state");
         let whereIsSet: boolean = false
 
@@ -1270,6 +1283,10 @@ export class ProfileService {
             skip = 0,
             take = 20,
         }): Promise<IList<City>> {
+
+        if (take > 100) {
+            throw new Error('Maximum value allowed for take is 100');
+        }
 
         let query = this.cityRepository.createQueryBuilder("city");
         let whereIsSet: boolean = false

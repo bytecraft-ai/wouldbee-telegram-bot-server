@@ -1,5 +1,5 @@
-import { BioRejectionReason } from 'src/common/enum';
-import { bioRejectionReasonMaxLength } from 'src/common/field-length';
+import { DocRejectionReason } from 'src/common/enum';
+import { docRejectionReasonMaxLength } from 'src/common/field-length';
 import {
     Entity,
     Column,
@@ -36,8 +36,8 @@ export class InvalidDocument {
     deletedOn?: Date;
 
     @Column({ type: "smallint" })
-    reason: BioRejectionReason;
+    reason: DocRejectionReason;
 
-    @Column("varchar", { nullable: true, length: bioRejectionReasonMaxLength })
-    description: BioRejectionReason;
+    @Column("varchar", { nullable: true, length: docRejectionReasonMaxLength })
+    description: string;
 }

@@ -287,17 +287,14 @@ export enum Language {
 }
 
 
-export enum BioRejectionReason {
+export enum DocRejectionReason {
     NOT_A_BIO = 1,
-    MISSING_NAME,
-    MISSING_GENDER,
-    MISSING_DOB,
-    MISSING_RELIGION,
-    MISSING_CASTE,
-    MISSING_INCOME,
-    MISSING_CITY,
+    NOT_A_PROFILE_PIC,
+    NOT_AN_ID,
+    MISSING_INFO,
     INVALID_CONTACT,
     OBSCENE_OR_OFFENSIVE,
+    FAKE_OR_FRAUDULENT,
     OTHER,
 }
 
