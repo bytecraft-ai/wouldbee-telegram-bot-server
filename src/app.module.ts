@@ -27,20 +27,26 @@ import { SeederModule } from './seeder/seeder.module';
       // storage: DiskStorage
     }),
     ScheduleModule.forRoot(),
+    BullModule.forRoot({
+      redis: {
+        host: 'localhost',
+        port: 6379,
+      },
+    }),
     BullModule.registerQueue(
       {
         name: 'find-match',
-        redis: {
-          host: 'localhost',
-          port: 6379,
-        },
+        // redis: {
+        //   host: 'localhost',
+        //   port: 6379,
+        // },
       },
       {
         name: 'send-profile',
-        redis: {
-          host: 'localhost',
-          port: 6379,
-        },
+        // redis: {
+        //   host: 'localhost',
+        //   port: 6379,
+        // },
       }
     ),
     TypeOrmModule.forRoot({ ...typeOrmConfig, autoLoadEntities: true }),

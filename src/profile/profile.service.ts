@@ -165,11 +165,20 @@ export class ProfileService {
 
     async createProfile(profileDto: CreateProfileDto): Promise<Profile | undefined> {
         const { telegramProfileId, name, gender, dob, religion, casteId, annualIncome, cityId, highestDegree, employedIn, occupation, motherTongue, maritalStatus } = profileDto;
+
         let profile = await this.profileRepository.findOne(telegramProfileId);
         if (profile) {
             throw new
                 ConflictException('profile already exists!');
         }
+
+        const approvedBio = await this.documentRepository.findOne({
+            where: { telegramProfileId, active: true }
+        })
+        if (!approvedBio) {
+            throw new ConflictException('No approved bio-data exists for this profile.');
+        }
+
         const caste = await this.getCaste(casteId, true);
         const city = await this.getCity(cityId, { throwOnFail: true });
         profile = this.profileRepository.create({
@@ -477,26 +486,28 @@ export class ProfileService {
             where: { gender: Gender.FEMALE },
             skip, take
         });
-        do {
-            // const matches = await this.matchRepository.find({
-            //     where: { femaleProfile: profiles }
-            // });
+        if (count > 0) {
+            do {
+                // const matches = await this.matchRepository.find({
+                //     where: { femaleProfile: profiles }
+                // });
 
-            const matches = await this.matchRepository.createQueryBuilder('match')
-                .select('DISTINCT ON (femaleProfileId) id, maleProfileId, femaleProfileId, profileSharedWith')
-                .where('match.profileSharedWith = :none',
-                    { none: ProfileSharedWith.NONE })
-                .andWhere('match.femaleProfileId in (...:femaleProfileIds)',
-                    { femaleProfileIds: profiles.map(profile => profile.id) })
-                .getMany();
+                const matches = await this.matchRepository.createQueryBuilder('match')
+                    .select('DISTINCT ON (femaleProfileId) id, maleProfileId, femaleProfileId, profileSharedWith')
+                    .where('match.profileSharedWith = :none',
+                        { none: ProfileSharedWith.NONE })
+                    .andWhere('match.femaleProfileId IN (:...femaleProfileIds)',
+                        { femaleProfileIds: profiles.map(profile => profile.id) })
+                    .getMany();
 
-            skip += take;
-            [profiles, count] = await this.profileRepository.findAndCount({
-                where: { gender: Gender.FEMALE },
-                skip, take
-            });
+                skip += take;
+                [profiles, count] = await this.profileRepository.findAndCount({
+                    where: { gender: Gender.FEMALE },
+                    skip, take
+                });
 
-        } while (skip < count)
+            } while (skip < count)
+        }
         // const [matches, count] = this.matchRepository.createQueryBuilder('match')
         //     .where()
 
@@ -801,37 +812,41 @@ export class ProfileService {
 
 
     @Transactional()
-    async verifyDocument(documentId: number, agent: Agent): Promise<Document | undefined> {
+    async verifyDocument(telegramProfileId: string, documentId: number, agent: Agent): Promise<Document | undefined> {
         try {
             let document = await this.documentRepository.findOne(documentId);
 
-            if (!document) {
+            if (!document || document.telegramProfileId !== telegramProfileId) {
                 throw new NotFoundException(`Document with id: ${documentId} does not exist!`);
             }
+            document.active = true;
+            document.verifierId = agent.id;
+            document.verifiedOn = new Date();
+            document = await this.documentRepository.save(document);
 
             // find current active document, mark as inactive and delete from AWS in the end
-            const currentActiveDocument = await this.documentRepository.findOne({
+            let currentActiveDocument = await this.documentRepository.findOne({
                 where: {
                     telegramProfileId: document.telegramProfileId,
                     typeOfDocument: document.typeOfDocument,
                     active: true
                 }
             });
-            currentActiveDocument.active = false;
-            const currentActiveDocumentFileName = currentActiveDocument.fileName;
-            currentActiveDocument.fileName = null;
-            currentActiveDocument.url = null;
-            currentActiveDocument.mimeType = null;
+            let currentActiveDocumentFileName: string;
+            if (currentActiveDocument) {
+                currentActiveDocument.active = false;
+                currentActiveDocumentFileName = currentActiveDocument.fileName.slice();
+                currentActiveDocument.fileName = null;
+                currentActiveDocument.url = null;
+                currentActiveDocument.mimeType = null;
 
-            document.active = true;
-            document.verifierId = agent.id;
-            document.verifiedOn = new Date();
-            const documents = await this.documentRepository.save([currentActiveDocument, document]);
+                await this.documentRepository.save(currentActiveDocument);
 
-            // delete old active document from AWS.
-            this.awsService.deleteFileFromS3(currentActiveDocumentFileName, currentActiveDocument.typeOfDocument);
+                // delete old active document from AWS.
+                await this.awsService.deleteFileFromS3(currentActiveDocumentFileName, currentActiveDocument.typeOfDocument);
+            }
 
-            return documents.find(doc => doc.id === documentId)
+            return document;
         }
         catch (error) {
             logger.error(`Could not verify document. Error: ${error}`);
@@ -850,7 +865,7 @@ export class ProfileService {
     // }
 
 
-    async getSignedDownloadUrl(telegramProfileId: string, docType: string): Promise<string | undefined> {
+    async getSignedDownloadUrl(telegramProfileId: string, docType: string): Promise<{ id: number, url: string } | undefined> {
         if (!docType) {
             throw new BadRequestException('docType is required!')
         }
@@ -885,7 +900,10 @@ export class ProfileService {
 
         try {
             const urlObj = await this.awsService.createSignedURL(telegramProfileId, document.fileName, document.typeOfDocument, S3Option.GET);
-            return urlObj.preSignedUrl;
+            return {
+                id: document.id,
+                url: urlObj.preSignedUrl
+            };
         }
         catch (err) {
             logger.error(`Could not generate signed url for telegramProfileId: ${telegramProfileId}, and docType: ${docType}. Error: ${err}`);
@@ -917,7 +935,7 @@ export class ProfileService {
 
         let query = this.casteRepository.createQueryBuilder("caste");
         if (like) {
-            query = query.where("caste.name ILIKE :pattern", { like: `${like}%` });
+            query = query.where("caste.name ILIKE :like", { like: `${like}%` });
         }
         return query.skip(skip).take(take).getMany();
     }

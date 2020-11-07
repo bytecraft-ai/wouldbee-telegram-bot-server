@@ -226,9 +226,7 @@ export class TelegramProfileController {
     @Get('/url/:id')
     async getSignedDownloadUrl(@Param('id') id: string, @Query() query: DocumentTypeDto): Promise<{ url: string }> {
         console.log('id:', id, 'docType:', query);
-        return {
-            url: await this.profileService.getSignedDownloadUrl(id, query.documentType)
-        }
+        return await this.profileService.getSignedDownloadUrl(id, query.documentType);
     }
 
 
@@ -237,8 +235,9 @@ export class TelegramProfileController {
     async validateDocument(
         @GetAgent() agent: Agent,
         @Param('id') id: string,
-        @Query() body: DocumentDto) {
-        await this.profileService.verifyDocument(body.documentId, agent);
+        @Body() body: DocumentDto) {
+        console.log('body:', body);
+        await this.profileService.verifyDocument(id, body.documentId, agent);
     }
 }
 
@@ -291,9 +290,9 @@ export class PreferenceController {
 
 
     @Post('/')
-    async setPreference(@Body() userPreference: PartnerPreferenceDto) {
-        console.log('set preference to', userPreference);
-        return this.profileService.savePartnerPreference(userPreference);
+    async setPreference(@Body() preference: PartnerPreferenceDto) {
+        console.log('set preference to', preference);
+        return this.profileService.savePartnerPreference(preference);
     }
 }
 

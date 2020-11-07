@@ -22,6 +22,8 @@ import { AuthModule } from 'src/auth/auth.module';
 import { Match } from './entities/match.entity';
 import { BullModule } from '@nestjs/bull';
 import { TelegramModule } from 'src/telegram/telegram.module';
+import { MatchQueueConsumer } from './profile-matchfinder.queue-consumer';
+import { SendQueueConsumer } from './profile-sender.queue-consumer';
 // import { AwsDocument } from './entities/aws-document.entity';
 // import { InvalidDocument } from './entities/invalid-document.entity';
 
@@ -30,13 +32,11 @@ import { TelegramModule } from 'src/telegram/telegram.module';
         TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, TelegramProfile, ProfilePicture, BioData, IdProof, Document, Match]), AwsServiceModule,
         PassportModule.register({ defaultStrategy: 'jwt' }),
         BullModule.registerQueue(
-            {
-                name: 'find-match',
-            }
+            { name: 'find-match' }, { name: 'send-profile' }
         ),
         forwardRef(() => TelegramModule)
     ],
-    providers: [ProfileService],
+    providers: [ProfileService, SendQueueConsumer, MatchQueueConsumer],
     controllers: [ProfileController, PreferenceController, CommonController, TelegramProfileController],
     exports: [ProfileService]
 })

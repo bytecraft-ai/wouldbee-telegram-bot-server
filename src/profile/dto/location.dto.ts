@@ -34,6 +34,7 @@ export class DocumentTypeDto {
 
 export class DocumentDto {
     @IsInt()
+    @Transform(value => Number(value))
     documentId: number;
 
     // @IsOptional()

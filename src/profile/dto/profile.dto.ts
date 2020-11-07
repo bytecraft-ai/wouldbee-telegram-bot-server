@@ -1,4 +1,4 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsNotEmpty, IsString, MinLength, MaxLength, Matches, IsNumberString, Length, IsEmail, IsInt, IsOptional, Min, Max, IsPositive, IsUUID, IsNumber, IsIn, IsDateString } from 'class-validator';
 import { AnnualIncome, EducationDegree, EmployedIn, Gender, MaritalStatus, Occupation, Religion, TypeOfDocument, Language } from 'src/common/enum';
 import { nameMaxLength, nameMinLength } from 'src/common/field-length';
@@ -196,8 +196,9 @@ export class PartnerPreferenceDto {
     religions?: Religion[];
 
     @IsOptional()
-    @IsPositive()
-    @IsInt()
+    // @IsPositive()
+    // @IsInt()
+    @Type(() => Number)
     casteIds?: number[];
 
     @IsOptional()
@@ -206,18 +207,19 @@ export class PartnerPreferenceDto {
     minimumIncome?: AnnualIncome;
 
     @IsOptional()
-    @IsPositive()
-    @IsInt()
+    // @IsPositive()
+    // @IsInt()
+    @Type(() => Number)
     cityIds?: number[];
 
     @IsOptional()
-    @IsPositive()
-    @IsInt()
+    // @IsPositive()
+    // @IsInt()
     stateIds?: number[];
 
     @IsOptional()
-    @IsPositive()
-    @IsInt()
+    // @IsPositive()
+    // @IsInt()
     countryIds?: number[];
 }
 

@@ -5,7 +5,7 @@ import { ProfileService } from './profile.service';
 
 const logger = new Logger('SendQueueConsumer');
 
-@Processor('find-match')
+@Processor('send-profile')
 export class SendQueueConsumer {
 
     constructor(
@@ -14,7 +14,8 @@ export class SendQueueConsumer {
 
     @Process()
     async sendMatches(job: Job<unknown>) {
-        logger.log(`Starting ${job.data} at ${new Date()}`);
+        logger.log(`processing send-profile task ${JSON.stringify(job.data)}`);
+        logger.log(`Starting ${job.data['task']} at ${new Date()}`);
         await this.profileService.sendMatches();
         return {};
     }
