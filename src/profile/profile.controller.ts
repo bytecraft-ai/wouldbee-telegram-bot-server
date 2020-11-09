@@ -232,7 +232,7 @@ export class TelegramProfileController {
         console.log('get profile with id', id);
         return {
             'profile': await this.profileService.getTelegramProfileById(id, { throwOnFail: true }),
-            'bio': await this.profileService.getSignedDownloadUrl(id, 'bio-data', { throwOnFail: true }),
+            'bio': await this.profileService.getSignedDownloadUrl(id, 'bio-data', { throwOnFail: false }),
             'picture': await this.profileService.getSignedDownloadUrl(id, 'picture', { throwOnFail: false }),
         };
     }

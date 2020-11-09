@@ -902,7 +902,11 @@ export class ProfileService {
             .getOne();
 
         if (!document) {
-            throw new NotFoundException(`Document for telegram profile with id: ${telegramProfileId} and docType: ${typeOfDocument} does not exist!`);
+            if (throwOnFail) {
+                throw new NotFoundException(`Document for telegram profile with id: ${telegramProfileId} and docType: ${typeOfDocument} does not exist!`);
+            } else {
+                return null;
+            }
         }
 
         try {
