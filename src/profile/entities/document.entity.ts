@@ -95,5 +95,5 @@ export class Document extends Verifiable {
     @IsPositive()
     @IsInt()
     @Column("varchar", { nullable: true, length: docRejectionReasonMaxLength })
-    invalidationDescription?: DocRejectionReason;
+    invalidationDescription?: string;
 }

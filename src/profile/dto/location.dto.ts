@@ -1,6 +1,8 @@
-import { ParseArrayPipe } from "@nestjs/common";
+// import { ParseArrayPipe } from "@nestjs/common";
 import { Transform, Type } from "class-transformer";
-import { IsBoolean, IsIn, IsInt, IsOptional, IsPositive, IsString, IsUUID, Length, Max, Min } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsOptional, IsPositive, IsString, IsUUID, Length, Max, MaxLength, Min } from "class-validator";
+import { DocRejectionReason } from 'src/common/enum';
+import { docRejectionReasonMaxLength } from "src/common/field-length";
 
 export class PaginationDto {
     @IsOptional()
@@ -32,10 +34,24 @@ export class DocumentTypeDto {
 }
 
 
-export class DocumentDto {
+export class DocumentValidationDto {
     @IsInt()
     @Transform(value => Number(value))
     documentId: number;
+
+    @IsBoolean()
+    @Transform(value => Boolean(value))
+    valid: boolean;
+
+    @IsOptional()
+    @IsInt()
+    @Transform(value => Number(value))
+    rejectionReason: DocRejectionReason;
+
+    @IsOptional()
+    @MaxLength(docRejectionReasonMaxLength)
+    @IsString()
+    rejectionDescription: string;
 
     // @IsOptional()
     // @IsIn(['bio-data', 'picture', 'id-proof'])

@@ -4,7 +4,7 @@ import { CreateCasteDto, CreateProfileDto, CreateUserDto, FileUploadDto, Partner
 import { ProfileService } from './profile.service';
 // import { User } from './entities/user.entity';
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
-import { DocumentDto, DocumentTypeDto, GetCitiesDto, GetCountriesDto, GetStatesDto, GetTelegramProfilesDto, PaginationDto } from './dto/location.dto';
+import { DocumentValidationDto, DocumentTypeDto, GetCitiesDto, GetCountriesDto, GetStatesDto, GetTelegramProfilesDto, PaginationDto } from './dto/location.dto';
 import { editFileName, imageOrDocFileFilter } from 'src/common/file-util';
 import { diskStorage } from 'multer';
 import { AwsService } from 'src/aws-service/aws-service.service';
@@ -33,6 +33,7 @@ export class CommonController {
     // }
 
     @Get('/')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getCommonData() {
         return this.profileService.getCommonData();
     }
@@ -46,24 +47,28 @@ export class CommonController {
 
 
     @Get('/caste')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getCastes(@Query() options: GetCitiesDto,) {
         return this.profileService.getCastesLike(options?.like, options?.skip, options?.take);
     }
 
 
     @Post('/caste')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async createCaste(@Body() createCasteDto: CreateCasteDto) {
         return this.profileService.createCaste(createCasteDto);
     }
 
 
     @Get('/caste/:id')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getCaste(@Param('id') id: number) {
         return this.profileService.getCaste(id, true);
     }
 
 
     @Get('/city')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getCities(
         @Query() getCitiesDto: GetCitiesDto,
         @Query('stateIds', new DefaultValuePipe([]), new ParseArrayPipe({ items: Number, separator: ',' }))
@@ -81,12 +86,14 @@ export class CommonController {
 
 
     @Get('/city/:id')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getCity(@Param('id') id: number) {
         return this.profileService.getCity(id, { throwOnFail: true });
     }
 
 
     @Get('/state')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getStates(
         @Query() getStatesDto: GetStatesDto,
         @Query('countryIds', new DefaultValuePipe([]), new ParseArrayPipe({ items: Number, separator: ',' }))
@@ -98,12 +105,14 @@ export class CommonController {
 
 
     @Get('/state/:id')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getState(@Param('id') id: number) {
         return this.profileService.getState(id, { throwOnFail: true });
     }
 
 
     @Get('/country')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getCountries(@Query() getCountriesDto: GetCountriesDto) {
         logger.log('getCountries()', JSON.stringify(getCountriesDto));
         return this.profileService.getCountriesLike(getCountriesDto?.like, getCountriesDto?.skip, getCountriesDto?.take);
@@ -112,6 +121,7 @@ export class CommonController {
 
 
     @Get('/country/:id')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getCountry(@Param('id') id: number) {
         return this.profileService.getCountry(id, true);
     }
@@ -205,6 +215,7 @@ export class TelegramProfileController {
     }
 
     @Get('/')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getTelegramProfiles(@Query() options: GetTelegramProfilesDto): Promise<IList<TelegramProfile>> {
         console.log('get all telegram profiles');
         return this.profileService.getTelegramProfiles({
@@ -216,28 +227,34 @@ export class TelegramProfileController {
 
 
     @Get(':id')
-    async getTelegramProfile(@Param('id') id: string): Promise<TelegramProfile | undefined> {
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
+    async getTelegramProfile(@Param('id') id: string) {
         console.log('get profile with id', id);
-        return this.profileService.getTelegramProfileById(id, { throwOnFail: true });
+        return {
+            'profile': await this.profileService.getTelegramProfileById(id, { throwOnFail: true }),
+            'bio': await this.profileService.getSignedDownloadUrl(id, 'bio-data', { throwOnFail: true }),
+            'picture': await this.profileService.getSignedDownloadUrl(id, 'picture', { throwOnFail: false }),
+        };
     }
 
 
     // TODO: implement caching on client side
     @Get('/url/:id')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getSignedDownloadUrl(@Param('id') id: string, @Query() query: DocumentTypeDto): Promise<{ url: string }> {
         console.log('id:', id, 'docType:', query);
-        return await this.profileService.getSignedDownloadUrl(id, query.documentType);
+        return await this.profileService.getSignedDownloadUrl(id, query.documentType, { throwOnFail: true });
     }
 
 
     @Post('/validate/:id')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
-    async validateDocument(
+    async validateOrRejectDocument(
         @GetAgent() agent: Agent,
         @Param('id') id: string,
-        @Body() body: DocumentDto) {
+        @Body() body: DocumentValidationDto) {
         console.log('body:', body);
-        await this.profileService.verifyDocument(id, body.documentId, agent);
+        await this.profileService.validateDocument(id, body, agent);
     }
 }
 
@@ -248,6 +265,7 @@ export class ProfileController {
     constructor(private readonly profileService: ProfileService) { }
 
     @Get('/')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getProfiles() {
         console.log('get all profiles');
         return this.profileService.getProfiles();
@@ -255,6 +273,7 @@ export class ProfileController {
 
 
     @Get(':id')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getProfile(@Param('id') id: string) {
         console.log('get profile with id', id);
         return this.profileService.getProfile(id, { throwOnFail: true });
@@ -262,6 +281,7 @@ export class ProfileController {
 
 
     @Post('/')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async createProfile(@Body() createProfileDto: CreateProfileDto) {
         console.log('create profile with', createProfileDto);
         return this.profileService.createProfile(createProfileDto);
@@ -276,6 +296,7 @@ export class PreferenceController {
     constructor(private readonly profileService: ProfileService) { }
 
     @Get('/')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getPreferences() {
         console.log('get preferences');
         return this.profileService.getPreferences();
@@ -283,6 +304,7 @@ export class PreferenceController {
 
 
     @Get(':id')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getPreference(@Param('id') id: string) {
         console.log('get preference with id', id);
         return this.profileService.getPreference(id);
@@ -290,6 +312,7 @@ export class PreferenceController {
 
 
     @Post('/')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
     async setPreference(@Body() preference: PartnerPreferenceDto) {
         console.log('set preference to', preference);
         return this.profileService.savePartnerPreference(preference);

@@ -32,6 +32,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { Match } from './entities/match.entity';
 import _ from 'lodash';
 import { TelegramService } from 'src/telegram/telegram.service';
+import { DocumentValidationDto } from './dto/location.dto';
 
 const logger = new Logger('ProfileService');
 
@@ -812,38 +813,44 @@ export class ProfileService {
 
 
     @Transactional()
-    async verifyDocument(telegramProfileId: string, documentId: number, agent: Agent): Promise<Document | undefined> {
+    async validateDocument(telegramProfileId: string, validationInput: DocumentValidationDto, agent: Agent): Promise<Document | undefined> {
+        const { documentId, valid, rejectionReason, rejectionDescription } = validationInput;
         try {
             let document = await this.documentRepository.findOne(documentId);
 
             if (!document || document.telegramProfileId !== telegramProfileId) {
                 throw new NotFoundException(`Document with id: ${documentId} does not exist!`);
             }
-            document.active = true;
+
+            document.active = valid;
+            document.invalidationReason = rejectionReason;
+            document.invalidationDescription = rejectionDescription;
             document.verifierId = agent.id;
             document.verifiedOn = new Date();
             document = await this.documentRepository.save(document);
 
-            // find current active document, mark as inactive and delete from AWS in the end
-            let currentActiveDocument = await this.documentRepository.findOne({
-                where: {
-                    telegramProfileId: document.telegramProfileId,
-                    typeOfDocument: document.typeOfDocument,
-                    active: true
+            if (valid) {
+                // find current active document, mark as inactive and delete from AWS in the end
+                let currentActiveDocument = await this.documentRepository.findOne({
+                    where: {
+                        telegramProfileId: document.telegramProfileId,
+                        typeOfDocument: document.typeOfDocument,
+                        active: true
+                    }
+                });
+                let currentActiveDocumentFileName: string;
+                if (currentActiveDocument) {
+                    currentActiveDocument.active = false;
+                    currentActiveDocumentFileName = currentActiveDocument.fileName.slice();
+                    currentActiveDocument.fileName = null;
+                    currentActiveDocument.url = null;
+                    currentActiveDocument.mimeType = null;
+
+                    await this.documentRepository.save(currentActiveDocument);
+
+                    // delete old active document from AWS.
+                    await this.awsService.deleteFileFromS3(currentActiveDocumentFileName, currentActiveDocument.typeOfDocument);
                 }
-            });
-            let currentActiveDocumentFileName: string;
-            if (currentActiveDocument) {
-                currentActiveDocument.active = false;
-                currentActiveDocumentFileName = currentActiveDocument.fileName.slice();
-                currentActiveDocument.fileName = null;
-                currentActiveDocument.url = null;
-                currentActiveDocument.mimeType = null;
-
-                await this.documentRepository.save(currentActiveDocument);
-
-                // delete old active document from AWS.
-                await this.awsService.deleteFileFromS3(currentActiveDocumentFileName, currentActiveDocument.typeOfDocument);
             }
 
             return document;
@@ -865,7 +872,7 @@ export class ProfileService {
     // }
 
 
-    async getSignedDownloadUrl(telegramProfileId: string, docType: string): Promise<{ id: number, url: string } | undefined> {
+    async getSignedDownloadUrl(telegramProfileId: string, docType: string, { throwOnFail = true }): Promise<{ id: number, url: string } | undefined> {
         if (!docType) {
             throw new BadRequestException('docType is required!')
         }
