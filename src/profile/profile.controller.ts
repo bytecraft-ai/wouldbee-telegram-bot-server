@@ -218,9 +218,7 @@ export class TelegramProfileController {
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getTelegramProfiles(@Query() options: GetTelegramProfilesDto): Promise<IList<TelegramProfile>> {
         console.log('get all telegram profiles');
-        return this.profileService.getTelegramProfiles({
-            isValid: options?.isValid
-        },
+        return this.profileService.getTelegramProfilesForVerification(
             options?.skip, options?.take
         );
     }
@@ -253,7 +251,7 @@ export class TelegramProfileController {
         @GetAgent() agent: Agent,
         @Param('id') id: string,
         @Body() body: DocumentValidationDto) {
-        console.log('body:', body);
+        console.log('id:', id, 'body:', body);
         await this.profileService.validateDocument(id, body, agent);
     }
 }
@@ -307,7 +305,7 @@ export class PreferenceController {
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getPreference(@Param('id') id: string) {
         console.log('get preference with id', id);
-        return this.profileService.getPreference(id);
+        return this.profileService.getPreference(id, { throwOnFail: true });
     }
 
 

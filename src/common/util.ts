@@ -500,3 +500,8 @@ export async function watermarkPdf(fileName: string, DIR = '/tmp/'): Promise<str
     await fs.writeFile(join(DIR, fileName), pdfBytes);
     return fileName;
 }
+
+
+export function getEnumValues(enumType: Object): number[] {
+    return Object.values(enumType).filter(value => typeof value === 'number');
+}

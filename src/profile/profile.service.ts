@@ -174,7 +174,7 @@ export class ProfileService {
         }
 
         const approvedBio = await this.documentRepository.findOne({
-            where: { telegramProfileId, active: true }
+            where: { telegramProfileId, isActive: true }
         })
         if (!approvedBio) {
             throw new ConflictException('No approved bio-data exists for this profile.');
@@ -223,7 +223,7 @@ export class ProfileService {
     }
 
 
-    async getPreference(id: string, throwOnFail = true): Promise<PartnerPreference | undefined> {
+    async getPreference(id: string, { throwOnFail = true }): Promise<PartnerPreference | undefined> {
         const preference = await this.prefRepository.findOne(id);
         if (throwOnFail && !preference) {
             throw new NotFoundException(`Preference with id: ${id} not found`);
@@ -241,7 +241,7 @@ export class ProfileService {
         let { id, minAge, maxAge, religions, casteIds, minimumIncome, cityIds, stateIds, countryIds } = preferenceInput;
         const profile = await this.getProfile(id, { throwOnFail: true });
 
-        let pref = await this.getPreference(id);
+        let pref = await this.getPreference(id, { throwOnFail: false });
         if (!pref) {
             pref = this.prefRepository.create();
         }
@@ -266,21 +266,27 @@ export class ProfileService {
         }
 
         const cities: City[] = [];
-        for (let cityId of cityIds) {
-            const city = await this.getCity(cityId, { throwOnFail: true });
-            cities.push(city);
+        if (cityIds) {
+            for (let cityId of cityIds) {
+                const city = await this.getCity(cityId, { throwOnFail: true });
+                cities.push(city);
+            }
         }
 
         const states: State[] = [];
-        for (let stateId of stateIds) {
-            const state = await this.getState(stateId, { throwOnFail: true });
-            states.push(state);
+        if (stateIds) {
+            for (let stateId of stateIds) {
+                const state = await this.getState(stateId, { throwOnFail: true });
+                states.push(state);
+            }
         }
 
         const countries: Country[] = [];
-        for (let countryId of countryIds) {
-            const country = await this.getCountry(countryId, true);
-            countries.push(country);
+        if (countryIds) {
+            for (let countryId of countryIds) {
+                const country = await this.getCountry(countryId, true);
+                countries.push(country);
+            }
         }
 
         pref.castes = castes;
@@ -588,6 +594,27 @@ export class ProfileService {
     }
 
 
+    async getTelegramProfilesForVerification(skip = 0, take = 20): Promise<IList<TelegramProfile> | undefined> {
+
+        if (take < 1 || take > 100) {
+            throw new Error('1 ≤ take ≥ 100');
+        }
+
+
+        const query = this.telegramRepository.createQueryBuilder('tel_profile');
+        query.leftJoin('tel_profile.documents', 'document')
+            .where('document.isValid IS NULL')
+            .andWhere('document.isActive IS NULL')
+
+        const [telegramProfiles, count] = await query.skip(skip).take(take).getManyAndCount();
+
+        return {
+            count,
+            values: telegramProfiles
+        };
+    }
+
+
     async getTelegramProfiles(options?: GetTelegramProfilesOption, skip = 0, take = 20): Promise<IList<TelegramProfile> | undefined> {
 
         if (take < 1 || take > 100) {
@@ -780,7 +807,7 @@ export class ProfileService {
                 console.log('unverifiedDocument:', unverifiedDocument);
                 const oldFileName = unverifiedDocument.fileName.slice();
                 // mark old unverified document as inactive;
-                unverifiedDocument.active = false;
+                unverifiedDocument.isActive = false;
                 unverifiedDocument.url = null;
                 unverifiedDocument.fileName = null;
                 unverifiedDocument.mimeType = null;
@@ -822,7 +849,8 @@ export class ProfileService {
                 throw new NotFoundException(`Document with id: ${documentId} does not exist!`);
             }
 
-            document.active = valid;
+            document.isActive = valid;
+            document.isValid = valid;
             document.invalidationReason = rejectionReason;
             document.invalidationDescription = rejectionDescription;
             document.verifierId = agent.id;
@@ -835,12 +863,12 @@ export class ProfileService {
                     where: {
                         telegramProfileId: document.telegramProfileId,
                         typeOfDocument: document.typeOfDocument,
-                        active: true
+                        isActive: true
                     }
                 });
                 let currentActiveDocumentFileName: string;
                 if (currentActiveDocument) {
-                    currentActiveDocument.active = false;
+                    currentActiveDocument.isActive = false;
                     currentActiveDocumentFileName = currentActiveDocument.fileName.slice();
                     currentActiveDocument.fileName = null;
                     currentActiveDocument.url = null;
@@ -897,7 +925,7 @@ export class ProfileService {
         const document = await this.documentRepository.createQueryBuilder('doc')
             .where('doc.telegramProfileId = :telegramProfileId', { telegramProfileId })
             .andWhere('doc.typeOfDocument = :typeOfDocument', { typeOfDocument })
-            .andWhere('doc.active IS NULL')
+            .andWhere('doc.isActive IS NULL')
             .orderBy('doc.createdOn', 'DESC')
             .getOne();
 
@@ -1020,8 +1048,24 @@ export class ProfileService {
     }
 
 
-    async getRegistrationStatus(id: string): Promise<RegistrationStatus | undefined> {
-        const telegramProfile = await this.telegramRepository.findOne(id, {
+    async getVerificationStatus(telegramProfileId: string) {
+        const telegramProfile = await this.telegramRepository.findOne(telegramProfileId, {
+            relations: ['documents']
+        })
+
+        if (!telegramProfile) {
+            logger.log(`getRegistrationStatus(): profile ${telegramProfile} not registered!`);
+            throw new NotFoundException(`Telegram profile with id: ${telegramProfile.id} not found!`);
+        }
+
+        if (!telegramProfile.phone) {
+            return RegistrationStatus.UNREGISTERED;
+        }
+    }
+
+
+    async getRegistrationStatus(telegramProfileId: string): Promise<RegistrationStatus | undefined> {
+        const telegramProfile = await this.telegramRepository.findOne(telegramProfileId, {
             relations: ['documents']
         })
 

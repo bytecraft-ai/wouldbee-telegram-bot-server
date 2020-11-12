@@ -1,7 +1,8 @@
 import { Transform, Type } from 'class-transformer';
-import { IsNotEmpty, IsString, MinLength, MaxLength, Matches, IsNumberString, Length, IsEmail, IsInt, IsOptional, Min, Max, IsPositive, IsUUID, IsNumber, IsIn, IsDateString } from 'class-validator';
+import { IsNotEmpty, IsString, MinLength, MaxLength, Matches, IsNumberString, Length, IsEmail, IsInt, IsOptional, Min, Max, IsPositive, IsUUID, IsNumber, IsIn, IsDateString, IsArray } from 'class-validator';
 import { AnnualIncome, EducationDegree, EmployedIn, Gender, MaritalStatus, Occupation, Religion, TypeOfDocument, Language } from 'src/common/enum';
 import { nameMaxLength, nameMinLength } from 'src/common/field-length';
+import { getEnumValues } from 'src/common/util';
 
 
 export class RegistrationDto {
@@ -115,6 +116,7 @@ export class CreateProfileDto {
     name: string;
 
     @IsNotEmpty()
+    @IsIn(getEnumValues(Gender))
     @IsInt()
     @Transform(value => Number(value))
     gender: Gender;
@@ -124,6 +126,7 @@ export class CreateProfileDto {
     dob: Date;
 
     @IsNotEmpty()
+    @IsIn(getEnumValues(Religion))
     @IsInt()
     @Transform(value => Number(value))
     religion: Religion;
@@ -134,6 +137,7 @@ export class CreateProfileDto {
     casteId: number;
 
     @IsNotEmpty()
+    @IsIn(getEnumValues(AnnualIncome))
     @IsInt()
     @Transform(value => Number(value))
     annualIncome: AnnualIncome;
@@ -146,26 +150,31 @@ export class CreateProfileDto {
     // optional params
 
     @IsOptional()
+    @IsIn(getEnumValues(EducationDegree))
     @IsInt()
     @Transform(value => Number(value))
     highestDegree?: EducationDegree;
 
     @IsOptional()
+    @IsIn(getEnumValues(EmployedIn))
     @IsInt()
     @Transform(value => Number(value))
     employedIn?: EmployedIn;
 
     @IsOptional()
+    @IsIn(getEnumValues(Occupation))
     @IsInt()
     @Transform(value => Number(value))
     occupation?: Occupation;
 
     @IsOptional()
+    @IsIn(getEnumValues(Language))
     @IsInt()
     @Transform(value => Number(value))
     motherTongue?: Language;
 
     @IsOptional()
+    @IsIn(getEnumValues(MaritalStatus))
     @IsInt()
     @Transform(value => Number(value))
     maritalStatus?: MaritalStatus;
@@ -192,34 +201,41 @@ export class PartnerPreferenceDto {
     @Transform(value => Number(value))
     maxAge?: number;
 
+    @Type(() => Number)
     @IsOptional()
+    // @IsPositive({ each: true })
+    @IsIn(getEnumValues(AnnualIncome), { each: true })
+    @IsInt({ each: true })
     religions?: Religion[];
 
-    @IsOptional()
-    // @IsPositive()
-    // @IsInt()
     @Type(() => Number)
+    @IsOptional()
+    @IsPositive({ each: true })
+    @IsInt({ each: true })
     casteIds?: number[];
 
     @IsOptional()
+    @IsIn(getEnumValues(AnnualIncome))
     @IsInt()
     @Transform(value => Number(value))
     minimumIncome?: AnnualIncome;
 
     @IsOptional()
-    // @IsPositive()
-    // @IsInt()
+    @IsPositive({ each: true })
+    @IsInt({ each: true })
     @Type(() => Number)
     cityIds?: number[];
 
     @IsOptional()
-    // @IsPositive()
-    // @IsInt()
+    @IsPositive({ each: true })
+    @IsInt({ each: true })
+    @Type(() => Number)
     stateIds?: number[];
 
     @IsOptional()
-    // @IsPositive()
-    // @IsInt()
+    @IsPositive({ each: true })
+    @IsInt({ each: true })
+    @Type(() => Number)
     countryIds?: number[];
 }
 
@@ -246,9 +262,7 @@ export class CreateCasteDto {
     casteName: string;
 
     @IsNotEmpty()
-    @Max(Religion.SIKH)
-    @Min(Religion.HINDU)
-    @IsInt()
+    @IsIn(Object.values(Religion).filter(value => typeof value === 'number'))
     @Transform(value => Number(value))
     religion: Religion;
 }

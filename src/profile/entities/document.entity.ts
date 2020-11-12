@@ -61,13 +61,7 @@ export class Document extends Verifiable {
     @IsOptional()
     @IsBoolean()
     @Column({ nullable: true })
-    active?: boolean;
-
-    // @OneToOne(type => AwsDocument, awsDocument => awsDocument.document)
-    // awsDocument?: AwsDocument;
-
-    // @OneToOne(type => InvalidDocument, invalidDoc => invalidDoc.document)
-    // invalidDocument?: InvalidDocument;
+    isActive?: boolean;
 
     @IsOptional()
     @Length(fileNameMinLength, fileNameMaxLength)

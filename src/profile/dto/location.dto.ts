@@ -1,8 +1,9 @@
 // import { ParseArrayPipe } from "@nestjs/common";
 import { Transform, Type } from "class-transformer";
-import { IsBoolean, IsIn, IsInt, IsOptional, IsPositive, IsString, IsUUID, Length, Max, MaxLength, Min } from "class-validator";
+import { IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsPositive, IsString, IsUUID, Length, Max, MaxLength, Min } from "class-validator";
 import { DocRejectionReason } from 'src/common/enum';
 import { docRejectionReasonMaxLength } from "src/common/field-length";
+import { getEnumValues } from "src/common/util";
 
 export class PaginationDto {
     @IsOptional()
@@ -44,7 +45,8 @@ export class DocumentValidationDto {
     valid: boolean;
 
     @IsOptional()
-    @IsInt()
+    // @IsIn(Object.values(DocRejectionReason).filter(value => typeof value === 'number'))
+    @IsIn(getEnumValues(DocRejectionReason))
     @Transform(value => Number(value))
     rejectionReason: DocRejectionReason;
 
