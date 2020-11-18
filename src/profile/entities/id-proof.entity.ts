@@ -1,72 +1,72 @@
-import {
-    Entity,
-    Column,
-    CreateDateColumn,
-    OneToOne,
-    PrimaryColumn,
-    JoinColumn,
-    DeleteDateColumn,
-    PrimaryGeneratedColumn,
-} from 'typeorm';
-import { TypeOfIdProof } from 'src/common/enum'
-import { Profile } from './profile.entity';
-import { Verifiable } from './abstract-verifiable.entity';
-import { IsString, IsUrl, Length } from 'class-validator';
-import { fileNameMaxLength, fileNameMinLength, mimeMaxLength, urlMaxLength } from 'src/common/field-length';
-import { TelegramProfile } from './telegram-profile.entity';
+// import {
+//     Entity,
+//     Column,
+//     CreateDateColumn,
+//     OneToOne,
+//     PrimaryColumn,
+//     JoinColumn,
+//     DeleteDateColumn,
+//     PrimaryGeneratedColumn,
+// } from 'typeorm';
+// import { TypeOfIdProof } from 'src/common/enum'
+// import { Profile } from './profile.entity';
+// import { Verifiable } from './abstract-verifiable.entity';
+// import { IsString, IsUrl, Length } from 'class-validator';
+// import { fileNameMaxLength, fileNameMinLength, mimeMaxLength, urlMaxLength } from 'src/common/field-length';
+// import { TelegramProfile } from './telegram-profile.entity';
 
-// TODO: implement table indexing on important columns
+// // TODO: implement table indexing on important columns
 
-@Entity()
-export class IdProof extends Verifiable {
+// @Entity()
+// export class IdProof extends Verifiable {
 
-    // @PrimaryColumn("int")
-    // id: number
+//     // @PrimaryColumn("int")
+//     // id: number
 
-    @PrimaryGeneratedColumn("uuid")
-    id: string;
+//     @PrimaryGeneratedColumn("uuid")
+//     id: string;
 
-    @OneToOne(
-        type => TelegramProfile,
-        tProfile => tProfile.idProof,
-        {
-            nullable: false,
-        }
-    )
-    @JoinColumn({
-        name: "id",
-        referencedColumnName: "id",
-    })
-    telegramProfile: TelegramProfile;
+//     @OneToOne(
+//         type => TelegramProfile,
+//         tProfile => tProfile.idProof,
+//         {
+//             nullable: false,
+//         }
+//     )
+//     @JoinColumn({
+//         name: "id",
+//         referencedColumnName: "id",
+//     })
+//     telegramProfile: TelegramProfile;
 
-    @Column("smallint")
-    type: TypeOfIdProof;
+//     @Column("smallint")
+//     type: TypeOfIdProof;
 
-    @Length(fileNameMinLength, fileNameMaxLength)
-    @IsString()
-    @Column({ length: fileNameMaxLength })
-    fileName: string;
+//     @Length(fileNameMinLength, fileNameMaxLength)
+//     @IsString()
+//     @Column({ length: fileNameMaxLength })
+//     fileName: string;
 
-    @IsUrl()
-    @Column({ length: urlMaxLength })
-    url: string;
+//     @IsUrl()
+//     @Column({ length: urlMaxLength })
+//     url: string;
 
-    @Column("varchar", { length: mimeMaxLength })
-    mimeType: string;
+//     @Column("varchar", { length: mimeMaxLength })
+//     mimeType: string;
 
-    @CreateDateColumn()
-    uploadedOn?: Date;
+//     @CreateDateColumn()
+//     uploadedOn?: Date;
 
-    @DeleteDateColumn()
-    deletedOn?: Date;
+//     @DeleteDateColumn()
+//     deletedOn?: Date;
 
-    // @Column()
-    // profileId: number;
+//     // @Column()
+//     // profileId: number;
 
-    // @ManyToOne(type => Profile, profile => profile.idProofs)
-    // profile: Profile;
+//     // @ManyToOne(type => Profile, profile => profile.idProofs)
+//     // profile: Profile;
 
-    // @OneToOne(type => IdMLValidation, pv => pv.profilePicture)
-    // idMLValidation: IdMLValidation;
-}
+//     // @OneToOne(type => IdMLValidation, pv => pv.profilePicture)
+//     // idMLValidation: IdMLValidation;
+// }
 

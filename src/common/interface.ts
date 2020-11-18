@@ -18,3 +18,16 @@ export interface IList<T> {
     count: number;
     values: Array<T>;
 }
+
+
+export interface IDocumentStatus {
+    valid?: boolean;
+    active?: boolean;
+}
+
+
+export interface IUserStats {
+    total: number;
+    male?: number;
+    female?: number;
+}

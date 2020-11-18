@@ -6,26 +6,35 @@ import { ProfileModule } from './profile/profile.module';
 import { AppService } from './app.service';
 import { AwsServiceModule } from './aws-service/aws-service.module';
 import { TelegramModule } from './telegram/telegram.module';
-import { MulterModule } from '@nestjs/platform-express';
 import { AgentModule } from './agent/agent.module';
 import { AuthModule } from './auth/auth.module';
 import { BullModule } from '@nestjs/bull';
 import { ScheduleModule } from '@nestjs/schedule';
-
-// import { DiskStorage } from 'multer';
-// import { APP_GUARD } from '@nestjs/core';
-// import { RolesGuard } from './auth/role.guard';
 import { SeederModule } from './seeder/seeder.module';
+
+// import { MulterModule } from '@nestjs/platform-express';
+// import { GraphQLModule } from '@nestjs/graphql';
 
 // console.log('typeorm config:', typeOrmConfig);
 // console.log('bot token:', process.env.BOT_TOKEN);
 
 @Module({
   imports: [
-    MulterModule.register({
-      // dest: '/tmp/wb-tg-uploads/',
-      // storage: DiskStorage
-    }),
+    // GraphQLModule.forRoot({
+    //   installSubscriptionHandlers: true,
+    //   autoSchemaFile: true,
+
+    //   //// use the below context once GQL guard is set up.
+    //   // context: ({ req, connection }) => connection
+    //   //   ? { req: { headers: connection.context } }
+    //   //   : { req },
+
+    //   playground: process.env.NODE_ENV === 'production' ? true : true
+    // }),
+    // MulterModule.register({
+    //   // dest: '/tmp/wb-tg-uploads/',
+    //   // storage: DiskStorage
+    // }),
     ScheduleModule.forRoot(),
     BullModule.forRoot({
       redis: {

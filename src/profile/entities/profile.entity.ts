@@ -2,7 +2,6 @@ import {
     Entity,
     Column,
     ManyToOne,
-    PrimaryGeneratedColumn,
     CreateDateColumn,
     UpdateDateColumn,
     DeleteDateColumn,
@@ -20,7 +19,6 @@ import {
     EducationDegree,
 } from '../../common/enum';
 import { IsString, Length } from 'class-validator';
-import { Country } from './country.entity';
 import { nameMaxLength, nameMinLength } from 'src/common/field-length';
 import { Caste } from './caste.entity';
 import { City } from './city.entity';
@@ -28,6 +26,7 @@ import { PartnerPreference } from './partner-preference.entity';
 // import { SharedMatch } from './shared-profiles.entity';
 import { TelegramProfile } from './telegram-profile.entity';
 import { Language, MaritalStatus } from 'src/common/enum';
+// import { Field, ID, ObjectType } from '@nestjs/graphql';
 // import { IdProof } from './id-proof.entity';
 // import { ProfilePicture } from './picture.entity';
 // import { BioData } from './bio-data.entity';
@@ -36,11 +35,14 @@ import { Language, MaritalStatus } from 'src/common/enum';
 
 // TODO: implement table indexing on important columns
 
+// @ObjectType('Profile')
 @Entity()
 export class Profile {
+    // @Field(type => ID)
     @PrimaryColumn("uuid")
     id: string;
 
+    // @Field()
     @OneToOne(
         type => TelegramProfile,
         telegramProfile => telegramProfile.profile,
@@ -55,12 +57,15 @@ export class Profile {
     })
     telegramProfile: TelegramProfile;
 
+    // @Field()
     @CreateDateColumn()
     createdOn?: Date;
 
+    // @Field()
     @UpdateDateColumn()
     updatedOn?: Date;
 
+    // @Field()
     @DeleteDateColumn()
     deletedOn?: Date;
 
@@ -78,25 +83,31 @@ export class Profile {
     // @Length(10, 10, { message: 'Phone number must be of 10 digits only!' })
     // phone?: string;
 
+    // @Field()
     @Length(nameMinLength, nameMaxLength)
     @IsString()
     @Column()
     name: string;
 
+    // @Field()
     @Column("smallint")
     gender: Gender;
 
     // TODO: add constraint that the age should be >= 21 years for males and >= 18 years for females.
+    // @Field()
+    // @Column("timestamp")
     @Column("date")
     dob: Date;
 
     // @Column({ type: "enum", enum: Religion })
+    // @Field()
     @Column("smallint")
     religion: Religion;
 
     @Column("int")
     casteId: number;
 
+    // @Field()
     @ManyToOne(type => Caste)
     @JoinColumn()
     caste: Caste;
@@ -105,29 +116,37 @@ export class Profile {
     cityId: number;
 
     // TODO: also target village dwellers?
+    // @Field()
     @ManyToOne(type => City)
     @JoinColumn()
     city: City;
 
+    // @Field()
     @Column("smallint")
     highestDegree: EducationDegree;
 
+    // @Field()
     @Column("smallint")
     employedIn: EmployedIn;
 
+    // @Field()
     @Column("smallint")
     occupation: Occupation;
 
+    // @Field()
     // @Column({ type: "enum", enum: AnnualIncome })
     @Column("smallint")
     annualIncome: AnnualIncome;
 
+    // @Field()
     @Column("smallint", { nullable: true })
     motherTongue?: Language;
 
+    // @Field()
     @Column("smallint", { nullable: true })
     maritalStatus?: MaritalStatus;
 
+    // @Field()
     @OneToOne(type => PartnerPreference)
     partnerPreference: PartnerPreference;
 

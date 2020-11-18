@@ -4,13 +4,13 @@ import { CreateCasteDto, CreateProfileDto, CreateUserDto, FileUploadDto, Partner
 import { ProfileService } from './profile.service';
 // import { User } from './entities/user.entity';
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
-import { DocumentValidationDto, DocumentTypeDto, GetCitiesDto, GetCountriesDto, GetStatesDto, GetTelegramProfilesDto, PaginationDto } from './dto/location.dto';
+import { DocumentValidationDto, DocumentTypeDto, GetCitiesDto, GetCountriesDto, GetStatesDto, GetTelegramProfilesDto, PaginationDto, BanProfileDto } from './dto/location.dto';
 import { editFileName, imageOrDocFileFilter } from 'src/common/file-util';
 import { diskStorage } from 'multer';
 import { AwsService } from 'src/aws-service/aws-service.service';
-import { TypeOfDocument, UserRole } from 'src/common/enum';
+import { TypeOfDocument, UserRole, UserStatOptions } from 'src/common/enum';
 import { TelegramProfile } from './entities/telegram-profile.entity';
-import { IList } from 'src/common/interface';
+import { IList, IUserStats } from 'src/common/interface';
 import { Roles } from 'src/auth/set-role.decorator';
 import { GetAgent } from 'src/auth/get-agent.decorator';
 import { Agent } from 'src/agent/entities/agent.entity';
@@ -202,6 +202,19 @@ export class CommonController {
 // }
 
 
+@Controller('stats')
+@UsePipes(ValidationPipe)
+export class StatsController {
+    constructor(private readonly profileService: ProfileService) { }
+
+    @Get('/')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
+    async userStats(@Query('userType') userType: UserStatOptions): Promise<IUserStats> {
+        return this.profileService.userStats(userType);
+    }
+}
+
+
 @Controller('telegram-profile')
 @UsePipes(ValidationPipe)
 export class TelegramProfileController {
@@ -253,6 +266,19 @@ export class TelegramProfileController {
         @Body() body: DocumentValidationDto) {
         console.log('id:', id, 'body:', body);
         await this.profileService.validateDocument(id, body, agent);
+        return { status: 'OK' };
+    }
+
+
+    @Post('/ban/:id')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
+    async banProfile(
+        @GetAgent() agent: Agent,
+        @Param('id') id: string,
+        @Body() body: BanProfileDto) {
+        console.log('id:', id, 'body:', body);
+        await this.profileService.banProfile(id, body, agent);
+        return { status: 'OK' };
     }
 }
 

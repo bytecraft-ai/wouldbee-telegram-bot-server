@@ -1,8 +1,8 @@
 import { Injectable, UnauthorizedException, Logger, BadRequestException, NotFoundException, ConflictException, InternalServerErrorException, NotImplementedException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, RegistrationStatus, MaritalStatus, ProfileSharedWith, S3Option } from 'src/common/enum';
+import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, RegistrationStatus, MaritalStatus, ProfileSharedWith, S3Option, RegistrationActionRequired, UserStatOptions } from 'src/common/enum';
 import { deDuplicateArray, getAgeInYearsFromDOB, setDifferenceFromArrays } from 'src/common/util';
-import { IsNull, Not, Repository } from 'typeorm';
+import { IsNull, Not, Repository, SelectQueryBuilder } from 'typeorm';
 // import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
 import { PartnerPreferenceDto, CreateUserDto, CreateProfileDto, RegistrationDto, CreateCasteDto } from './dto/profile.dto';
 import { Caste } from './entities/caste.entity';
@@ -18,7 +18,7 @@ import { TelegramProfile } from './entities/telegram-profile.entity';
 // import { SharedMatch } from './entities/shared-profiles.entity';
 import { AwsService } from 'src/aws-service/aws-service.service';
 import { Transactional } from 'typeorm-transactional-cls-hooked';
-import { CommonData, IList } from 'src/common/interface';
+import { CommonData, IDocumentStatus, IList, IUserStats } from 'src/common/interface';
 import { Document } from './entities/document.entity';
 import { isUUID } from 'class-validator';
 import { AgentService } from 'src/agent/agent.service';
@@ -32,7 +32,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { Match } from './entities/match.entity';
 import _ from 'lodash';
 import { TelegramService } from 'src/telegram/telegram.service';
-import { DocumentValidationDto } from './dto/location.dto';
+import { BanProfileDto, DocumentValidationDto } from './dto/location.dto';
 
 const logger = new Logger('ProfileService');
 
@@ -162,6 +162,102 @@ export class ProfileService {
     //     });
     //     return this.userRepository.save(user);
     // }
+
+
+    async userStats(userType: UserStatOptions): Promise<IUserStats> {
+        let query: SelectQueryBuilder<TelegramProfile>;
+        let output: IUserStats;
+
+        switch (userType) {
+            case UserStatOptions.REGISTRATION_FAILURE:
+                return {
+                    total: await this.telegramRepository.count({
+                        where: { phone: IsNull() }
+                    })
+                };
+
+            case UserStatOptions.NEW:
+                query = this.telegramRepository.createQueryBuilder('tprofile')
+                    .leftJoin('tprofile.document', 'document')
+                    .leftJoin('tprofile.profile', 'profile')
+                    .where('document.typeOfDocument = :tod', { tod: TypeOfDocument.BIO_DATA })
+                    .andWhere('document.fileName IS NOT NULL')
+                    .andWhere('profile.id IS NULL');
+                return {
+                    total: await query.getCount()
+                };
+
+            case UserStatOptions.VALID:
+                query = this.telegramRepository.createQueryBuilder('tprofile')
+                    // .leftJoin('tprofile.document', 'document')
+                    .leftJoin('tprofile.profile', 'profile')
+                    .select('profile.gender')
+                    .addSelect('COUNT(user.id)', 'count')
+                    // .where('document.typeOfDocument = :tod', { tod: TypeOfDocument.BIO_DATA })
+                    // .andWhere('document.fileName IS NOT NULL')
+                    .andWhere('profile.id IS NOT NULL')
+                    .groupBy('profile.gender');
+                const counts = await query.getRawMany();
+                console.log('valid users query result:', counts);
+
+                for (const iterator of counts) {
+                    if (iterator['gender'] === Gender.MALE) {
+                        output.male = iterator['count'];
+                    }
+                    else if (iterator['gender'] === Gender.FEMALE) {
+                        output.female = iterator['count'];
+                    }
+                }
+
+                output.total = output.male + output.female;
+                return output;
+
+            case UserStatOptions.INVALID:
+                query = this.telegramRepository.createQueryBuilder('tprofile')
+                    .leftJoin('tprofile.document', 'document')
+                    .leftJoinAndSelect('tprofile.profile', 'profile')
+                    .where('document.typeOfDocument = :tod', { tod: TypeOfDocument.BIO_DATA })
+                    // bio should be invalidated
+                    .andWhere('document.isValid = false')
+                    // no other bio should be validated
+                    .andWhere('document.isValid != true');
+                return {
+                    total: await query.getCount()
+                };
+
+            case UserStatOptions.BANNED:
+                return {
+                    total: await this.telegramRepository.count({
+                        where: { isBanned: true }
+                    })
+                };
+
+            case UserStatOptions.TOTAL:
+                const counts_ = await
+                    this.profileRepository.createQueryBuilder('profile')
+                        .select('profile.gender')
+                        .addSelect('COUNT(profile.id)', 'count')
+                        .groupBy('profile.gender')
+                        .getRawMany();
+
+                for (const iterator of counts) {
+                    if (iterator['gender'] === Gender.MALE) {
+                        output.male = iterator['count'];
+                    }
+                    else if (iterator['gender'] === Gender.FEMALE) {
+                        output.female = iterator['count'];
+                    }
+                }
+                output.total = output.male + output.female;
+                return output;
+
+            case UserStatOptions.DEACTIVATED:
+            case UserStatOptions.SELF_DELETED:
+            case UserStatOptions.SYSTEM_DELETED:
+            default:
+                throw new NotImplementedException('Not implemented!');
+        }
+    }
 
 
     async createProfile(profileDto: CreateProfileDto): Promise<Profile | undefined> {
@@ -457,7 +553,8 @@ export class ProfileService {
     async getTelegramProfileForSending(profile: Profile): Promise<TelegramProfile | undefined> {
         const telegramProfile = await
             this.telegramRepository.findOne(profile.id, {
-                relations: ['bioData', 'picture', 'idProof']
+                // relations: ['bioData', 'picture', 'idProof']
+                relations: ['documents']
             });
         if (!telegramProfile) {
             logger.error(`Could not get telegram profile for profile with id: ${profile.id}`);
@@ -602,6 +699,26 @@ export class ProfileService {
 
 
         const query = this.telegramRepository.createQueryBuilder('tel_profile');
+        query.leftJoin('tel_profile.profile', 'profile')
+            .where('profile.createdOn IS NULL')
+
+        const [telegramProfiles, count] = await query.skip(skip).take(take).getManyAndCount();
+
+        return {
+            count,
+            values: telegramProfiles
+        };
+    }
+
+
+    async getTelegramProfilesForUpdation(skip = 0, take = 20): Promise<IList<TelegramProfile> | undefined> {
+
+        if (take < 1 || take > 100) {
+            throw new Error('1 ≤ take ≥ 100');
+        }
+
+
+        const query = this.telegramRepository.createQueryBuilder('tel_profile');
         query.leftJoin('tel_profile.documents', 'document')
             .where('document.isValid IS NULL')
             .andWhere('document.isActive IS NULL')
@@ -615,93 +732,93 @@ export class ProfileService {
     }
 
 
-    async getTelegramProfiles(options?: GetTelegramProfilesOption, skip = 0, take = 20): Promise<IList<TelegramProfile> | undefined> {
+    // async getTelegramProfiles(options?: GetTelegramProfilesOption, skip = 0, take = 20): Promise<IList<TelegramProfile> | undefined> {
 
-        if (take < 1 || take > 100) {
-            throw new Error('1 ≤ take ≥ 100');
-        }
+    //     if (take < 1 || take > 100) {
+    //         throw new Error('1 ≤ take ≥ 100');
+    //     }
 
-        const { isValid, withPhone, withBio, withPhoto, withIdProof } = options;
-        const query = this.telegramRepository.createQueryBuilder('tel_profile');
+    //     const { isValid, withPhone, withBio, withPhoto, withIdProof } = options;
+    //     const query = this.telegramRepository.createQueryBuilder('tel_profile');
 
-        // TODO: Implement using INTERSECT clause within sub-queries and fix this.
-        if (!isNil(withPhoto) || !isNil(withIdProof)) {
-            throw new NotImplementedException('withPhoto and withIdProof options are not yet implemented!')
-            /**
-             * TODO: Refactor documents into separate tables - BioData, IdProof, 
-             * Picture, etc. This will allow join to create a single row, e.g.
-             * (id1, chatId1, phone1, idProof1, bio1, photo1)
-             *  BUT if we have all docTypes in one document, then we get multi-row
-             *  join for each id, e.g. (which is harder to query bcz of attributes
-             *  being in separate rows.)
-             *  [   
-             *      (id2, chatId2, phone2, bio2),
-             *      (id2, chatId2, phone2, photo2),
-             *      (id2, chatId2, phone2, idProof2),
-             *  ]
-             */
-        }
+    //     // TODO: Implement using INTERSECT clause within sub-queries and fix this.
+    //     if (!isNil(withPhoto) || !isNil(withIdProof)) {
+    //         throw new NotImplementedException('withPhoto and withIdProof options are not yet implemented!')
+    //         /**
+    //          * TODO: Refactor documents into separate tables - BioData, IdProof, 
+    //          * Picture, etc. This will allow join to create a single row, e.g.
+    //          * (id1, chatId1, phone1, idProof1, bio1, photo1)
+    //          *  BUT if we have all docTypes in one document, then we get multi-row
+    //          *  join for each id, e.g. (which is harder to query bcz of attributes
+    //          *  being in separate rows.)
+    //          *  [   
+    //          *      (id2, chatId2, phone2, bio2),
+    //          *      (id2, chatId2, phone2, photo2),
+    //          *      (id2, chatId2, phone2, idProof2),
+    //          *  ]
+    //          */
+    //     }
 
-        if (!isNil(withBio) || !isNil(withPhoto) || !isNil(withIdProof))
-            query.leftJoin('tel_profile.documents', 'document');
+    //     if (!isNil(withBio) || !isNil(withPhoto) || !isNil(withIdProof))
+    //         query.leftJoin('tel_profile.documents', 'document');
 
-        if (!isNil(isValid))
-            query.where('tel_profile.isValid = :isValid', { isValid });
+    //     if (!isNil(isValid))
+    //         query.where('tel_profile.isValid = :isValid', { isValid });
 
-        if (!isNil(withPhone) && withPhone === false)
-            query.andWhere('tel_profile.phone IS NULL');
-        else if (withPhone)
-            query.andWhere('tel_profile.phone IS NOT NULL');
+    //     if (!isNil(withPhone) && withPhone === false)
+    //         query.andWhere('tel_profile.phone IS NULL');
+    //     else if (withPhone)
+    //         query.andWhere('tel_profile.phone IS NOT NULL');
 
-        if (withBio)
-            query.andWhere('document.typeOfDocument = :docTypeBio', { docTypeBio: TypeOfDocument.BIO_DATA });
-        else if (!isNil(withBio) && withBio === false) {
-            query.andWhere(qb => {
-                const subQuery = qb.subQuery()
-                    .select("t_document.telegramProfileId")
-                    .from(Document, "t_document")
-                    .where("t_document.typeOfDocument = :docTypeBio")
-                    .getQuery();
-                return "tel_profile.id NOT IN " + subQuery;
-            })
-            query.setParameter("docTypeBio", TypeOfDocument.BIO_DATA);
-        }
+    //     if (withBio)
+    //         query.andWhere('document.typeOfDocument = :docTypeBio', { docTypeBio: TypeOfDocument.BIO_DATA });
+    //     else if (!isNil(withBio) && withBio === false) {
+    //         query.andWhere(qb => {
+    //             const subQuery = qb.subQuery()
+    //                 .select("t_document.telegramProfileId")
+    //                 .from(Document, "t_document")
+    //                 .where("t_document.typeOfDocument = :docTypeBio")
+    //                 .getQuery();
+    //             return "tel_profile.id NOT IN " + subQuery;
+    //         })
+    //         query.setParameter("docTypeBio", TypeOfDocument.BIO_DATA);
+    //     }
 
-        // if (withPhoto)
-        //     query.andWhere('document.typeOfDocument = :docTypePhoto', { docTypePhoto: TypeOfDocument.PICTURE });
-        // else if (!isNil(withPhoto) && withPhoto === false) {
-        //     query.andWhere(qb => {
-        //         const subQuery = qb.subQuery()
-        //             .select("t_document.telegramProfileId")
-        //             .from(Document, "t_document")
-        //             .where("t_document.typeOfDocument = :docTypePhoto")
-        //             .getQuery();
-        //         return "tel_profile.id NOT IN " + subQuery;
-        //     })
-        //     query.setParameter("docTypePhoto", TypeOfDocument.PICTURE);
-        // }
+    //     // if (withPhoto)
+    //     //     query.andWhere('document.typeOfDocument = :docTypePhoto', { docTypePhoto: TypeOfDocument.PICTURE });
+    //     // else if (!isNil(withPhoto) && withPhoto === false) {
+    //     //     query.andWhere(qb => {
+    //     //         const subQuery = qb.subQuery()
+    //     //             .select("t_document.telegramProfileId")
+    //     //             .from(Document, "t_document")
+    //     //             .where("t_document.typeOfDocument = :docTypePhoto")
+    //     //             .getQuery();
+    //     //         return "tel_profile.id NOT IN " + subQuery;
+    //     //     })
+    //     //     query.setParameter("docTypePhoto", TypeOfDocument.PICTURE);
+    //     // }
 
-        // if (withIdProof)
-        //     query.andWhere('document.typeOfDocument = :docTypeId', { docTypeId: TypeOfDocument.ID_PROOF });
-        // else if (!isNil(withIdProof) && withIdProof === false) {
-        //     query.andWhere(qb => {
-        //         const subQuery = qb.subQuery()
-        //             .select("t_document.telegramProfileId")
-        //             .from(Document, "t_document")
-        //             .where("t_document.typeOfDocument = :docTypeId")
-        //             .getQuery();
-        //         return "tel_profile.id NOT IN " + subQuery;
-        //     })
-        //     query.setParameter("docTypeId", TypeOfDocument.ID_PROOF);
-        // }
+    //     // if (withIdProof)
+    //     //     query.andWhere('document.typeOfDocument = :docTypeId', { docTypeId: TypeOfDocument.ID_PROOF });
+    //     // else if (!isNil(withIdProof) && withIdProof === false) {
+    //     //     query.andWhere(qb => {
+    //     //         const subQuery = qb.subQuery()
+    //     //             .select("t_document.telegramProfileId")
+    //     //             .from(Document, "t_document")
+    //     //             .where("t_document.typeOfDocument = :docTypeId")
+    //     //             .getQuery();
+    //     //         return "tel_profile.id NOT IN " + subQuery;
+    //     //     })
+    //     //     query.setParameter("docTypeId", TypeOfDocument.ID_PROOF);
+    //     // }
 
-        const [telegramProfiles, count] = await query.skip(skip).take(take).getManyAndCount();
+    //     const [telegramProfiles, count] = await query.skip(skip).take(take).getManyAndCount();
 
-        return {
-            count,
-            values: telegramProfiles
-        };
-    }
+    //     return {
+    //         count,
+    //         values: telegramProfiles
+    //     };
+    // }
 
 
     async getTelegramProfileById(id: string, { throwOnFail = true }): Promise<TelegramProfile | undefined> {
@@ -761,11 +878,32 @@ export class ProfileService {
     }
 
 
-    async getDocument(telegramProfileId: string, typeOfDocument: TypeOfDocument, { throwOnFail = false
+    async getDocuments(telegramProfileId: string, typeOfDocument: TypeOfDocument): Promise<Document[] | undefined> {
+        return this.documentRepository.find({
+            where: { telegramProfileId, typeOfDocument, url: Not(IsNull()) },
+        });
+    }
+
+
+    async getDocument(telegramProfileId: string, typeOfDocument: TypeOfDocument, {
+        active = true,
+        valid = true,
+        throwOnFail = false
     }): Promise<Document | undefined> {
+        const where = {
+            telegramProfileId,
+            typeOfDocument,
+
+        };
+        if (!isNil(active)) {
+            where['active'] = active;
+        }
+        if (!isNil(valid)) {
+            where['valid'] = valid;
+        }
 
         const document = await this.documentRepository.findOne({
-            where: { telegramProfileId, typeOfDocument },
+            where: where,
         });
 
         if (throwOnFail && !document) {
@@ -830,7 +968,7 @@ export class ProfileService {
 
         const telegramProfile = await this.getTelegramProfileByTelegramUserId(telegramUserId, { throwOnFail: true });
 
-        const document = await this.getDocument(telegramProfile.id, typeOfDocument, { throwOnFail: true });
+        const document = await this.getDocument(telegramProfile.id, typeOfDocument, { throwOnFail: true, active: null, valid: null });
 
         if (!document.fileName)
             throw new Error('This document does not exist on AWS!');
@@ -840,9 +978,36 @@ export class ProfileService {
 
 
     @Transactional()
+    async banProfile(telegramProfileId: string, banInput: BanProfileDto, agent: Agent) {
+        const telegramProfile = await this.getTelegramProfileById(telegramProfileId, { throwOnFail: true });
+        try {
+            telegramProfile.isBanned = true;
+            telegramProfile.bannedOn = new Date();
+            telegramProfile.bannedBy = agent;
+            telegramProfile.reasonForBan = banInput.reasonForBan;
+            telegramProfile.banDescription = banInput.banDescription;
+            this.profileRepository.softDelete(telegramProfileId);
+            const documents = await this.documentRepository.find({
+                where: { telegramProfileId }
+            })
+            for (const document of documents) {
+                await this.documentRepository.softRemove(document);
+            }
+        }
+        catch (error) {
+            logger.error(`Could not verify document. Error: ${error}`);
+            throw error;
+        }
+    }
+
+
+    @Transactional()
     async validateDocument(telegramProfileId: string, validationInput: DocumentValidationDto, agent: Agent): Promise<Document | undefined> {
         const { documentId, valid, rejectionReason, rejectionDescription } = validationInput;
         try {
+            const telegramProfile = await
+                this.getTelegramProfileById(telegramProfileId, { throwOnFail: true });
+
             let document = await this.documentRepository.findOne(documentId);
 
             if (!document || document.telegramProfileId !== telegramProfileId) {
@@ -855,10 +1020,26 @@ export class ProfileService {
             document.invalidationDescription = rejectionDescription;
             document.verifierId = agent.id;
             document.verifiedOn = new Date();
-            document = await this.documentRepository.save(document);
 
             if (valid) {
-                // find current active document, mark as inactive and delete from AWS in the end
+                // Mark this document as active doc in telegram profile for that doc type
+                switch (document.typeOfDocument) {
+                    case TypeOfDocument.BIO_DATA:
+                        telegramProfile.bioDataId = document.id;
+                        break;
+                    case TypeOfDocument.PICTURE:
+                        telegramProfile.pictureId = document.id;
+                        break;
+                    case TypeOfDocument.ID_PROOF:
+                        telegramProfile.idProofId = document.id;
+                        break;
+                    case TypeOfDocument.VIDEO:
+                    case TypeOfDocument.REPORT_ATTACHMENT:
+                    default:
+                        throw new NotImplementedException('Not implemented!');
+                }
+
+                // find old active document, mark as inactive and delete from AWS in the end
                 let currentActiveDocument = await this.documentRepository.findOne({
                     where: {
                         telegramProfileId: document.telegramProfileId,
@@ -880,6 +1061,10 @@ export class ProfileService {
                     await this.awsService.deleteFileFromS3(currentActiveDocumentFileName, currentActiveDocument.typeOfDocument);
                 }
             }
+
+            // Caution: save here! 
+            // cannot save before marking the old active document inactive.
+            document = await this.documentRepository.save(document);
 
             return document;
         }
@@ -1064,7 +1249,7 @@ export class ProfileService {
     }
 
 
-    async getRegistrationStatus(telegramProfileId: string): Promise<RegistrationStatus | undefined> {
+    async getRegistrationStatus(telegramProfileId: string): Promise<RegistrationActionRequired | undefined> {
         const telegramProfile = await this.telegramRepository.findOne(telegramProfileId, {
             relations: ['documents']
         })
@@ -1075,79 +1260,43 @@ export class ProfileService {
         }
 
         if (!telegramProfile.phone) {
-            return RegistrationStatus.UNREGISTERED;
+            return RegistrationActionRequired.VERIFY_PHONE;
         }
 
         const documents: Document[] = telegramProfile.documents;
         if (!documents?.length) {
-            return RegistrationStatus.PHONE_VERIFIED;
+            return RegistrationActionRequired.UPLOAD_BIO_AND_PICTURE;
         }
         else {
-            let bioUploaded = false, bioVerified = false, picUploaded = false, picVerified = false;
+            let bioRequired = true, bioVerified = false,
+                picRequired = true, picVerified = false;
             for (let doc of documents) {
-                if (doc.typeOfDocument === TypeOfDocument.BIO_DATA) {
-                    bioUploaded = true;
+                if (doc.typeOfDocument === TypeOfDocument.BIO_DATA && doc.isValid !== false) {
+                    bioRequired = false;
                     if (doc.isValid) {
                         bioVerified = true;
                     }
-                } else if (doc.typeOfDocument === TypeOfDocument.PICTURE) {
-                    picUploaded = true;
+                } else if (doc.typeOfDocument === TypeOfDocument.PICTURE && doc.isValid !== false) {
+                    picRequired = false;
                     if (doc.isValid) {
                         picVerified = true;
                     }
                 }
             }
-            if (!bioUploaded) {
-                return RegistrationStatus.PHONE_VERIFIED;
-            } else if (!picUploaded) {
-                return RegistrationStatus.BIO_UPLOADED;
-            } else {
-                return RegistrationStatus.PICTURE_UPLOADED;
+            if (bioRequired && picRequired) {
+                return RegistrationActionRequired.UPLOAD_BIO_AND_PICTURE;
+            } else if (picRequired) {
+                return RegistrationActionRequired.UPLOAD_PICTURE;
+            } else if (bioRequired) {
+                return RegistrationActionRequired.UPLOAD_BIO;
+            } else { // if (!bioRequired && !picRequired) {
+                return RegistrationActionRequired.NONE;
             }
         }
     }
 
 
     // Common data
-
-    async seedCity() {
-        // Delhi Lucknow Ghaziabad Pune Patna Mumbai Indore Bhopal Ranchi Raipur
-        let cityNameList = 'Jaipur Udaipur Jaisalmer Jodhpur Kota Alwar'.split(' ');
-        const cityList: City[] = [];
-        for (const cityName of cityNameList) {
-            const city: City = {
-                name: cityName,
-                state: await this.getOrCreateState('Rajasthan', 'India')
-            };
-            cityList.push(city);
-        }
-        cityNameList = 'Bangalore Mysore Belgavi Mangalore Udupi'.split(' ');
-        for (const cityName of cityNameList) {
-            const city: City = {
-                name: cityName,
-                state: await this.getOrCreateState('Karnataka', 'India')
-            };
-            cityList.push(city);
-        }
-        cityNameList = 'Pune Nashik Mumbai Jalgaon Aurangabad'.split(' ');
-        for (const cityName of cityNameList) {
-            const city: City = {
-                name: cityName,
-                state: await this.getOrCreateState('Maharashtra', 'India')
-            };
-            cityList.push(city);
-        }
-        cityNameList = 'Ghaziabad Noida Lucknow Allahabad Ayodhya'.split(' ');
-        for (const cityName of cityNameList) {
-            const city: City = {
-                name: cityName,
-                state: await this.getOrCreateState('Uttar Pradesh', 'India')
-            };
-            cityList.push(city);
-        }
-        await this.cityRepository.save(cityList);
-    }
-
 
     async getOrCreateState(stateName: string, countryName: string): Promise<State | undefined> {
         if (!stateName) throw new BadRequestException("Empty or null stateName")

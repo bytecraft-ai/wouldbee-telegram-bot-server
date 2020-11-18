@@ -13,9 +13,9 @@ import { TelegramProfile } from './entities/telegram-profile.entity';
 // import { SharedMatch } from './entities/shared-profiles.entity';
 import { AwsServiceModule } from 'src/aws-service/aws-service.module';
 import { PassportModule } from '@nestjs/passport';
-import { BioData } from './entities/bio-data.entity';
-import { IdProof } from './entities/id-proof.entity';
-import { ProfilePicture } from './entities/picture.entity';
+// import { BioData } from './entities/bio-data.entity';
+// import { IdProof } from './entities/id-proof.entity';
+// import { ProfilePicture } from './entities/picture.entity';
 import { Document } from './entities/document.entity';
 import { AgentModule } from 'src/agent/agent.module';
 import { AuthModule } from 'src/auth/auth.module';
@@ -24,12 +24,10 @@ import { BullModule } from '@nestjs/bull';
 import { TelegramModule } from 'src/telegram/telegram.module';
 import { MatchQueueConsumer } from './profile-matchfinder.queue-consumer';
 import { SendQueueConsumer } from './profile-sender.queue-consumer';
-// import { AwsDocument } from './entities/aws-document.entity';
-// import { InvalidDocument } from './entities/invalid-document.entity';
 
 @Module({
     imports: [AuthModule, AgentModule,
-        TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, TelegramProfile, ProfilePicture, BioData, IdProof, Document, Match]), AwsServiceModule,
+        TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, TelegramProfile, Document, Match]), AwsServiceModule,
         PassportModule.register({ defaultStrategy: 'jwt' }),
         BullModule.registerQueue(
             { name: 'find-match' }, { name: 'send-profile' }

@@ -67,27 +67,15 @@ export class Document extends Verifiable {
     @Length(fileNameMinLength, fileNameMaxLength)
     @IsString()
     @Column("varchar", { length: fileNameMaxLength, nullable: true })
-    fileName: string;
+    fileName?: string;
 
     @IsOptional()
     @Length(40, urlMaxLength)
     @IsString()
     @Column("varchar", { length: urlMaxLength, nullable: true })
-    url: string;
+    url?: string;
 
     @IsOptional()
     @Column("varchar", { length: mimeMaxLength, nullable: true })
-    mimeType: string;
-
-    @IsOptional()
-    @IsPositive()
-    @IsInt()
-    @Column("smallint", { nullable: true })
-    invalidationReason?: DocRejectionReason;
-
-    @IsOptional()
-    @IsPositive()
-    @IsInt()
-    @Column("varchar", { nullable: true, length: docRejectionReasonMaxLength })
-    invalidationDescription?: string;
+    mimeType?: string;
 }

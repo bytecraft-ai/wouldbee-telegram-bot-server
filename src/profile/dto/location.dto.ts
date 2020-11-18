@@ -1,7 +1,7 @@
 // import { ParseArrayPipe } from "@nestjs/common";
 import { Transform, Type } from "class-transformer";
-import { IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsPositive, IsString, IsUUID, Length, Max, MaxLength, Min } from "class-validator";
-import { DocRejectionReason } from 'src/common/enum';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsPositive, IsString, IsUUID, Length, Max, MaxLength, Min } from "class-validator";
+import { DocRejectionReason, ReasonForProfileBan } from 'src/common/enum';
 import { docRejectionReasonMaxLength } from "src/common/field-length";
 import { getEnumValues } from "src/common/util";
 
@@ -32,6 +32,18 @@ export class DocumentTypeDto {
     @IsIn(['bio-data', 'picture', 'id-proof'])
     @IsString()
     documentType: string
+}
+
+
+export class BanProfileDto {
+    @IsIn(getEnumValues(ReasonForProfileBan))
+    @Transform(value => Number(value))
+    reasonForBan: ReasonForProfileBan;
+
+    @IsOptional()
+    @MaxLength(docRejectionReasonMaxLength)
+    @IsString()
+    banDescription: string;
 }
 
 

@@ -20,6 +20,15 @@ export enum Referee {
 }
 
 
+export enum RegistrationActionRequired {
+    VERIFY_PHONE = 1,
+    UPLOAD_BIO,
+    UPLOAD_BIO_AND_PICTURE,
+    UPLOAD_PICTURE,
+    NONE
+}
+
+
 export enum RegistrationStatus {
     UNREGISTERED = 1,
     PHONE_VERIFIED,
@@ -287,6 +296,15 @@ export enum Language {
 }
 
 
+export enum ReasonForProfileBan {
+    OBSCENE_OR_OFFENSIVE_UPLOADS,
+    FAKE_OR_FRAUD,
+    BAD_BEHAVIOR_WITH_OTHER_CUSTOMER,
+    BAD_BEHAVIOR_WITH_AGENT,
+    OTHER,
+}
+
+
 export enum DocRejectionReason {
     NOT_A_BIO = 1,
     NOT_A_PROFILE_PIC,
@@ -344,6 +362,19 @@ export enum TypeOfDocument {
     ID_PROOF,
     BIO_DATA,
     REPORT_ATTACHMENT
+}
+
+
+export enum UserStatOptions {
+    REGISTRATION_FAILURE = 1,
+    NEW,    // VALIDATION PENDING
+    VALID,
+    INVALID,
+    DEACTIVATED,
+    SELF_DELETED,
+    SYSTEM_DELETED,
+    BANNED,
+    TOTAL,  // misleading - removes banned, deleted, registration_failures
 }
 
 
