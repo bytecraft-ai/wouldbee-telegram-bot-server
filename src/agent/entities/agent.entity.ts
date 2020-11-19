@@ -11,7 +11,7 @@ import { UserRole } from 'src/common/enum';
 import { hash } from 'bcryptjs';
 
 @Entity()
-export class Agent extends BaseEntity {
+export class WbAgent extends BaseEntity {
     @PrimaryGeneratedColumn("uuid")
     id: string;
 

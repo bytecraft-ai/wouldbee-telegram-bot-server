@@ -1,7 +1,7 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { AgentService } from 'src/agent/agent.service';
 import { AgentSignInDto } from 'src/agent/dto/agent-register.dto';
-import { Agent } from 'src/agent/entities/agent.entity';
+import { WbAgent } from 'src/agent/entities/agent.entity';
 import { JwtPayload } from 'src/common/interface';
 import { JwtService } from '@nestjs/jwt';
 
@@ -15,7 +15,7 @@ export class AuthService {
     ) { }
 
 
-    async validate(payload: JwtPayload): Promise<Agent> {
+    async validate(payload: JwtPayload): Promise<WbAgent> {
         const { username: id } = payload;
         const agent = await this.agentService.getAgentById(id, {
             throwOnFail: false

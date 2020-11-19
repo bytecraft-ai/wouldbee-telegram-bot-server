@@ -13,7 +13,7 @@ import { TelegramProfile } from './entities/telegram-profile.entity';
 import { IList, IUserStats } from 'src/common/interface';
 import { Roles } from 'src/auth/set-role.decorator';
 import { GetAgent } from 'src/auth/get-agent.decorator';
-import { Agent } from 'src/agent/entities/agent.entity';
+import { WbAgent } from 'src/agent/entities/agent.entity';
 
 const logger = new Logger('ProfileController');
 
@@ -262,7 +262,7 @@ export class TelegramProfileController {
     @Post('/validate')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async validateOrRejectDocument(
-        @GetAgent() agent: Agent,
+        @GetAgent() agent: WbAgent,
         // @Param('id') id: string,
         @Body() body: DocumentValidationDto) {
         // console.log('id:', id, 'body:', body);
@@ -274,7 +274,7 @@ export class TelegramProfileController {
     @Post('/ban/:id')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async banProfile(
-        @GetAgent() agent: Agent,
+        @GetAgent() agent: WbAgent,
         @Param('id') id: string,
         @Body() body: BanProfileDto) {
         console.log('id:', id, 'body:', body);

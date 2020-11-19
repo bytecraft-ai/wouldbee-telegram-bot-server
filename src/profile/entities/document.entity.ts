@@ -9,7 +9,7 @@ import {
     DeleteDateColumn,
     // OneToOne,
 } from 'typeorm';
-import { IsBoolean, IsInt, IsOptional, IsPositive, IsString, Length } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsPositive, IsString, Length, MaxLength } from 'class-validator';
 import { docRejectionReasonMaxLength, fileNameMaxLength, fileNameMinLength, mimeMaxLength, urlMaxLength } from 'src/common/field-length';
 import { DocRejectionReason, TypeOfDocument, TypeOfIdProof } from 'src/common/enum';
 import { TelegramProfile } from './telegram-profile.entity';
@@ -86,8 +86,8 @@ export class Document extends Verifiable {
     invalidationReason?: DocRejectionReason;
 
     @IsOptional()
-    @IsPositive()
-    @IsInt()
+    @MaxLength(docRejectionReasonMaxLength)
+    @IsString()
     @Column("varchar", { nullable: true, length: docRejectionReasonMaxLength })
     invalidationDescription?: string;
 }

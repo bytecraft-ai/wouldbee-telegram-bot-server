@@ -1,7 +1,7 @@
 import { Transform, Type } from 'class-transformer';
-import { IsNotEmpty, IsString, MinLength, MaxLength, Matches, IsNumberString, Length, IsEmail, IsInt, IsOptional, Min, Max, IsPositive, IsUUID, IsNumber, IsIn, IsDateString, IsArray } from 'class-validator';
-import { AnnualIncome, EducationDegree, EmployedIn, Gender, MaritalStatus, Occupation, Religion, TypeOfDocument, Language } from 'src/common/enum';
-import { nameMaxLength, nameMinLength } from 'src/common/field-length';
+import { IsNotEmpty, IsString, IsNumberString, Length, IsEmail, IsInt, IsOptional, Min, Max, IsPositive, IsUUID, IsNumber, IsIn } from 'class-validator';
+import { AnnualIncome, EducationDegree, EmployedIn, Gender, MaritalStatus, Occupation, Religion, SupportTicketCategory, Language } from 'src/common/enum';
+import { nameMaxLength, nameMinLength, supportResolutionMinLength, supportResolutionMaxLength } from 'src/common/field-length';
 import { getEnumValues } from 'src/common/util';
 
 
@@ -265,6 +265,19 @@ export class CreateCasteDto {
     @IsIn(Object.values(Religion).filter(value => typeof value === 'number'))
     @Transform(value => Number(value))
     religion: Religion;
+}
+
+
+export class SupportResolutionDto {
+    @IsNotEmpty()
+    @IsIn(Object.values(SupportTicketCategory).filter(value => typeof value === 'number'))
+    @Transform(value => Number(value))
+    category: SupportTicketCategory;
+
+    @IsOptional()
+    @Length(supportResolutionMinLength, supportResolutionMaxLength)
+    @IsString()
+    resolution: string;
 }
 
    // // TODO: apply strong password validation

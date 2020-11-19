@@ -50,6 +50,14 @@ export enum UserStatus {
 }
 
 
+export enum SupportTicketCategory {
+    TECHNICAL_ISSUE = 1,
+    OTHER_ISSUE,
+    GOOD_FEEDBACK,
+    BAD_FEEDBACK
+}
+
+
 // export enum RegistrationStatus {
 //     UNREGISTERED = 1,
 //     PHONE_VERIFIED,

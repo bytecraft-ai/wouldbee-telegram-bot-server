@@ -4,7 +4,7 @@ import { Strategy, ExtractJwt } from 'passport-jwt';
 import { get } from 'config';
 import { AuthService } from 'src/auth/auth.service';
 import { JwtPayload } from '../common/interface';
-import { Agent } from 'src/agent/entities/agent.entity';
+import { WbAgent } from 'src/agent/entities/agent.entity';
 
 const jwtConfig = get('jwt');
 
@@ -18,7 +18,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         });
     }
 
-    async validate(payload: JwtPayload): Promise<Agent | undefined> {
+    async validate(payload: JwtPayload): Promise<WbAgent | undefined> {
         const agent = await this.authService.validate(payload);
         if (!agent) throw new UnauthorizedException();
 

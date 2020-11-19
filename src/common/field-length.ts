@@ -29,3 +29,10 @@ export const mimeMaxLength = 100;
 
 // rejection-reason
 export const docRejectionReasonMaxLength = 200;
+
+// support
+export const supportQueryMinLength = 20;
+export const supportQueryMaxLength = 500;
+
+export const supportResolutionMinLength = 10;
+export const supportResolutionMaxLength = 500;

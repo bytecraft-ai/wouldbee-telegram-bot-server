@@ -1,7 +1,7 @@
 import { EntityRepository, Repository } from "typeorm";
-import { Agent } from "../entities/agent.entity";
+import { WbAgent } from "../entities/agent.entity";
 
-@EntityRepository(Agent)
-export class AgentRepository extends Repository<Agent> {
+@EntityRepository(WbAgent)
+export class AgentRepository extends Repository<WbAgent> {
 
 }

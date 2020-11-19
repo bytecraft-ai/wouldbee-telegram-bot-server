@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, MaritalStatus, ProfileSharedWith, S3Option, RegistrationActionRequired, UserStatOptions, ProfileDeactivationDuration, ProfileDeletionReason, UserStatus } from 'src/common/enum';
 import { daysAhead, deDuplicateArray, getAgeInYearsFromDOB, setDifferenceFromArrays } from 'src/common/util';
 import { IsNull, Not, Repository, SelectQueryBuilder } from 'typeorm';
-import { PartnerPreferenceDto, CreateProfileDto, CreateCasteDto } from './dto/profile.dto';
+import { PartnerPreferenceDto, CreateProfileDto, CreateCasteDto, SupportResolutionDto } from './dto/profile.dto';
 import { Caste } from './entities/caste.entity';
 import { City } from './entities/city.entity';
 import { Country } from './entities/country.entity';
@@ -18,16 +18,17 @@ import { CommonData, IList, IUserStats } from 'src/common/interface';
 import { Document } from './entities/document.entity';
 import { isUUID } from 'class-validator';
 import { AgentService } from 'src/agent/agent.service';
-import { Agent } from 'src/agent/entities/agent.entity';
-import { isNil } from 'lodash';
+import { WbAgent } from 'src/agent/entities/agent.entity';
+import { isNil, sortBy } from 'lodash';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
 import { Match } from './entities/match.entity';
 import { TelegramService } from 'src/telegram/telegram.service';
 import { BanProfileDto, DocumentValidationDto } from './dto/location.dto';
-import { DeactivatedProfile } from './entities/deactivated-profile.entity';
+// import { DeactivatedProfile } from './entities/deactivated-profile.entity';
 import { Cron } from '@nestjs/schedule';
 import { assert } from 'console';
+import { Support } from './entities/support.entity';
 
 const logger = new Logger('ProfileService');
 
@@ -44,12 +45,13 @@ export class ProfileService {
 
         @InjectRepository(Profile) private profileRepository: Repository<Profile>,
         @InjectRepository(TelegramProfile) private telegramRepository: Repository<TelegramProfile>,
-        @InjectRepository(DeactivatedProfile) private deactivatedProfileRepository: Repository<DeactivatedProfile>,
+        // @InjectRepository(DeactivatedProfile) private deactivatedProfileRepository: Repository<DeactivatedProfile>,
 
         @InjectRepository(Match) private matchRepository: Repository<Match>,
         @InjectRepository(PartnerPreference) private prefRepository: Repository<PartnerPreference>,
 
         @InjectRepository(Document) private documentRepository: Repository<Document>,
+        @InjectRepository(Support) private supportRepository: Repository<Support>,
 
         @InjectRepository(Caste) private casteRepository: Repository<Caste>,
         @InjectRepository(City) private cityRepository: Repository<City>,
@@ -468,7 +470,7 @@ export class ProfileService {
 
 
     @Transactional()
-    async banProfile(telegramProfileId: string, banInput: BanProfileDto, agent: Agent) {
+    async banProfile(telegramProfileId: string, banInput: BanProfileDto, agent: WbAgent) {
         const telegramProfile = await this.getTelegramProfileById(telegramProfileId, { throwOnFail: true });
         try {
             telegramProfile.status = UserStatus.BANNED;
@@ -1075,8 +1077,24 @@ export class ProfileService {
     }
 
 
+    async getInvalidatedDocumentCausingProfileInvalidation(telegramProfileId: string, typeOfDocument = TypeOfDocument.BIO_DATA): Promise<Document | undefined> {
+        const document = await this.documentRepository.findOne({
+            where: { telegramProfileId, typeOfDocument, isValid: false },
+            order: { createdOn: 'DESC' }
+        });
+        const validateDocument = await this.documentRepository.findOne({
+            where: { telegramProfileId, typeOfDocument, isValid: true },
+            order: { createdOn: 'DESC' }
+        });
+        if (validateDocument) {
+            return null;
+        }
+        return document;
+    }
+
+
     @Transactional()
-    async validateDocument(validationInput: DocumentValidationDto, agent: Agent): Promise<Document | undefined> {
+    async validateDocument(validationInput: DocumentValidationDto, agent: WbAgent): Promise<Document | undefined> {
         const { documentId, valid, rejectionReason, rejectionDescription } = validationInput;
         try {
             let document = await this.documentRepository.findOne(documentId);
@@ -1277,7 +1295,7 @@ export class ProfileService {
     }
 
 
-    async getReferee(payload: string): Promise<[Referee, null | TelegramProfile | Agent]> {
+    async getReferee(payload: string): Promise<[Referee, null | TelegramProfile | WbAgent]> {
         if (!payload) {
             return [Referee.NONE, null];
         } else if (payload === "w8e7d872-938c-4695-9a84-3e72e9d09a7eb") {
@@ -1303,15 +1321,15 @@ export class ProfileService {
     }
 
 
-    async getRegistrationStatus(telegramProfileId: string): Promise<RegistrationActionRequired | undefined> {
-        const telegramProfile = await this.telegramRepository.findOne(telegramProfileId, {
-            relations: ['documents']
-        })
+    async getRegistrationAction(telegramProfileId: string): Promise<RegistrationActionRequired | undefined> {
+        // const telegramProfile = await this.telegramRepository.findOne(telegramProfileId, { relations: ['documents'] });
 
-        if (!telegramProfile) {
-            logger.log(`getRegistrationStatus(): profile ${telegramProfile} not registered!`);
-            throw new NotFoundException(`Telegram profile with id: ${telegramProfile.id} not found!`);
-        }
+        // if (!telegramProfile) {
+        //     logger.log(`getRegistrationStatus(): profile ${telegramProfile} not registered!`);
+        //     throw new NotFoundException(`Telegram profile with id: ${telegramProfile.id} not found!`);
+        // }
+
+        const telegramProfile = await this.getTelegramProfileById(telegramProfileId, { throwOnFail: true });
 
         if (!telegramProfile.phone) {
             return RegistrationActionRequired.VERIFY_PHONE;
@@ -1347,6 +1365,58 @@ export class ProfileService {
                 return RegistrationActionRequired.NONE;
             }
         }
+    }
+
+
+    async getActiveSupportTicket(telegramProfileId: string): Promise<Support | undefined> {
+        return this.supportRepository.findOne({
+            where: { telegramProfileId, resolved: false }
+        });
+    }
+
+
+    async userCloseActiveSupportTicket(telegramProfileId: string) {
+        const activeSupportTicket = await this.getActiveSupportTicket(telegramProfileId);
+        if (!activeSupportTicket) {
+            throw new NotFoundException(`No active support ticket was found for Telegram profile with id: ${telegramProfileId}`);
+        }
+        await this.supportRepository.delete(activeSupportTicket);
+    }
+
+
+    async createSupportTicket(telegramProfileId: string, description: string): Promise<Support | undefined> {
+        const telegramProfile = await this.getTelegramProfileById(telegramProfileId, { throwOnFail: true });
+
+        const activeSupportTicket = await this.getActiveSupportTicket(telegramProfileId);
+
+        if (activeSupportTicket) {
+            throw new ConflictException('One Support Ticket is already open. Cannot Open another.');
+        }
+
+        const supportTicket = this.supportRepository.create({
+            telegramProfileId: telegramProfileId,
+            issueDescription: description
+        });
+
+        return this.supportRepository.save(supportTicket);
+    }
+
+
+    async resolveSupportTicket(ticketId: number, supportResolutionDto: SupportResolutionDto, agent: WbAgent): Promise<Support | undefined> {
+        const supportTicket = await this.supportRepository.findOne(ticketId);
+        if (!supportTicket) {
+            throw new NotFoundException(`No support ticket was found for ticket id: ${ticketId}`);
+        }
+
+        const { category, resolution } = supportResolutionDto;
+
+        supportTicket.resolved = true;
+        supportTicket.resolvedOn = new Date();
+        supportTicket.resolvedBy = agent;
+        supportTicket.category = category;
+        supportTicket.resolution = resolution;
+
+        return this.supportRepository.save(supportTicket);
     }
 
 

@@ -3,7 +3,7 @@ import {
     ManyToOne,
     JoinColumn,
 } from 'typeorm';
-import { Agent } from 'src/agent/entities/agent.entity';
+import { WbAgent } from 'src/agent/entities/agent.entity';
 
 export abstract class Verifiable {
 
@@ -21,7 +21,7 @@ export abstract class Verifiable {
     @Column("uuid", { nullable: true })
     verifierId?: string;
 
-    @ManyToOne(type => Agent, { nullable: true })
+    @ManyToOne(type => WbAgent, { nullable: true })
     @JoinColumn({ name: "verifierId" })
-    verifiedBy?: Agent;
+    verifiedBy?: WbAgent;
 }

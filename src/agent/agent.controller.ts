@@ -4,7 +4,7 @@ import {
 } from '@nestjs/common';
 import { AgentService } from './agent.service';
 import { AgentRegistrationDto, AgentSignInDto } from './dto/agent-register.dto';
-import { Agent } from './entities/agent.entity';
+import { WbAgent } from './entities/agent.entity';
 import { GetAgent } from '../auth/get-agent.decorator'
 import { Roles } from '../auth/set-role.decorator';
 import { UserRole } from 'src/common/enum';
@@ -28,7 +28,7 @@ export class AgentController {
 
 
     @Get('/')
-    async getAgents(): Promise<Agent[]> {
+    async getAgents(): Promise<WbAgent[]> {
         return this.agentService.getAgents();
     }
 
@@ -37,7 +37,7 @@ export class AgentController {
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     test(
         // @Req() req,
-        @GetAgent() agent: Agent
+        @GetAgent() agent: WbAgent
     ) {
         // console.log('request:', req);
         console.log('agent:', agent);

@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AgentChangePasswordDto, AgentRegistrationDto, AgentSignInDto } from './dto/agent-register.dto';
-import { Agent } from './entities/agent.entity';
+import { WbAgent } from './entities/agent.entity';
 import { AgentRepository } from './repositories/agent.repository';
 import { genSalt, hash } from 'bcryptjs';
 
@@ -15,7 +15,7 @@ export class AgentService {
     ) { }
 
 
-    async getAgentById(id: string, { throwOnFail = false }): Promise<Agent> {
+    async getAgentById(id: string, { throwOnFail = false }): Promise<WbAgent> {
         const agent = await this.agentRepository.findOne(id);
         if (!agent && throwOnFail) {
             throw new NotFoundException(`Agent with id: ${id} not found!`);
@@ -24,7 +24,7 @@ export class AgentService {
     }
 
 
-    async getAgentByEmail(email: string, { throwOnFail = false }): Promise<Agent> {
+    async getAgentByEmail(email: string, { throwOnFail = false }): Promise<WbAgent> {
         const agent = await this.agentRepository.findOne({
             where: { email: email.toLowerCase().trim() },
         });
@@ -35,12 +35,12 @@ export class AgentService {
     }
 
 
-    async getAgents(): Promise<Agent[]> {
+    async getAgents(): Promise<WbAgent[]> {
         return this.agentRepository.find();
     }
 
 
-    async registerAgent(registrationDto: AgentRegistrationDto): Promise<Agent> {
+    async registerAgent(registrationDto: AgentRegistrationDto): Promise<WbAgent> {
         console.log('registrationDto:', registrationDto);
         let agent = await this.agentRepository.findOne({
             where: [
@@ -68,7 +68,7 @@ export class AgentService {
     }
 
 
-    async validateAgent(authInput: AgentSignInDto): Promise<Agent | null> {
+    async validateAgent(authInput: AgentSignInDto): Promise<WbAgent | null> {
         let { email, password } = authInput;
 
         email = email.trim().toLowerCase();
@@ -85,7 +85,7 @@ export class AgentService {
     }
 
 
-    async resetAgentPassword(changePasswordInput: AgentChangePasswordDto, currentAgent: Agent): Promise<Agent | undefined> {
+    async resetAgentPassword(changePasswordInput: AgentChangePasswordDto, currentAgent: WbAgent): Promise<WbAgent | undefined> {
 
         const { oldPassword, newPassword } = changePasswordInput;
         const signInInput = new AgentSignInDto();

@@ -1,5 +1,5 @@
 import { IsInt, IsOptional, IsPositive, IsString, MaxLength } from 'class-validator';
-import { Agent } from 'src/agent/entities/agent.entity';
+import { WbAgent } from 'src/agent/entities/agent.entity';
 import { ProfileDeletionReason, ReasonForProfileBan, UserStatus } from 'src/common/enum';
 import { docRejectionReasonMaxLength } from 'src/common/field-length';
 import {
@@ -126,9 +126,9 @@ export class TelegramProfile extends Verifiable {
     @Column("uuid", { nullable: true })
     bannedById?: string;
 
-    @ManyToOne(type => Agent, { nullable: true })
+    @ManyToOne(type => WbAgent, { nullable: true })
     @JoinColumn({ name: "bannedById" })
-    bannedBy?: Agent;
+    bannedBy?: WbAgent;
 
     @IsOptional()
     @IsPositive()

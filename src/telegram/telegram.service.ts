@@ -19,7 +19,7 @@
  * 
  */
 
-import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { assert } from 'console';
 import {
     Start,
@@ -37,14 +37,15 @@ import {
     BaseScene,
     Command,
 } from 'nestjs-telegraf';
-import { RegistrationActionRequired, TypeOfDocument, DocRejectionReason } from 'src/common/enum';
+import { RegistrationActionRequired, TypeOfDocument, DocRejectionReason, UserStatus } from 'src/common/enum';
 import { deleteFile, mimeTypes } from 'src/common/util';
 import { Profile } from 'src/profile/entities/profile.entity';
 import { TelegramProfile } from 'src/profile/entities/telegram-profile.entity';
 import { ProfileService } from 'src/profile/profile.service';
-import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, registrationCancelled } from './telegram.constants';
+import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, registrationCancelled, supportMsg } from './telegram.constants';
 import { getBioDataFileName, getPictureFileName, processBioDataFile, processPictureFile, validateBioDataFileSize, validatePhotoFileSize, } from './telegram.service.helper';
 import { Document } from 'src/profile/entities/document.entity';
+import { supportResolutionMaxLength, supportResolutionMinLength } from 'src/common/field-length';
 
 const logger = new Logger('TelegramService');
 
@@ -96,6 +97,7 @@ export class TelegramService {
         return !!telegramProfile;
     }
 
+
     // ref - https://github.com/telegraf/telegraf/issues/810
     // ref - https://github.com/telegraf/telegraf/issues/705
     createRegistrationWizard() {
@@ -113,7 +115,7 @@ export class TelegramService {
                 let telegramProfile = await this.getProfile(ctx);
                 if (telegramProfile) {
                     ctx.wizard.state.data.telegramProfileId = telegramProfile.id;
-                    const status: RegistrationActionRequired = await this.profileService.getRegistrationStatus(telegramProfile.id);
+                    const status: RegistrationActionRequired = await this.profileService.getRegistrationAction(telegramProfile.id);
                     logger.log(`status: ${JSON.stringify(status)}`);
                     ctx.wizard.state.data.status = status;
                 } else {
@@ -607,6 +609,77 @@ export class TelegramService {
     }
 
 
+    createSupportWizard() {
+        const supportWizard = new WizardScene(
+            'support-wizard',
+
+            // Step -1
+            async (ctx: Context) => {
+                await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+
+                ctx.wizard.state.data = {};
+                logger.log(`createSupportWizard():: step-1`);
+
+                // check if the user has already been registered.
+                let telegramProfile = await this.getProfile(ctx);
+
+                if (!telegramProfile) {
+                    telegramProfile = await this.createTelegramProfile(ctx);
+                } else {
+                    logger.log(`telegram profile: ${telegramProfile}`);
+                }
+                ctx.wizard.state.data.telegramProfileId = telegramProfile.id;
+
+                await ctx.reply(supportMsg);
+
+                logger.log('calling step-2');
+                return ctx.wizard.next();
+            },
+
+            // step-2: read query/feedback, upload to table
+            async (ctx: Context) => {
+                logger.log(`createSupportWizard():: step-2`);
+                await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+
+                if (ctx.message.text) {
+                    const msg = ctx.message.text;
+
+                    if (msg.toLocaleLowerCase() === 'cancel') {
+                        await ctx.reply('Cancelled');
+                        return ctx.scene.leave();
+                    }
+
+                    if (msg.length < supportResolutionMinLength || msg.length > supportResolutionMaxLength) {
+                        await ctx.reply(`Please try again while keeping the query/feedback length between ${supportResolutionMinLength} to ${supportResolutionMaxLength} characters.`)
+                        return;
+                    }
+
+                    try {
+                        const ticket = await this.profileService.createSupportTicket(ctx.wizard.state.data.telegramProfileId, msg.toLocaleLowerCase());
+                        await ctx.reply(`Your query/feedback has been saved. We will get back to you in a few days.`);
+                    } catch (error) {
+                        logger.log('Could not Open new support ticket due to the following error:\n' + JSON.stringify(error));
+
+                        // TODO: Confirm that this is actually a conflict error
+                        await ctx.reply('You have already opened one support ticket. Cannot open another until that is resolved or closed from your end.');
+                    }
+
+                }
+                else {
+                    await ctx.reply(`Type your query/feedback or type "Cancel" to quit.`);
+                    return;
+                }
+            }
+        );
+
+        const stage = new Stage([supportWizard]);
+        this.bot.use(stage.middleware());
+        this.bot.command('support', ctx => {
+            ctx.scene.enter('support-wizard');
+        });
+    }
+
+
     @Start()
     async start(ctx: Context) {
         const msg = ctx.message;
@@ -649,7 +722,53 @@ export class TelegramService {
     @Command('status')
     async status(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        await ctx.reply('TODO')
+
+        let telegramProfile = await this.getProfile(ctx);
+        if (!telegramProfile) {
+            telegramProfile = await this.createTelegramProfile(ctx);
+        }
+
+        let msg = '';
+
+        switch (telegramProfile.status) {
+            case UserStatus.UNREGISTERED:
+            case UserStatus.PHONE_VERIFIED:
+                msg = 'You are unregistered. Please type or click on /register to register.'
+                break;
+
+            case UserStatus.ACTIVATION_PENDING:
+                msg = 'Your profile activation is pending at our end. We will verify your submitted bio-data and profile-picture shortly and notify you of the decision.'
+                break;
+
+            case UserStatus.ACTIVATION_FAILED:
+                msg = `Your profile activation failed.`
+                const causingDocument = await this.profileService.getInvalidatedDocumentCausingProfileInvalidation(telegramProfile.id)
+                if (causingDocument?.invalidationReason) {
+                    msg += `\n Reason - ${causingDocument.invalidationReason}.`
+                }
+                if (causingDocument?.invalidationDescription) {
+                    msg += `\n Description - ${causingDocument.invalidationDescription}`
+                }
+                break;
+
+            case UserStatus.ACTIVATED:
+                msg = 'Your profile is activated and requires no action from you.'
+                break;
+
+            case UserStatus.DEACTIVATED:
+                msg = 'Your profile is deactivated. In this state, you will neither receive any matches nor your profile with be shared with your matches. To reactivate it, use /reactivate command.'
+                break;
+
+            case UserStatus.DELETED:
+                msg = 'Your profile has been deleted.'
+                break;
+
+            case UserStatus.BANNED:
+                msg = 'Your profile has been banned.'
+                break;
+        }
+
+        await ctx.reply(msg);
     }
 
 
@@ -658,14 +777,14 @@ export class TelegramService {
     @Hears('hey')
     async hears(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        await ctx.reply('Hi there');
+        await ctx.reply('Hi there! Type or click on /help to see how you can interact with me. ');
     }
 
 
     @Command('support')
     async support(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        await ctx.reply('Please email your issue to us on `support@wouldbee.com` and we will try our best to help you out.')
+        await ctx.reply(`Please email your issue to us on "support@wouldbee.com" and we will try our best to help you out.`)
     }
 
 
