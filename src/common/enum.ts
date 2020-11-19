@@ -38,12 +38,24 @@ export enum RegistrationActionRequired {
 }
 
 
-export enum RegistrationStatus {
+export enum UserStatus {
     UNREGISTERED = 1,
     PHONE_VERIFIED,
-    BIO_UPLOADED,
-    PICTURE_UPLOADED,
+    ACTIVATION_PENDING,
+    ACTIVATION_FAILED,
+    ACTIVATED,
+    DEACTIVATED,
+    DELETED,
+    BANNED,
 }
+
+
+// export enum RegistrationStatus {
+//     UNREGISTERED = 1,
+//     PHONE_VERIFIED,
+//     BIO_UPLOADED,
+//     PICTURE_UPLOADED,
+// }
 
 
 export enum UserRole {
@@ -336,6 +348,7 @@ export enum ProfileDeletionReason {
     UNHAPPY_REPEATED_MATCHES,
     UNHAPPY_FEW_MATCHES,
     UNHAPPY_TECHNICAL_ISSUE,
+    BAN,
     OTHER
 }
 
@@ -373,8 +386,7 @@ export enum UserStatOptions {
     INVALID,
     ACTIVE,
     DEACTIVATED,
-    SELF_DELETED,
-    SYSTEM_DELETED,
+    DELETED,
     BANNED,
     TOTAL,  // misleading - removes banned, deleted, registration_failures
 }

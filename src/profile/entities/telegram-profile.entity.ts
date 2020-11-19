@@ -1,6 +1,6 @@
-import { IsInt, IsOptional, IsPositive } from 'class-validator';
+import { IsInt, IsOptional, IsPositive, IsString, MaxLength } from 'class-validator';
 import { Agent } from 'src/agent/entities/agent.entity';
-import { ReasonForProfileBan } from 'src/common/enum';
+import { ProfileDeletionReason, ReasonForProfileBan, UserStatus } from 'src/common/enum';
 import { docRejectionReasonMaxLength } from 'src/common/field-length';
 import {
     Entity,
@@ -82,7 +82,43 @@ export class TelegramProfile extends Verifiable {
     idProof?: Document;
 
     @Column({ nullable: true })
-    isBanned?: boolean;
+    unverifiedBioDataId?: number;
+
+    @OneToOne(type => Document)
+    @JoinColumn({
+        name: "unverifiedBioDataId",
+        referencedColumnName: "id",
+    })
+    unverifiedBioData?: Document;
+
+    @Column({ nullable: true })
+    unverifiedPictureId?: number;
+
+    @OneToOne(type => Document)
+    @JoinColumn({
+        name: "unverifiedPictureId",
+        referencedColumnName: "id",
+    })
+    unverifiedPicture?: Document;
+
+    @Column({ nullable: true })
+    unverifiedIdProofId?: number;
+
+    @OneToOne(type => Document)
+    @JoinColumn({
+        name: "unverifiedIdProofId",
+        referencedColumnName: "id",
+    })
+    unverifiedIdProof?: Document;
+
+    // @Column({ nullable: true })
+    // isBanned?: boolean;
+
+    @IsOptional()
+    @IsPositive()
+    @IsInt()
+    @Column("smallint", { nullable: true })
+    status?: UserStatus;
 
     @Column({ "nullable": true })
     bannedOn?: Date;
@@ -101,8 +137,14 @@ export class TelegramProfile extends Verifiable {
     reasonForBan?: ReasonForProfileBan;
 
     @IsOptional()
-    @IsPositive()
-    @IsInt()
+    @MaxLength(docRejectionReasonMaxLength)
+    @IsString()
     @Column("varchar", { nullable: true, length: docRejectionReasonMaxLength })
     banDescription?: string;
+
+    @IsOptional()
+    @IsPositive()
+    @IsInt()
+    @Column("smallint", { nullable: true })
+    reasonForDeletion?: ProfileDeletionReason;
 }

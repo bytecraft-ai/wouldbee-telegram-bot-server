@@ -5,16 +5,16 @@ const logger = new Logger('AppController');
 @Controller()
 export class AppController {
 
-  @Get('/')
-  @Render('index')
-  index() { }
+  // @Get('/')
+  // @Render('index')
+  // index() { }
 
-  @Get('/privacy')
-  @Render('privacy')
-  privacy() { }
+  // @Get('/privacy')
+  // @Render('privacy')
+  // privacy() { }
 
-  @Get('/terms')
-  @Render('terms')
-  terms() { }
+  // @Get('/terms')
+  // @Render('terms')
+  // terms() { }
 
 }

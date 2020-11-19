@@ -258,14 +258,15 @@ export class TelegramProfileController {
     }
 
 
-    @Post('/validate/:id')
+    // @Post('/validate/:id')
+    @Post('/validate')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async validateOrRejectDocument(
         @GetAgent() agent: Agent,
-        @Param('id') id: string,
+        // @Param('id') id: string,
         @Body() body: DocumentValidationDto) {
-        console.log('id:', id, 'body:', body);
-        await this.profileService.validateDocument(id, body, agent);
+        // console.log('id:', id, 'body:', body);
+        await this.profileService.validateDocument(body, agent);
         return { status: 'OK' };
     }
 
@@ -308,7 +309,7 @@ export class ProfileController {
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async createProfile(@Body() createProfileDto: CreateProfileDto) {
         console.log('create profile with', createProfileDto);
-        return this.profileService.createProfile(createProfileDto);
+        return this.profileService.saveProfile(createProfileDto);
     }
 }
 
