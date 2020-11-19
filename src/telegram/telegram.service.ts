@@ -5,11 +5,17 @@
  * 
  *  2. Implement status - what does a user need to do next
  * 
- *  3. Implement sharing of bio-data with user
+ *  3. Test sharing of bio-data with user
  * 
  *  5. Implement thumbnails for bio-data
  * 
  *  6. Notify user on bio/picture verification
+ * 
+ *  7. Implement temporary deactivation of profiles
+ * 
+ *  8. Implement permanent deletion of profiles
+ * 
+ *  9. Give status on /help - message
  * 
  */
 
@@ -38,9 +44,6 @@ import { TelegramProfile } from 'src/profile/entities/telegram-profile.entity';
 import { ProfileService } from 'src/profile/profile.service';
 import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, registrationCancelled } from './telegram.constants';
 import { getBioDataFileName, getPictureFileName, processBioDataFile, processPictureFile, validateBioDataFileSize, validatePhotoFileSize, } from './telegram.service.helper';
-import { Cron } from '@nestjs/schedule';
-import { Queue } from 'bull';
-import { InjectQueue } from '@nestjs/bull';
 import { Document } from 'src/profile/entities/document.entity';
 
 const logger = new Logger('TelegramService');
@@ -53,7 +56,7 @@ const processToPdf = true;
 export class TelegramService {
 
     constructor(
-        @InjectQueue('send-profile') private sendProfileQueue: Queue,
+        // @InjectQueue('scheduler-queue') private schedulerQueue: Queue,
         @InjectBot() private bot: TelegrafProvider,
 
         @Inject(forwardRef(() => ProfileService))
@@ -675,17 +678,6 @@ export class TelegramService {
     async feedback(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         await ctx.reply('This feature will be released soon.')
-    }
-
-
-    // ref- https://crontab.guru/#15_8-20/3_*_*_*
-    @Cron('*/16 5 8-21/3 * * *')   // try every 16 second of 5th minute
-    // @Cron('*/10 * 8-21/3 * * *')
-    async handleCron() {
-        logger.debug('Scheduling send profiles task');
-        const jobId = (new Date()).setSeconds(0, 0);
-        // setting job-id equal to date value up to minute ensure that duplicate values added in the minute (every 16th second) are not added. This is done to make it more probable that the task gets scheduled at least once (at 16th, 32nd, or 48th second) and at most once.
-        await this.sendProfileQueue.add({ task: 'send-profiles' }, { jobId })
     }
 
 

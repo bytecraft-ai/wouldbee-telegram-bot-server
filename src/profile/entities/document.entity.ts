@@ -78,4 +78,16 @@ export class Document extends Verifiable {
     @IsOptional()
     @Column("varchar", { length: mimeMaxLength, nullable: true })
     mimeType?: string;
+
+    @IsOptional()
+    @IsPositive()
+    @IsInt()
+    @Column("smallint", { nullable: true })
+    invalidationReason?: DocRejectionReason;
+
+    @IsOptional()
+    @IsPositive()
+    @IsInt()
+    @Column("varchar", { nullable: true, length: docRejectionReasonMaxLength })
+    invalidationDescription?: string;
 }

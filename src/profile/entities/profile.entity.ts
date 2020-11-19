@@ -23,15 +23,8 @@ import { nameMaxLength, nameMinLength } from 'src/common/field-length';
 import { Caste } from './caste.entity';
 import { City } from './city.entity';
 import { PartnerPreference } from './partner-preference.entity';
-// import { SharedMatch } from './shared-profiles.entity';
 import { TelegramProfile } from './telegram-profile.entity';
 import { Language, MaritalStatus } from 'src/common/enum';
-// import { Field, ID, ObjectType } from '@nestjs/graphql';
-// import { IdProof } from './id-proof.entity';
-// import { ProfilePicture } from './picture.entity';
-// import { BioData } from './bio-data.entity';
-// import { Document } from './update.entity';
-// import { User } from './user.entity';
 
 // TODO: implement table indexing on important columns
 
@@ -150,44 +143,14 @@ export class Profile {
     @OneToOne(type => PartnerPreference)
     partnerPreference: PartnerPreference;
 
-    // @OneToOne(type => IdProof, idProof => idProof.profile)
-    // idProof: IdProof;
+    @Column({ nullable: true })
+    deactivatedOn?: Date;
 
-    // @OneToOne(type => ProfilePicture, picture => picture.profile)
-    // picture: ProfilePicture;
-
-    // @OneToOne(type => BioData, bioData => bioData.profile)
-    // bioData: BioData;
-
-    // @OneToMany(type => Document, update => update.profile)
-    // updates: Document[]
-
-    // // profile shared with other profiles
-    // @OneToMany(
-    //     type => SharedMatch,
-    //     sharedProfile => sharedProfile.sharedProfile,
-    //     { nullable: true }
-    // )
-    // sharedWithProfiles: SharedMatch[];
-
-    // // profiles shared with this profile
-    // @OneToMany(
-    //     type => SharedMatch,
-    //     sharedProfile => sharedProfile.sentToProfile,
-    //     { nullable: true }
-    // )
-    // sharedProfiles: SharedMatch[];
+    // This will be null if the deactivation is done by the system
+    // upon activation, the record will be deleted
+    @Column({ nullable: true })
+    activateOn?: Date;
 
     // @Column({ default: () => `now()` })
     // lastSeen: Date;
-
-    // @Column("smallint", { nullable: true })
-    // reasonForDeletion?: AccountDeletionReason;
-
-    // @Column({ unique: true, nullable: false })
-    // sharableId?: string;
-
-    // @Column({ unique: true, nullable: true })
-    // notificationId?: string;
-
 }

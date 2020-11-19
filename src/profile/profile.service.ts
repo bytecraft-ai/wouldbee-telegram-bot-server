@@ -1,8 +1,8 @@
 import { Injectable, UnauthorizedException, Logger, BadRequestException, NotFoundException, ConflictException, InternalServerErrorException, NotImplementedException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, RegistrationStatus, MaritalStatus, ProfileSharedWith, S3Option, RegistrationActionRequired, UserStatOptions } from 'src/common/enum';
-import { deDuplicateArray, getAgeInYearsFromDOB, setDifferenceFromArrays } from 'src/common/util';
-import { IsNull, Not, Repository, SelectQueryBuilder } from 'typeorm';
+import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, RegistrationStatus, MaritalStatus, ProfileSharedWith, S3Option, RegistrationActionRequired, UserStatOptions, ProfileDeactivationDuration, ProfileDeletionReason } from 'src/common/enum';
+import { daysAhead, deDuplicateArray, getAgeInYearsFromDOB, setDifferenceFromArrays } from 'src/common/util';
+import { IsNull, LessThanOrEqual, MoreThanOrEqual, Not, Repository, SelectQueryBuilder } from 'typeorm';
 // import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
 import { PartnerPreferenceDto, CreateUserDto, CreateProfileDto, RegistrationDto, CreateCasteDto } from './dto/profile.dto';
 import { Caste } from './entities/caste.entity';
@@ -33,6 +33,8 @@ import { Match } from './entities/match.entity';
 import _ from 'lodash';
 import { TelegramService } from 'src/telegram/telegram.service';
 import { BanProfileDto, DocumentValidationDto } from './dto/location.dto';
+import { DeactivatedProfile } from './entities/deactivated-profile.entity';
+import { Cron } from '@nestjs/schedule';
 
 const logger = new Logger('ProfileService');
 
@@ -45,18 +47,16 @@ export class ProfileService {
         @Inject(forwardRef(() => TelegramService))
         private readonly telegramService: TelegramService,
 
-        @InjectQueue('find-match') private matchFinderQueue: Queue,
+        @InjectQueue('scheduler-queue') private schedulerQueue: Queue,
 
-        // @InjectRepository(User) private userRepository: Repository<User>,
         @InjectRepository(Profile) private profileRepository: Repository<Profile>,
         @InjectRepository(TelegramProfile) private telegramRepository: Repository<TelegramProfile>,
-        // @InjectRepository(SharedMatch) private sharedProfileRepository: Repository<SharedMatch>,
+        @InjectRepository(DeactivatedProfile) private deactivatedProfileRepository: Repository<DeactivatedProfile>,
+
         @InjectRepository(Match) private matchRepository: Repository<Match>,
         @InjectRepository(PartnerPreference) private prefRepository: Repository<PartnerPreference>,
 
         @InjectRepository(Document) private documentRepository: Repository<Document>,
-        // @InjectRepository(AwsDocument) private awsDocumentRepository: Repository<AwsDocument>,
-        // @InjectRepository(InvalidDocument) private invalidDocumentRepository: Repository<InvalidDocument>,
 
         @InjectRepository(Caste) private casteRepository: Repository<Caste>,
         @InjectRepository(City) private cityRepository: Repository<City>,
@@ -65,107 +65,10 @@ export class ProfileService {
     ) { }
 
 
-    // checkTelegramAuth(auth: TelegramAuthenticateDto): boolean {
-    //     if (!process.env.BOT_TOKEN) {
-    //         throw new InternalServerErrorException('Telegram Bot token is not set!');
-    //     }
-    //     console.log('auth:', JSON.stringify(auth));
-    //     const now = Date.now() / 1000;
-    //     const timeDiff = now - parseInt(auth.auth_date);
-    //     console.log('now:', now, 'timeDiff:', timeDiff);
-
-    //     const checkString: string = Object.keys(auth)
-    //         .filter(key => key !== 'hash')
-    //         .map(key => `${key}=${auth[key]}`)
-    //         .sort()
-    //         .join('\n');
-
-    //     const secret = createHash('sha256')
-    //         .update(process.env.BOT_TOKEN)
-    //         .digest();
-
-    //     const hash = createHmac('sha256', secret)
-    //         .update(checkString)
-    //         .digest('hex');
-
-    //     return auth.hash === hash; // && timeDiff < constants.telegram.authExpiresIn;
-    // }
-
-
-    // async sendMessage(): Promise<boolean> {
-    //     return true;
-    // }
-
-
-    // async getUsers(): Promise<User[] | undefined> {
-    //     return this.userRepository.find();
-    // }
-
-
-    // async getUserByPhone(phone: string, throwOnFail = true): Promise<User | undefined> {
-    //     // const user = await this.userRepository.findOne({
-    //     //     where: { phone: phone }
-    //     // });
-    //     // if (throwOnFail && !user) {
-    //     //     throw new NotFoundException(`user with phone: ${phone} not found!`);
-    //     // }
-    //     // return user;
-
-    //     const user = await this.userRepository.createQueryBuilder("user")
-    //         .leftJoinAndSelect("user.country", 'country')
-    //         .where("country.phoneCode || user.phone LIKE :phone",
-    //             { phone }).getOne();
-    //     // .orWhere("user.phone LIKE :phone",
-    //     //     { phone: `phone` }).getOne();
-    //     if (throwOnFail && !user) {
-    //         throw new NotFoundException(`user with phone: ${phone} not found!`);
-    //     }
-    //     return user;
-    // }
-
-
-    // async getUser(id: string, throwOnFail = true): Promise<User | undefined> {
-    //     const user = await this.userRepository.findOne(id);
-    //     if (throwOnFail && !user) {
-    //         throw new NotFoundException('user not found!');
-    //     }
-    //     return user;
-    // }
-
-
-    // async createUser(userInput: CreateUserDto): Promise<User | undefined> {
-    //     const { email, phone, countryId } = userInput;
-
-    //     let country: Country;
-    //     if (!countryId) {
-    //         country = await this.getCountryByName('India', true);
-    //     } else {
-    //         country = await this.getCountry(countryId, true);
-    //     }
-
-    //     console.log('country:', country);
-
-    //     let user = await this.userRepository.findOne({
-    //         where: [
-    //             { email: email },
-    //             { phone: phone }
-    //         ]
-    //     });
-    //     if (user) {
-    //         throw new ConflictException('user with email/phone already exists!');
-    //     }
-
-    //     user = this.userRepository.create({
-    //         email,
-    //         country,
-    //         phone
-    //     });
-    //     return this.userRepository.save(user);
-    // }
-
-
+    // TODO: test
     async userStats(userType: UserStatOptions): Promise<IUserStats> {
         let query: SelectQueryBuilder<TelegramProfile>;
+        let profileQuery: SelectQueryBuilder<Profile>;
         let output: IUserStats;
 
         switch (userType) {
@@ -233,12 +136,20 @@ export class ProfileService {
                 };
 
             case UserStatOptions.TOTAL:
-                const counts_ = await
-                    this.profileRepository.createQueryBuilder('profile')
-                        .select('profile.gender')
-                        .addSelect('COUNT(profile.id)', 'count')
-                        .groupBy('profile.gender')
-                        .getRawMany();
+            case UserStatOptions.ACTIVE:
+            case UserStatOptions.DEACTIVATED:
+                profileQuery =
+                    this.profileRepository.createQueryBuilder('profile');
+
+                if (userType === UserStatOptions.DEACTIVATED)
+                    profileQuery.where('profile.active = false')
+                else if (userType === UserStatOptions.ACTIVE)
+                    profileQuery.where('profile.active = true')
+
+                profileQuery.select('profile.gender')
+                    .addSelect('COUNT(profile.id)', 'count')
+                    .groupBy('profile.gender')
+                    .getRawMany();
 
                 for (const iterator of counts) {
                     if (iterator['gender'] === Gender.MALE) {
@@ -251,7 +162,6 @@ export class ProfileService {
                 output.total = output.male + output.female;
                 return output;
 
-            case UserStatOptions.DEACTIVATED:
             case UserStatOptions.SELF_DELETED:
             case UserStatOptions.SYSTEM_DELETED:
             default:
@@ -296,7 +206,7 @@ export class ProfileService {
         const savedProfile = await this.profileRepository.save(profile);
 
         // add match-finding job to queue for create profile
-        await this.matchFinderQueue.add('create',
+        await this.schedulerQueue.add('create-profile',
             { profileId: savedProfile.id },
             { delay: 3000 }, // 3 seconds delayed
         );
@@ -402,12 +312,123 @@ export class ProfileService {
         logger.log(JSON.stringify(pref));
 
         // add match-finding job to queue for update profile
-        await this.matchFinderQueue.add('update',
+        await this.schedulerQueue.add('update-profile',
             { profileId: profile.id },
             { delay: 3000 }, // 3 seconds delayed
         );
 
         return pref;
+    }
+
+
+    // TODO: test
+    @Transactional()
+    async deleteProfile(telegramUserId: number, reason: ProfileDeletionReason) {
+        const telegramProfile = await this.telegramRepository.findOne({
+            where: { telegramUserId },
+            relations: ['profile', 'documents']
+        });
+        if (!telegramProfile) {
+            throw new NotFoundException(`Telegram profile with telegram user id: ${telegramUserId} not found!`);
+        }
+
+        const profile: Profile = telegramProfile.profile;
+        if (!profile) {
+            throw new NotFoundException('Profile for this telegram user does not exist!');
+        }
+        await this.profileRepository.softRemove(profile);
+        await this.prefRepository.softDelete(telegramProfile.id);
+
+        const documents = telegramProfile.documents;
+        if (documents)
+            for await (let document of documents) {
+                await this.documentRepository.softRemove(document);
+            }
+    }
+
+    // TODO: test
+    // @Transactional()
+    async deactivateProfile(profile: Profile, deactivateFor: ProfileDeactivationDuration): Promise<Profile | undefined> {
+        if (profile.deactivatedOn) {
+            throw new ConflictException('Profile already deactivated!');
+        }
+
+        let activateOn: Date;
+        switch (deactivateFor) {
+            case ProfileDeactivationDuration.ONE_WEEK:
+                activateOn = daysAhead(7);
+                break;
+            case ProfileDeactivationDuration.TWO_WEEKS:
+                activateOn = daysAhead(15);
+                break;
+            case ProfileDeactivationDuration.ONE_MONTH:
+                activateOn = daysAhead(30);
+                break;
+            case ProfileDeactivationDuration.TWO_MONTHS:
+                activateOn = daysAhead(60);
+                break;
+            case ProfileDeactivationDuration.INDEFINITELY:
+                activateOn = null;
+                break;
+            default:
+                throw new Error('Choose one of the values from ProfileDeactivationDuration enum');
+        }
+
+        profile.deactivatedOn = new Date();
+        profile.activateOn = activateOn;
+        return this.profileRepository.save(profile);
+    }
+
+
+    // TODO: test
+    // @Transactional()
+    async activateProfile(profile: Profile): Promise<Profile | undefined> {
+        if (!profile.deactivatedOn) {
+            throw new ConflictException('Profile is already active!');
+        }
+
+        profile.deactivatedOn = null;
+        profile.activateOn = null;
+        return this.profileRepository.save(profile);
+    }
+
+
+    // TODO: test
+    async activateProfiles() {
+        const today = new Date();
+        today.setHours(23, 59, 59);
+
+        await this.profileRepository
+            .createQueryBuilder('profile')
+            .update()
+            .set({ deactivatedOn: null, activateOn: null })
+            .where('profile.deactivatedOn IS NOT NULL')
+            .andWhere('profile.activateOn <= :today', { today })
+            .execute();
+
+        // const count = await this.profileRepository.count({
+        //     where: {
+        //         deactivatedOn: Not(IsNull()),
+        //         activateOn: LessThanOrEqual(today)
+        //     }
+        // });
+
+        // let skip = 0, take = 50;
+        // while (skip < count) {
+        //     const profiles = await this.profileRepository.find({
+        //         where: {
+        //             deactivatedOn: Not(IsNull()),
+        //             activateOn: LessThanOrEqual(today)
+        //         },
+        //         skip,
+        //         take
+        //     });
+        //     for await (const profile of profiles) {
+        //         await this.activateProfile(profile);
+        //     }
+        //     skip += 50;
+        //     take += 50;
+        // }
     }
 
 
@@ -1647,5 +1668,29 @@ export class ProfileService {
             maleAgeList: maleAgeList,
             femaleAgeList: femaleAgeList,
         }
+    }
+
+
+    /**
+     * Cron Task Schedulers
+     */
+
+    // ref- https://crontab.guru/#15_8-20/3_*_*_*
+    @Cron('*/16 5 8-21/3 * * *')   // try every 16 second of 5th minute
+    // @Cron('*/10 * 8-21/3 * * *')
+    async queueSendProfilesTask() {
+        logger.debug('Scheduling send-profiles task');
+        const jobId = (new Date()).setSeconds(0, 0);
+        // setting job-id equal to date value up to minute ensure that duplicate values added in the minute (every 16th second) are not added. This is done to make it more probable that the task gets scheduled at least once (at 16th, 32nd, or 48th second) and at most once.
+        await this.schedulerQueue.add({ task: 'send-profiles' }, { jobId })
+    }
+
+
+    @Cron('1 1 0 * * *')   // try everyday at 12:01:01 am
+    async queueActivateProfilesTask() {
+        logger.debug('Scheduling activate-profiles task');
+        const jobId = (new Date()).setSeconds(0, 0);
+        // setting job-id equal to date value up to minute ensure that duplicate values added in the minute (every 16th second) are not added. This is done to make it more probable that the task gets scheduled at least once (at 16th, 32nd, or 48th second) and at most once.
+        await this.schedulerQueue.add({ task: 'activate-profiles' }, { jobId })
     }
 }

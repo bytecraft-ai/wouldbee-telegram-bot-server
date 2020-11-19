@@ -154,11 +154,32 @@ export function getAgeInYearsFromDOB(dateOfBirth: Date): number {
 }
 
 
-export function daysAgo(days: number): Date {
+export function shiftDays(days: number, agoTrueAheadFalse: boolean, setTimeToZero?: boolean): Date {
     var d = new Date();
-    d.setDate(d.getDate() - days);
-    d.setHours(0, 0, 0, 0);
+
+    if (agoTrueAheadFalse)
+        d.setDate(d.getDate() - days);
+    else
+        d.setDate(d.getDate() + days);
+
+    if (setTimeToZero)
+        d.setHours(0, 0, 0, 0);
+
     return d;
+}
+
+
+export function daysAhead(days: number, setTimeToZero = true): Date {
+    return shiftDays(days, false, setTimeToZero);
+}
+
+
+export function daysAgo(days: number, setTimeToZero = true): Date {
+    // var d = new Date();
+    // d.setDate(d.getDate() - days);
+    // d.setHours(0, 0, 0, 0);
+    // return d;
+    return shiftDays(days, true, setTimeToZero);
 }
 
 

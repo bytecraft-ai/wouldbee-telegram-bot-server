@@ -4,9 +4,6 @@ import {
     JoinColumn,
 } from 'typeorm';
 import { Agent } from 'src/agent/entities/agent.entity';
-import { IsInt, IsOptional, IsPositive } from 'class-validator';
-import { docRejectionReasonMaxLength } from 'src/common/field-length';
-import { DocRejectionReason } from 'src/common/enum';
 
 export abstract class Verifiable {
 
@@ -27,16 +24,4 @@ export abstract class Verifiable {
     @ManyToOne(type => Agent, { nullable: true })
     @JoinColumn({ name: "verifierId" })
     verifiedBy?: Agent;
-
-    @IsOptional()
-    @IsPositive()
-    @IsInt()
-    @Column("smallint", { nullable: true })
-    invalidationReason?: DocRejectionReason;
-
-    @IsOptional()
-    @IsPositive()
-    @IsInt()
-    @Column("varchar", { nullable: true, length: docRejectionReasonMaxLength })
-    invalidationDescription?: string;
 }

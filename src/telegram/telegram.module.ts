@@ -1,4 +1,4 @@
-import { BullModule } from '@nestjs/bull';
+// import { BullModule } from '@nestjs/bull';
 import { forwardRef, Logger, Module } from '@nestjs/common';
 import { TelegrafModule } from 'nestjs-telegraf';
 import { ProfileModule } from 'src/profile/profile.module';
@@ -19,11 +19,9 @@ logger.log(`STAGING_BOT_TOKEN: ${process.env.STAGING_BOT_TOKEN}`);
           ? process.env.DEV_BOT_TOKEN
           : process.env.STAGING_BOT_TOKEN,
     }),
-    BullModule.registerQueue(
-      {
-        name: 'send-profile',
-      }
-    ),
+    // BullModule.registerQueue(
+    //   { name: 'scheduler-queue' },
+    // ),
     forwardRef(() => ProfileModule),
   ],
   providers: [TelegramService],
