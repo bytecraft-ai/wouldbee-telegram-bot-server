@@ -11,9 +11,10 @@ import {
 import { IsInt, IsOptional, IsPositive, IsString, Length } from 'class-validator';
 import { supportQueryMaxLength, supportQueryMinLength, supportResolutionMinLength, supportResolutionMaxLength } from 'src/common/field-length';
 import { SupportTicketCategory } from 'src/common/enum';
-import { TelegramProfile } from './telegram-profile.entity';
+import { TelegramAccount } from './telegram-profile.entity';
 import { Verifiable } from './abstract-verifiable.entity';
 import { WbAgent } from 'src/agent/entities/agent.entity';
+import { Exclude } from 'class-transformer';
 
 
 // Records all document updates.
@@ -26,7 +27,7 @@ export class Support extends Verifiable {
     telegramProfileId: string;
 
     @ManyToOne(
-        type => TelegramProfile,
+        type => TelegramAccount,
         telegramProfile => telegramProfile.documents,
         { nullable: false }
     )
@@ -34,7 +35,7 @@ export class Support extends Verifiable {
         name: "telegramProfileId",
         referencedColumnName: "id",
     })
-    telegramProfile: TelegramProfile;
+    telegramProfile: TelegramAccount;
 
     @IsOptional()
     @Length(supportQueryMinLength, supportQueryMaxLength)
@@ -48,6 +49,7 @@ export class Support extends Verifiable {
     @UpdateDateColumn()
     updatedOn?: Date;
 
+    @Exclude()
     @DeleteDateColumn()
     deletedOn?: Date;
 

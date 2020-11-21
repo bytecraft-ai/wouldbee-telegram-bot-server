@@ -17,8 +17,11 @@ export const stateCodeMaxLength = 10;
 export const countryMinLength = 3;
 export const countryMaxLength = 50;
 
-export const phoneCodeMinLength = 2;
-export const phoneCodeMaxLength = 20;
+export const phoneCodeMinLength = 1;
+export const phoneCodeMaxLength = 10;
+
+export const phoneMinLength = 4;
+export const phoneMaxLength = 20;
 
 
 // Files & urls

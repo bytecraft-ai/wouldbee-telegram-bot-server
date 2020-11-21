@@ -1,13 +1,12 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
-// import { join } from 'path';
 import { AppModule } from './app.module';
 import { get } from 'config';
 
 require('dotenv').config();
 const serverConfig = get('server');
 
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { ClassSerializerInterceptor, Logger, ValidationPipe } from '@nestjs/common';
 
 import {
   initializeTransactionalContext,
@@ -37,6 +36,10 @@ async function bootstrap() {
     //   enableImplicitConversion: true
     // }
   }));
+
+  const reflector = app.get(Reflector);
+  app.useGlobalInterceptors(new ClassSerializerInterceptor(reflector));
+
 
   await app.listen(process.env.SERVER_PORT || serverConfig.port);
   logger.log(`Application listening on port ${process.env.SERVER_PORT || serverConfig.port}`);

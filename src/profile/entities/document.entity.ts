@@ -12,8 +12,9 @@ import {
 import { IsBoolean, IsInt, IsOptional, IsPositive, IsString, Length, MaxLength } from 'class-validator';
 import { docRejectionReasonMaxLength, fileNameMaxLength, fileNameMinLength, mimeMaxLength, urlMaxLength } from 'src/common/field-length';
 import { DocRejectionReason, TypeOfDocument, TypeOfIdProof } from 'src/common/enum';
-import { TelegramProfile } from './telegram-profile.entity';
+import { TelegramAccount } from './telegram-profile.entity';
 import { Verifiable } from './abstract-verifiable.entity';
+import { Exclude } from 'class-transformer';
 // import { AwsDocument } from './aws-document.entity';
 // import { InvalidDocument } from './invalid-document.entity';
 
@@ -28,7 +29,7 @@ export class Document extends Verifiable {
     telegramProfileId: string;
 
     @ManyToOne(
-        type => TelegramProfile,
+        type => TelegramAccount,
         telegramProfile => telegramProfile.documents,
         { nullable: false }
     )
@@ -36,7 +37,7 @@ export class Document extends Verifiable {
         name: "telegramProfileId",
         referencedColumnName: "id",
     })
-    telegramProfile: TelegramProfile;
+    telegramProfile: TelegramAccount;
 
     @CreateDateColumn()
     createdOn?: Date;
@@ -53,6 +54,7 @@ export class Document extends Verifiable {
     @Column("smallint", { nullable: true })
     typeOfIdProof?: TypeOfIdProof;
 
+    @Exclude()
     @IsString()
     @Column("varchar", { length: urlMaxLength })
     telegramFileId: string;

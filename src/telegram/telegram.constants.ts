@@ -27,7 +27,7 @@ export const helpMessage = `Hi there. You can use the following commands to avai
 
 /support - to get support or give feedback.
 
--- The below features will be released soon --
+-- The below features will be released soon
 
 /preference - set your partner preference to fine-tune the matches you receive.
 
@@ -40,7 +40,7 @@ export const helpMessage = `Hi there. You can use the following commands to avai
  * Notification Messages
  */
 
-export const registrationCancelled = `Registration cancelled`;
+export const registrationCancelled = `Registration cancelled. Use /register command to start registration process again or use /help command to see how to interact with the Would Bee bot.`;
 
 
 export const askForBioUploadMsg = `Upload your bio-data or type Cancel to quit.

@@ -4,7 +4,6 @@ import {
     JoinColumn,
     ManyToOne,
     OneToMany,
-    PrimaryGeneratedColumn,
     PrimaryColumn
 } from 'typeorm';
 import { IsString, Length, MaxLength } from 'class-validator';

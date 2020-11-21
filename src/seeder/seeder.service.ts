@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnApplicationBootstrap, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { readFileSync } from 'fs';
 import { AgentService } from 'src/agent/agent.service';
 import { AgentRegistrationDto } from 'src/agent/dto/agent-register.dto';
@@ -123,6 +123,13 @@ export class SeederService implements OnApplicationBootstrap {
             email: "tanugupta17@gmail.com",
             phone: "7023400244",
             name: "Tanuja Gupta",
+            password: "Password-1",
+            role: UserRole.AGENT
+        }
+        const yash: AgentRegistrationDto = {
+            email: 'yashsharma170898@gmail.com',
+            phone: "8910719147",
+            name: "Yash Sharma",
             password: "Password-1",
             role: UserRole.AGENT
         }

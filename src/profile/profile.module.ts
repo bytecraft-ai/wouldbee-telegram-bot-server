@@ -8,7 +8,7 @@ import { Country } from './entities/country.entity';
 import { PartnerPreference } from './entities/partner-preference.entity';
 import { Profile } from './entities/profile.entity';
 import { State } from './entities/state.entity';
-import { TelegramProfile } from './entities/telegram-profile.entity';
+import { TelegramAccount } from './entities/telegram-profile.entity';
 import { AwsServiceModule } from 'src/aws-service/aws-service.module';
 import { PassportModule } from '@nestjs/passport';
 import { Document } from './entities/document.entity';
@@ -24,7 +24,7 @@ import { ProfileMarkedForDeletion } from './entities/to-delete-profile.entity';
 
 @Module({
     imports: [AuthModule, AgentModule,
-        TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, TelegramProfile, Document, Match, Support, DeactivatedProfile, ProfileMarkedForDeletion]), AwsServiceModule,
+        TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, TelegramAccount, Document, Match, Support, DeactivatedProfile, ProfileMarkedForDeletion]), AwsServiceModule,
         PassportModule.register({ defaultStrategy: 'jwt' }),
         BullModule.registerQueue(
             { name: 'scheduler-queue' },

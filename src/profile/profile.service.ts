@@ -1,8 +1,8 @@
 import { Injectable, Logger, BadRequestException, NotFoundException, ConflictException, NotImplementedException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, MaritalStatus, ProfileSharedWith, S3Option, RegistrationActionRequired, UserStatOptions, ProfileDeactivationDuration, ProfileDeletionReason, UserStatus } from 'src/common/enum';
+import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, MaritalStatus, ProfileSharedWith, S3Option, RegistrationActionRequired, ProfileDeactivationDuration, ProfileDeletionReason, UserStatus } from 'src/common/enum';
 import { daysAhead, deDuplicateArray, getAgeInYearsFromDOB, nextWeek, setDifferenceFromArrays } from 'src/common/util';
-import { IsNull, LessThanOrEqual, Not, Repository, SelectQueryBuilder } from 'typeorm';
+import { LessThanOrEqual, Repository } from 'typeorm';
 import { PartnerPreferenceDto, CreateProfileDto, CreateCasteDto, SupportResolutionDto } from './dto/profile.dto';
 import { Caste } from './entities/caste.entity';
 import { City } from './entities/city.entity';
@@ -11,7 +11,7 @@ import { PartnerPreference } from './entities/partner-preference.entity';
 import { Profile } from './entities/profile.entity';
 import { State } from './entities/state.entity';
 import { GetCityOptions, GetStateOptions } from './profile.interface';
-import { TelegramProfile } from './entities/telegram-profile.entity';
+import { TelegramAccount } from './entities/telegram-profile.entity';
 import { AwsService } from 'src/aws-service/aws-service.service';
 import { Transactional } from 'typeorm-transactional-cls-hooked';
 import { CommonData, IList, IUserStats } from 'src/common/interface';
@@ -24,8 +24,8 @@ import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
 import { Match } from './entities/match.entity';
 import { TelegramService } from 'src/telegram/telegram.service';
-import { BanProfileDto, DocumentValidationDto } from './dto/location.dto';
-// import { DeactivatedProfile } from './entities/deactivated-profile.entity';
+import { BanProfileDto, DocumentValidationDto } from './dto/profile.dto';
+import { Context as TelgrafContext } from 'nestjs-telegraf';
 import { Cron } from '@nestjs/schedule';
 import { assert } from 'console';
 import { Support } from './entities/support.entity';
@@ -47,7 +47,7 @@ export class ProfileService {
         @InjectQueue('scheduler-queue') private schedulerQueue: Queue,
 
         @InjectRepository(Profile) private profileRepository: Repository<Profile>,
-        @InjectRepository(TelegramProfile) private telegramRepository: Repository<TelegramProfile>,
+        @InjectRepository(TelegramAccount) private telegramRepository: Repository<TelegramAccount>,
         @InjectRepository(DeactivatedProfile) private deactivatedProfileRepository:
             Repository<DeactivatedProfile>,
         @InjectRepository(ProfileMarkedForDeletion) private toDeleteProfileRepository: Repository<ProfileMarkedForDeletion>,
@@ -66,106 +66,31 @@ export class ProfileService {
 
 
     // TODO: test
-    async userStats(userType: UserStatOptions): Promise<IUserStats> {
-        let query: SelectQueryBuilder<TelegramProfile>;
-        let profileQuery: SelectQueryBuilder<Profile>;
-        let output: IUserStats;
+    async userStats(status: UserStatus): Promise<IUserStats> {
 
-        switch (userType) {
-            case UserStatOptions.REGISTRATION_FAILURE:
-                return {
-                    total: await this.telegramRepository.count({
-                        where: { phone: IsNull() }
-                    })
-                };
-
-            case UserStatOptions.NEW:
-                query = this.telegramRepository.createQueryBuilder('tprofile')
-                    .leftJoin('tprofile.document', 'document')
-                    .leftJoin('tprofile.profile', 'profile')
-                    .where('document.typeOfDocument = :tod', { tod: TypeOfDocument.BIO_DATA })
-                    .andWhere('document.fileName IS NOT NULL')
-                    .andWhere('profile.id IS NULL');
-                return {
-                    total: await query.getCount()
-                };
-
-            case UserStatOptions.VALID:
-                query = this.telegramRepository.createQueryBuilder('tprofile')
-                    // .leftJoin('tprofile.document', 'document')
-                    .leftJoin('tprofile.profile', 'profile')
-                    .select('profile.gender')
-                    .addSelect('COUNT(user.id)', 'count')
-                    // .where('document.typeOfDocument = :tod', { tod: TypeOfDocument.BIO_DATA })
-                    // .andWhere('document.fileName IS NOT NULL')
-                    .andWhere('profile.id IS NOT NULL')
-                    .groupBy('profile.gender');
-                const counts = await query.getRawMany();
-                console.log('valid users query result:', counts);
-
-                for (const iterator of counts) {
-                    if (iterator['gender'] === Gender.MALE) {
-                        output.male = iterator['count'];
+        return {
+            total: await this.telegramRepository.count({
+                where: { status }
+            }),
+            male: await this.telegramRepository.count({
+                join: {
+                    alias: 'telegram_profile',
+                    leftJoinAndSelect: {
+                        profile: 'telegram_profile.profile'
                     }
-                    else if (iterator['gender'] === Gender.FEMALE) {
-                        output.female = iterator['count'];
+                },
+                where: { gender: Gender.MALE }
+            }),
+            female: await this.telegramRepository.count({
+                join: {
+                    alias: 'telegram_profile',
+                    leftJoinAndSelect: {
+                        profile: 'telegram_profile.profile'
                     }
-                }
-
-                output.total = output.male + output.female;
-                return output;
-
-            case UserStatOptions.INVALID:
-                query = this.telegramRepository.createQueryBuilder('tprofile')
-                    .leftJoin('tprofile.document', 'document')
-                    .leftJoinAndSelect('tprofile.profile', 'profile')
-                    .where('document.typeOfDocument = :tod', { tod: TypeOfDocument.BIO_DATA })
-                    // bio should be invalidated
-                    .andWhere('document.isValid = false')
-                    // no other bio should be validated
-                    .andWhere('document.isValid != true');
-                return {
-                    total: await query.getCount()
-                };
-
-            case UserStatOptions.BANNED:
-                return {
-                    total: await this.telegramRepository.count({
-                        where: { isBanned: true }
-                    })
-                };
-
-            case UserStatOptions.TOTAL:
-            case UserStatOptions.ACTIVE:
-            case UserStatOptions.DEACTIVATED:
-                profileQuery =
-                    this.profileRepository.createQueryBuilder('profile');
-
-                if (userType === UserStatOptions.DEACTIVATED)
-                    profileQuery.where('profile.active = false')
-                else if (userType === UserStatOptions.ACTIVE)
-                    profileQuery.where('profile.active = true')
-
-                profileQuery.select('profile.gender')
-                    .addSelect('COUNT(profile.id)', 'count')
-                    .groupBy('profile.gender')
-                    .getRawMany();
-
-                for (const iterator of counts) {
-                    if (iterator['gender'] === Gender.MALE) {
-                        output.male = iterator['count'];
-                    }
-                    else if (iterator['gender'] === Gender.FEMALE) {
-                        output.female = iterator['count'];
-                    }
-                }
-                output.total = output.male + output.female;
-                return output;
-
-            case UserStatOptions.DELETED:
-            default:
-                throw new NotImplementedException('Not implemented!');
-        }
+                },
+                where: { gender: Gender.FEMALE }
+            }),
+        };
     }
 
 
@@ -173,19 +98,27 @@ export class ProfileService {
     async saveProfile(profileDto: CreateProfileDto): Promise<Profile | undefined> {
         const { telegramProfileId, name, gender, dob, religion, casteId, annualIncome, cityId, highestDegree, employedIn, occupation, motherTongue, maritalStatus } = profileDto;
 
-        const telegramProfile = await this.getTelegramProfileById(telegramProfileId, {
+        const telegramAccount = await this.getTelegramProfileById(telegramProfileId, {
             throwOnFail: true,
             relations: ['profile', 'bioData']
         });
 
-        const approvedBio = telegramProfile.bioData;
+        console.log(telegramAccount);
+        assert(telegramAccount.status === UserStatus.VERIFIED || telegramAccount.status === UserStatus.ACTIVATED, 'Cannot create/edit profile for telegram accounts in states other than verified/activated');
+
+        const approvedBio = telegramAccount.bioData;
         if (!approvedBio) {
-            throw new ConflictException('No approved bio-data exists for this profile.');
+            console.log('throwing conflict');
+            throw new ConflictException('No approved bio-data exists for this account.');
         }
 
-        let profile = telegramProfile.profile;
+        let createTrueEditFalse: Boolean;
+        let profile = telegramAccount.profile;
         if (!profile) {
+            createTrueEditFalse = true;
             profile = this.profileRepository.create();
+        } else {
+            createTrueEditFalse = false;
         }
 
         const caste = await this.getCaste(casteId, true);
@@ -207,12 +140,19 @@ export class ProfileService {
 
         try {
             profile = await this.profileRepository.save(profile);
-            if (telegramProfile.status === UserStatus.ACTIVATION_PENDING) {
+
+            if (telegramAccount.status === UserStatus.VERIFIED) {
                 await this.telegramRepository.update({ id: telegramProfileId }, { status: UserStatus.ACTIVATED });
             }
+
+            await this.setDefaultPartnerPreference(profile);
         } catch (error) {
             logger.error(`Could not save profile. Error:\n${JSON.stringify(error)}`);
             throw error;
+        }
+
+        if (createTrueEditFalse) {
+            this.telegramService.notifyUser(telegramAccount, 'Your profile has been activated! You will now receive matches as soon as we find one suitable for you.');
         }
 
         // add match-finding job to queue for create profile
@@ -253,6 +193,43 @@ export class ProfileService {
     }
 
 
+    async setDefaultPartnerPreference(profile: Profile): Promise<PartnerPreference | undefined> {
+
+        let pref = await this.getPreference(profile.id, { throwOnFail: false });
+        if (pref) {
+            return pref;
+        } else {
+            const age = getAgeInYearsFromDOB(profile.dob);
+
+            const minAge = profile.gender === Gender.MALE ?
+                Math.max(age - 6, 18) :
+                Math.max(age - 1, 21);
+
+            const maxAge = profile.gender === Gender.MALE ?
+                Math.max(age + 1, 18) :
+                Math.max(age + 6, 21)
+
+            const religions = [profile.religion]
+            const castes = [profile.caste];
+
+            let pref = this.prefRepository.create({
+                profile,
+                minAge,
+                maxAge,
+                religions,
+                castes
+            });
+
+            pref = await this.prefRepository.save(pref)
+
+            logger.log(`Created default preference for profile: ${JSON.stringify(profile)}`);
+            logger.log(`Preference: ${JSON.stringify(pref)}`);
+
+            return pref;
+        }
+    }
+
+
     async savePartnerPreference(preferenceInput: PartnerPreferenceDto): Promise<PartnerPreference> {
         let { id, minAge, maxAge, religions, casteIds, minimumIncome, cityIds, stateIds, countryIds } = preferenceInput;
         const profile = await this.getProfile(id, { throwOnFail: true });
@@ -262,72 +239,67 @@ export class ProfileService {
             pref = this.prefRepository.create();
         }
 
-        const age = getAgeInYearsFromDOB(profile.dob);
-        if (!minAge) {
-            minAge = profile.gender === Gender.MALE ? age - 6 : age - 1;
-        }
-        if (!maxAge) {
-            maxAge = profile.gender === Gender.MALE ? age + 1 : age + 6
-        }
-        minAge = Math.min(profile.gender === Gender.MALE ? 21 : 18, minAge)
-        maxAge = Math.max(profile.gender === Gender.MALE ? 21 : 18, maxAge)
-
-        if (!religions?.length) religions = [profile.religion]
-        if (!casteIds?.length) casteIds = [profile.casteId]
+        minAge = minAge
+            ? Math.max(profile.gender === Gender.MALE ? 18 : 21, minAge)
+            : minAge;
+        maxAge = maxAge ?
+            Math.max(profile.gender === Gender.MALE ? 18 : 21, maxAge)
+            : maxAge;
 
         const castes: Caste[] = [];
-        for (let casteId of casteIds) {
-            const caste = await this.getCaste(casteId, true);
-            castes.push(caste);
-        }
-
-        const cities: City[] = [];
-        if (cityIds) {
-            for (let cityId of cityIds) {
-                const city = await this.getCity(cityId, { throwOnFail: true });
-                cities.push(city);
+        if (casteIds) {
+            for (let casteId of casteIds) {
+                const caste = await this.getCaste(casteId, true);
+                castes.push(caste);
             }
-        }
 
-        const states: State[] = [];
-        if (stateIds) {
-            for (let stateId of stateIds) {
-                const state = await this.getState(stateId, { throwOnFail: true });
-                states.push(state);
+            const cities: City[] = [];
+            if (cityIds) {
+                for (let cityId of cityIds) {
+                    const city = await this.getCity(cityId, { throwOnFail: true });
+                    cities.push(city);
+                }
             }
-        }
 
-        const countries: Country[] = [];
-        if (countryIds) {
-            for (let countryId of countryIds) {
-                const country = await this.getCountry(countryId, true);
-                countries.push(country);
+            const states: State[] = [];
+            if (stateIds) {
+                for (let stateId of stateIds) {
+                    const state = await this.getState(stateId, { throwOnFail: true });
+                    states.push(state);
+                }
             }
+
+            const countries: Country[] = [];
+            if (countryIds) {
+                for (let countryId of countryIds) {
+                    const country = await this.getCountry(countryId, true);
+                    countries.push(country);
+                }
+            }
+
+            pref.castes = castes;
+            pref.cities = cities;
+            pref.states = states;
+            pref.countries = countries;
+
+            pref.minAge = minAge;
+            pref.maxAge = maxAge;
+            pref.religions = religions;
+            pref.minimumIncome = minimumIncome;
+            pref.profile = profile;
+
+            pref = await this.prefRepository.save(pref)
+
+            logger.log(`saved preference for profile with id: ${profile.id}`);
+
+            // add match-finding job to queue for update profile
+            await this.schedulerQueue.add('update-profile',
+                { profileId: profile.id },
+                { delay: 3000 }, // 3 seconds delayed
+            );
+
+            return pref;
         }
-
-        pref.castes = castes;
-        pref.cities = cities;
-        pref.states = states;
-        pref.countries = countries;
-
-        pref.minAge = minAge;
-        pref.maxAge = maxAge;
-        pref.religions = religions;
-        pref.minimumIncome = minimumIncome;
-        pref.profile = profile;
-
-        pref = await this.prefRepository.save(pref)
-
-        logger.log(`saved preference for profile: ${JSON.stringify(profile)}`);
-        logger.log(JSON.stringify(pref));
-
-        // add match-finding job to queue for update profile
-        await this.schedulerQueue.add('update-profile',
-            { profileId: profile.id },
-            { delay: 3000 }, // 3 seconds delayed
-        );
-
-        return pref;
     }
 
 
@@ -336,7 +308,7 @@ export class ProfileService {
     async softDeleteProfile(telegramUserId: number, reason: ProfileDeletionReason) {
         logger.log(`softDeleteProfile(telegramUserId: ${telegramUserId}): start`);
         const telegramProfile = await this.telegramRepository.findOne({
-            where: { telegramUserId },
+            where: { userId: telegramUserId },
             relations: ['profile']
         });
         if (!telegramProfile) {
@@ -390,8 +362,8 @@ export class ProfileService {
     @Transactional()
     async markProfileForDeletion(telegramUserId: number, reason: ProfileDeletionReason) {
         logger.log(`markProfileForDeletion(telegramUserId: ${telegramUserId}): start`);
-        const telegramProfile: TelegramProfile = await this.telegramRepository.findOne({
-            where: { telegramUserId },
+        const telegramProfile: TelegramAccount = await this.telegramRepository.findOne({
+            where: { userId: telegramUserId },
             relations: ['profile']
         });
         if (!telegramProfile) {
@@ -399,7 +371,7 @@ export class ProfileService {
         }
         let profile = telegramProfile.profile;
 
-        if (telegramProfile.status >= UserStatus.ACTIVATION_PENDING
+        if (telegramProfile.status >= UserStatus.UNVERIFIED
             && telegramProfile.status < UserStatus.PENDING_DELETION) {
             throw new ConflictException("Cannot delete banned or unregistered profiles.")
         }
@@ -439,7 +411,7 @@ export class ProfileService {
     @Transactional()
     async cancelProfileForDeletion(telegramUserId: number) {
         logger.log(`cancelProfileForDeletion(telegramUserId: ${telegramUserId}): start`);
-        const telegramProfile: TelegramProfile = await
+        const telegramProfile: TelegramAccount = await
             this.getTelegramProfileByTelegramUserId(telegramUserId, {
                 throwOnFail: true,
                 relations: ['profile']
@@ -710,7 +682,7 @@ export class ProfileService {
             telegramProfile.banDescription = banInput.banDescription;
             await this.telegramRepository.save(telegramProfile);
 
-            await this.softDeleteProfile(telegramProfile.telegramUserId,
+            await this.softDeleteProfile(telegramProfile.userId,
                 ProfileDeletionReason.Ban);
         }
         catch (error) {
@@ -861,7 +833,7 @@ export class ProfileService {
     }
 
 
-    async getTelegramProfileForSending(profile: Profile): Promise<TelegramProfile | undefined> {
+    async getTelegramProfileForSending(profile: Profile): Promise<TelegramAccount | undefined> {
         return this.getTelegramProfileById(profile.id, {
             throwOnFail: true,
             relations: ['bioData', 'picture', 'idProof']
@@ -917,27 +889,32 @@ export class ProfileService {
     }
 
 
-    async createTelegramProfile(telegramChatId: number, telegramUserId: number, phone?: string): Promise<TelegramProfile | undefined> {
+    async createTelegramProfile(ctx: TelgrafContext): Promise<TelegramAccount | undefined> {
+        const telegramChatId = ctx.chat.id;
+        const { id: telegramUserId, first_name, last_name, username } = ctx.from;
+        const name = (first_name || '' + ' ' + last_name || '').trim()
+
         if (!telegramUserId || !telegramChatId) {
             throw new BadRequestException('Requires non empty telegramUserId and chatId');
         }
         let telegramProfile = await this.telegramRepository.findOne({
             where: [
-                { phone },
-                { telegramUserId },
-                { telegramUserId }
+                { userId: telegramUserId },
+                { chatId: telegramChatId }
             ]
         })
         if (!telegramProfile) {
             telegramProfile = this.telegramRepository.create({
-                telegramChatId,
-                telegramUserId,
-                phone,
-                status: !!phone ? UserStatus.PHONE_VERIFIED : UserStatus.UNREGISTERED
+                chatId: telegramChatId,
+                userId: telegramUserId,
+                name: name || null,
+                username: username,
+                status: UserStatus.UNREGISTERED
             })
             telegramProfile = await this.telegramRepository.save(telegramProfile);
-            logger.log(`Created new telegram profile!`);
+            logger.log(`Created new telegram profile with id: ${telegramProfile.id}`);
         } else {
+            logger.error(`Telegram profile already exists, for inputs - telegramUserId: ${telegramUserId},  telegramChatId: ${telegramChatId}`);
             throw new ConflictException('Telegram profile already exists!');
         }
 
@@ -947,7 +924,7 @@ export class ProfileService {
 
 
     // TODO: update
-    async getTelegramProfilesForVerification(skip = 0, take = 20): Promise<IList<TelegramProfile> | undefined> {
+    async getTelegramProfilesForVerification(skip = 0, take = 20): Promise<IList<TelegramAccount> | undefined> {
 
         if (take < 1 || take > 100) {
             throw new Error('1 ≤ take ≥ 100');
@@ -968,7 +945,7 @@ export class ProfileService {
 
 
     // TODO: update
-    async getTelegramProfilesForUpdation(skip = 0, take = 20): Promise<IList<TelegramProfile> | undefined> {
+    async getTelegramProfilesForUpdation(skip = 0, take = 20): Promise<IList<TelegramAccount> | undefined> {
 
         if (take < 1 || take > 100) {
             throw new Error('1 ≤ take ≥ 100');
@@ -1081,7 +1058,7 @@ export class ProfileService {
     async getTelegramProfileById(id: string, {
         throwOnFail = true,
         relations = [],
-    }): Promise<TelegramProfile | undefined> {
+    }): Promise<TelegramAccount | undefined> {
         const telegramProfile = await this.telegramRepository.findOne(id, {
             relations
         });
@@ -1096,9 +1073,9 @@ export class ProfileService {
     async getTelegramProfileByTelegramUserId(telegramUserId: number, {
         throwOnFail = true,
         relations = []
-    }): Promise<TelegramProfile | undefined> {
+    }): Promise<TelegramAccount | undefined> {
         const telegramProfile = await this.telegramRepository.findOne({
-            where: { telegramUserId },
+            where: { userId: telegramUserId },
             relations
         });
         if (throwOnFail && !telegramProfile) {
@@ -1123,7 +1100,7 @@ export class ProfileService {
     // }
 
 
-    async savePhoneNumberForTelegramUser(id: string, phone: string): Promise<TelegramProfile | undefined> {
+    async savePhoneNumberForTelegramUser(id: string, phone: string): Promise<TelegramAccount | undefined> {
         if (!phone) {
             throw new Error("Phone number cannot be empty!");
         }
@@ -1249,8 +1226,8 @@ export class ProfileService {
                 case TypeOfDocument.BIO_DATA:
                     telegramProfile.unverifiedBioData = document;
                     if (telegramProfile.status === UserStatus.PHONE_VERIFIED
-                        || telegramProfile.status === UserStatus.ACTIVATION_FAILED) {
-                        telegramProfile.status = UserStatus.ACTIVATION_PENDING;
+                        || telegramProfile.status === UserStatus.VERIFICATION_FAILED) {
+                        telegramProfile.status = UserStatus.UNVERIFIED;
                     }
                     break;
                 case TypeOfDocument.PICTURE:
@@ -1351,10 +1328,10 @@ export class ProfileService {
                     if (valid)
                         telegramProfile.bioDataId = document.id;
 
-                    if (telegramProfile.status === UserStatus.ACTIVATION_PENDING) {
+                    if (telegramProfile.status === UserStatus.UNVERIFIED) {
                         telegramProfile.status = valid
-                            ? UserStatus.ACTIVATED
-                            : UserStatus.ACTIVATION_FAILED
+                            ? UserStatus.VERIFIED
+                            : UserStatus.VERIFICATION_FAILED
                     }
                     break;
                 case TypeOfDocument.PICTURE:
@@ -1372,6 +1349,8 @@ export class ProfileService {
                 default:
                     throw new NotImplementedException('Not implemented!');
             }
+
+            await this.telegramRepository.save(telegramProfile);
 
             if (valid) {
                 // find old active document, mark as inactive and delete from AWS in the end
@@ -1533,7 +1512,7 @@ export class ProfileService {
     }
 
 
-    async getReferee(payload: string): Promise<[Referee, null | TelegramProfile | WbAgent]> {
+    async getReferee(payload: string): Promise<[Referee, null | TelegramAccount | WbAgent]> {
         if (!payload) {
             return [Referee.NONE, null];
         } else if (payload === "w8e7d872-938c-4695-9a84-3e72e9d09a7eb") {

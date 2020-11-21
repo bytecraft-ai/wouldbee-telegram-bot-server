@@ -1,5 +1,5 @@
 import { IsString, Length, MaxLength } from 'class-validator';
-import { countryMinLength, countryMaxLength, phoneCodeMaxLength } from 'src/common/field-length';
+import { countryMinLength, countryMaxLength, phoneMaxLength } from 'src/common/field-length';
 import {
     Entity,
     Column,
@@ -31,8 +31,8 @@ export class Country {
     iso2: string
 
     // can't be unique as a few are empty (two empties are equal so not unique)
-    @MaxLength(phoneCodeMaxLength)
-    @Column("varchar", { length: phoneCodeMaxLength, nullable: false })
+    @MaxLength(phoneMaxLength)
+    @Column("varchar", { length: phoneMaxLength, nullable: false })
     phoneCode: string
 
     @OneToMany(type => State, state => state.country, { eager: false })

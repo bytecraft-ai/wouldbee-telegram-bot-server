@@ -1,9 +1,10 @@
 import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, UseInterceptors, UploadedFiles, Query, DefaultValuePipe, ParseIntPipe, ParseArrayPipe } from '@nestjs/common';
-import { CreateCasteDto, CreateProfileDto, CreateUserDto, FileUploadDto, PartnerPreferenceDto, RegistrationDto } from './dto/profile.dto';
+import { CreateCasteDto, CreateProfileDto, FileUploadDto, PartnerPreferenceDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
-import { DocumentValidationDto, DocumentTypeDto, GetCitiesDto, GetCountriesDto, GetStatesDto, GetTelegramProfilesDto, PaginationDto, BanProfileDto } from './dto/location.dto';
-import { TypeOfDocument, UserRole, UserStatOptions } from 'src/common/enum';
-import { TelegramProfile } from './entities/telegram-profile.entity';
+import { DocumentValidationDto, DocumentTypeDto, GetTelegramProfilesDto, BanProfileDto } from './dto/profile.dto';
+import { GetCitiesDto, GetCountriesDto, GetStatesDto } from './dto/location.dto';
+import { UserRole, UserStatus } from 'src/common/enum';
+import { TelegramAccount } from './entities/telegram-profile.entity';
 import { IList, IUserStats } from 'src/common/interface';
 import { Roles } from 'src/auth/set-role.decorator';
 import { GetAgent } from 'src/auth/get-agent.decorator';
@@ -128,8 +129,8 @@ export class StatsController {
 
     @Get('/')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
-    async userStats(@Query('userType') userType: UserStatOptions): Promise<IUserStats> {
-        return this.profileService.userStats(userType);
+    async userStats(@Query('userStatus') userStatus: UserStatus): Promise<IUserStats> {
+        return this.profileService.userStats(userStatus);
     }
 }
 
@@ -148,7 +149,7 @@ export class TelegramProfileController {
 
     @Get('/')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
-    async getTelegramProfiles(@Query() options: GetTelegramProfilesDto): Promise<IList<TelegramProfile>> {
+    async getTelegramProfiles(@Query() options: GetTelegramProfilesDto): Promise<IList<TelegramAccount>> {
         console.log('get all telegram profiles');
         return this.profileService.getTelegramProfilesForVerification(
             options?.skip, options?.take
@@ -182,9 +183,7 @@ export class TelegramProfileController {
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async validateOrRejectDocument(
         @GetAgent() agent: WbAgent,
-        // @Param('id') id: string,
         @Body() body: DocumentValidationDto) {
-        // console.log('id:', id, 'body:', body);
         await this.profileService.validateDocument(body, agent);
         return { status: 'OK' };
     }

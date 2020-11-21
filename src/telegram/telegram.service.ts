@@ -11,6 +11,10 @@
  * 
  *  6. Notify user on bio/picture verification, profile deletion, reactivation.
  * 
+ *  7. Implement rate-limiter
+ * 
+ *  8. Handle bots
+ * 
  */
 
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
@@ -23,19 +27,16 @@ import {
     Context,
     InjectBot,
     TelegrafProvider,
-    Composer,
-    Markup,
     WizardScene,
     session,
     Stage,
-    BaseScene,
     Command,
     Action,
 } from 'nestjs-telegraf';
 import { RegistrationActionRequired, TypeOfDocument, DocRejectionReason, UserStatus, ProfileDeactivationDuration, ProfileDeletionReason } from 'src/common/enum';
 import { deleteFile, mimeTypes } from 'src/common/util';
 import { Profile } from 'src/profile/entities/profile.entity';
-import { TelegramProfile } from 'src/profile/entities/telegram-profile.entity';
+import { TelegramAccount } from 'src/profile/entities/telegram-profile.entity';
 import { ProfileService } from 'src/profile/profile.service';
 import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, registrationCancelled, supportMsg, deletionSuccessMsg, acknowledgeDeletionRequest } from './telegram.constants';
 import { getBioDataFileName, getPictureFileName, processBioDataFile, processPictureFile, validateBioDataFileSize, validatePhotoFileSize, } from './telegram.service.helper';
@@ -66,19 +67,43 @@ export class TelegramService {
         this.createUploadBioWizard();
         this.createUploadPictureWizard();
 
+        // TODO: test
         this.bot.catch((err, ctx) => {
             logger.error(`Bot encountered an error for updateType: ${ctx.updateType}, Error:\n${JSON.stringify(err)}`);
             ctx.reply(fatalErrorMsg);
         })
+
+        this.setCommands();
 
         // Handle all unsupported messages.
         // bot.on('message', ctx => ctx.reply('Please use /help command to see what this bot supports.'));
     }
 
 
-    async createTelegramProfile(ctx: Context): Promise<TelegramProfile> {
+    async setCommands() {
+        await this.bot.telegram.setMyCommands([
+            { command: 'start', description: 'See the welcome message' },
+            { command: 'help', description: 'See the help menu' },
+            { command: 'register', description: 'register for a new Would Bee account' },
+            { command: 'upload_bio', description: 'Update bio-data up to 5 times.' },
+            { command: 'update_picture', description: 'Update profile picture up to 5 times.' },
+            { command: 'status', description: 'See your Wouldbee account status' },
+            { command: 'deactivate', description: 'Temporarily Deactivate Profile' },
+            { command: 'reactivate', description: 'Reactivate profile' },
+            { command: 'delete', description: 'Delete profile' },
+            { command: 'cancel_delete', description: 'Recover deleted profile within first week' },
+            { command: 'support', description: 'Customer support options' },
+        ]);
+    }
+
+
+    async createTelegramProfile(ctx: Context): Promise<TelegramAccount> {
+        if (ctx.from.is_bot) {
+            throw new Error('Not for bots');
+        }
+
         const telegramProfile = await
-            this.profileService.createTelegramProfile(ctx.message.chat.id, ctx.from.id);
+            this.profileService.createTelegramProfile(ctx);
         logger.log(`Telegram profile created: ${JSON.stringify(telegramProfile)}`);
         return telegramProfile;
     }
@@ -249,9 +274,6 @@ export class TelegramService {
                             }
 
                             await ctx.reply(`Thank you ${msg.contact.first_name} for sharing your phone number: ${msg.contact.phone_number}`);
-                            // return;
-
-                            // ctx.wizard.state.data.phone_number = ctx.update.message.contact.phone_number;
                         }
                     }
                     else if (ctx.message.text?.toLocaleLowerCase() === 'cancel') {
@@ -291,7 +313,6 @@ export class TelegramService {
 
                 logger.log('calling step-4');
                 return ctx.wizard.next();
-                // return ctx.wizard.steps[ctx.wizard.cursor](ctx);
             },
 
             // Step-4 :: download bio, upload to aws.
@@ -309,6 +330,9 @@ export class TelegramService {
 
                     const document = ctx.message.document;
                     if (document) {
+
+                        await ctx.reply('Please wait ...');
+                        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
                         // size check
                         const sizeErrorMessage = validateBioDataFileSize(ctx);
@@ -400,6 +424,9 @@ export class TelegramService {
                     const photo = (photos && photos[0]) ? photos[0] : null;
 
                     if (document || photo) {
+
+                        await ctx.reply('Please wait ...');
+                        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
                         // size check
                         const sizeErrorMessage = validatePhotoFileSize(ctx);
@@ -774,7 +801,7 @@ export class TelegramService {
         const telegramProfile = await this.getProfile(ctx);
 
         // await this.profileService.markProfileForDeletion(ctx.from.id, );
-        if (telegramProfile.status < UserStatus.ACTIVATION_PENDING) {
+        if (telegramProfile.status < UserStatus.UNVERIFIED) {
             await ctx.reply('Cannot delete unregistered profile.');
         }
         else if (telegramProfile.status === UserStatus.BANNED) {
@@ -786,16 +813,16 @@ export class TelegramService {
         }
         else {
 
-            const inlineKeyboardButtons = [{ text: 'Cancel', callback_data: `delete-0` }];
+            const inlineKeyboardButtons = [[{ text: 'Cancel', callback_data: `delete-0` }]];
+
+            // global replacement using regex. ref - https://www.w3schools.com/jsref/jsref_replace.asp
             for (let i = 1; i <= ProfileDeletionReason.Other; i++) {
-                inlineKeyboardButtons.push({ text: ProfileDeletionReason[i].replace('_', ' '), callback_data: `delete-${i}` })
+                inlineKeyboardButtons.push([{ text: ProfileDeletionReason[i].replace(/_/g, ' '), callback_data: `delete-${i}` }]);
             }
 
             await ctx.telegram.sendMessage(ctx.chat.id, acknowledgeDeletionRequest, {
                 reply_markup: {
-                    inline_keyboard: [
-                        inlineKeyboardButtons
-                    ]
+                    inline_keyboard: inlineKeyboardButtons
                 }
             });
         }
@@ -803,7 +830,7 @@ export class TelegramService {
 
 
     // delete callback function
-    @Action(/delete-[0-10]/)
+    @Action(/delete-(10|[0-9])/)
     async delete_callback(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         logger.log(`delete_callback data: ${ctx.callbackQuery.data}`);
@@ -846,7 +873,7 @@ export class TelegramService {
     }
 
 
-    @Action(/cancel_delete-[confirm,cancel]/)
+    @Action(/cancel_delete-(confirm|cancel)/)
     async cancel_delete_callback(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         logger.log(`cancel_delete callback data: ${ctx.callbackQuery.data}`);
@@ -868,6 +895,7 @@ export class TelegramService {
             await ctx.telegram.sendMessage(ctx.chat.id, 'Okay. For how long do you want to deactivate?', {
                 reply_markup: {
                     inline_keyboard: [
+                        [{ text: 'Cancel', callback_data: "deactivate-0" }],
                         [
                             { text: '1 week', callback_data: "deactivate-1" },
                             { text: '2 weeks', callback_data: "deactivate-2" }
@@ -886,22 +914,22 @@ export class TelegramService {
 
 
     // deactivate callback handler
-    @Action(/deactivate-[1,2,3,4]/)
+    @Action(/deactivate-[0-4]/)
     async deactivation_callback(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         logger.log(`deactivate data: ${ctx.callbackQuery.data}`);
         await ctx.deleteMessage();
 
         const duration = parseInt(ctx.callbackQuery.data.split('-')[1]);
-        const durationString = ProfileDeactivationDuration[duration];
 
-        try {
+        if (duration === 0) {
+            await ctx.reply('Cancelled');
+        } else {
+            const durationString = ProfileDeactivationDuration[duration];
             await this.profileService.deactivateProfile(ctx.from.id, duration);
 
-            await ctx.reply(`Alright! Deactivated your profile for ${durationString.toLocaleLowerCase().replace('_', ' ')}. Use /reactivate command to reactivate your profile anytime.`);
-        }
-        catch (error) {
-            await ctx.reply(fatalErrorMsg);
+            await ctx.reply(`Alright! Deactivated your profile for ${durationString.toLocaleLowerCase().replace(/_/g, ' ')}. Use /reactivate command to reactivate your profile anytime.`);
+
         }
     }
 
@@ -912,7 +940,7 @@ export class TelegramService {
         const telegramProfile = await this.getOrCreateProfile(ctx);
         if (telegramProfile.status === UserStatus.DEACTIVATED) {
             try {
-                await this.profileService.reactivateProfile(telegramProfile.telegramUserId);
+                await this.profileService.reactivateProfile(telegramProfile.userId);
                 await ctx.reply('Welcome back! Your profile has been reactivated successfully.');
             }
             catch (error) {
@@ -939,11 +967,11 @@ export class TelegramService {
                 msg = 'You are unregistered. Please type or click on /register to register.'
                 break;
 
-            case UserStatus.ACTIVATION_PENDING:
+            case UserStatus.UNVERIFIED:
                 msg = 'Your profile activation is pending at our end. We will verify your submitted bio-data and profile-picture shortly and notify you of the decision.'
                 break;
 
-            case UserStatus.ACTIVATION_FAILED:
+            case UserStatus.VERIFICATION_FAILED:
                 msg = `Your profile activation failed.`
                 const causingDocument = await this.profileService.getInvalidatedDocumentCausingProfileInvalidation(telegramProfile.id)
                 if (causingDocument?.invalidationReason) {
@@ -952,6 +980,10 @@ export class TelegramService {
                 if (causingDocument?.invalidationDescription) {
                     msg += `\n Description - ${causingDocument.invalidationDescription}`
                 }
+                break;
+
+            case UserStatus.VERIFIED:
+                msg = 'Your bio-data and picture has been verified. Your profile will be activated shortly.'
                 break;
 
             case UserStatus.ACTIVATED:
@@ -995,20 +1027,37 @@ export class TelegramService {
     }
 
 
-    @Command('feedback')
-    @Command('delete_account')
-    @Command('unsubscribe')
-    @Command('subscribe')
     @Command('preference')
-    @Command('my_profile')
-    async feedback(ctx: Context) {
+    async preference(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         await ctx.reply('This feature will be released soon.')
     }
 
 
-    async notifyUserOfVerification(telegramProfile: TelegramProfile, doc: Document, result: boolean, invalidationReason?: DocRejectionReason, invalidationDescription?: string) {
-        const chatId = telegramProfile.telegramChatId;
+    @Command('preview')
+    async preview(ctx: Context) {
+        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+        await ctx.reply('This feature will be released soon.')
+    }
+
+
+    // TODO: if at odd time, send notification silently.
+    // fails silently
+    async notifyUser(telegramAccount: TelegramAccount, message: string, sendHi = true) {
+        try {
+            const chatId = telegramAccount.chatId;
+            const name = telegramAccount.name || 'there'
+            message = `Hi ${name},\n${message}`;
+            await this.bot.telegram.sendMessage(chatId, message);
+        }
+        catch (error) {
+            logger.error(`Could not notify user. Telegram account id: ${JSON.stringify(telegramAccount.id)}, message: ${message}, name: ${name}, ERROR:\n${JSON.stringify(error)}`);
+        }
+    }
+
+
+    async notifyUserOfVerification(telegramAccount: TelegramAccount, doc: Document, result: boolean, invalidationReason?: DocRejectionReason, invalidationDescription?: string) {
+        const chatId = telegramAccount.chatId;
         const docType: string = TypeOfDocument[doc.typeOfDocument].toLowerCase();
         const reason: string = !!invalidationReason ? DocRejectionReason[invalidationReason].toLowerCase() : null;
         let message: string;
@@ -1017,19 +1066,25 @@ export class TelegramService {
             message = `Hi. Your ${docType} has successfully been verified.`
         } else {
             message = `Hi. Your ${docType} has been rejected`
+
             if (reason) {
                 message += ` as it was found ${reason}.`
             } else {
                 message += '.'
             }
-            message += `You can upload a new ${docType} or ff you think that is a mistake, please contact our customer care.`
+
+            if (invalidationDescription) {
+                message += `The verification team added the following comment:\n${invalidationDescription}`
+            }
+
+            message += `You can upload a new ${docType} or if you think that is a mistake, please contact our customer care.`
         }
         await this.bot.telegram.sendMessage(chatId, message);
     }
 
 
-    async sendProfile(sendToTelegramProfile: TelegramProfile, profileToSend: Profile, TelegramProfileToSend: TelegramProfile,) {
-        const chatId = sendToTelegramProfile.telegramChatId;
+    async sendProfile(sendToTelegramProfile: TelegramAccount, profileToSend: Profile, TelegramProfileToSend: TelegramAccount,) {
+        const chatId = sendToTelegramProfile.chatId;
         const photoFileId = TelegramProfileToSend.picture.telegramFileId;
         const bioFileId = TelegramProfileToSend.bioData.telegramFileId;
 

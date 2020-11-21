@@ -17,6 +17,7 @@ import { AnnualIncome, MaritalStatus, Religion } from 'src/common/enum';
 import { Caste } from './caste.entity';
 import { Country } from './country.entity';
 import { State } from './state.entity';
+import { Exclude } from 'class-transformer';
 
 
 // TODO: implement table indexing on important columns
@@ -42,12 +43,6 @@ export class PartnerPreference {
         referencedColumnName: "id",
     })
     profile: Profile;
-
-    // @IsOptional()
-    // @Length(5, 15)
-    // @IsString()
-    // @Column("int4range", { nullable: true })
-    // ageRange?: string;
 
     @Column({ nullable: true })
     minAge: number;
@@ -81,6 +76,7 @@ export class PartnerPreference {
     @JoinTable()
     countries?: Country[];
 
+    @Exclude()
     @DeleteDateColumn()
     deletedOn?: Date;
 

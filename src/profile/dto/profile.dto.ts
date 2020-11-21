@@ -1,8 +1,72 @@
 import { Transform, Type } from 'class-transformer';
-import { IsNotEmpty, IsString, IsNumberString, Length, IsEmail, IsInt, IsOptional, Min, Max, IsPositive, IsUUID, IsNumber, IsIn } from 'class-validator';
-import { AnnualIncome, EducationDegree, EmployedIn, Gender, MaritalStatus, Occupation, Religion, SupportTicketCategory, Language } from 'src/common/enum';
-import { nameMaxLength, nameMinLength, supportResolutionMinLength, supportResolutionMaxLength } from 'src/common/field-length';
+import { IsNotEmpty, IsString, IsNumberString, Length, IsEmail, IsInt, IsOptional, Min, Max, IsPositive, IsUUID, IsNumber, IsIn, IsBoolean, MaxLength } from 'class-validator';
+import { AnnualIncome, EducationDegree, EmployedIn, Gender, MaritalStatus, Occupation, Religion, SupportTicketCategory, Language, ReasonForProfileBan, DocRejectionReason } from 'src/common/enum';
+import { nameMaxLength, nameMinLength, supportResolutionMinLength, supportResolutionMaxLength, docRejectionReasonMaxLength } from 'src/common/field-length';
 import { getEnumValues } from 'src/common/util';
+
+
+export class PaginationDto {
+    @IsOptional()
+    @Max(20)
+    @Min(1)
+    @IsInt()
+    @Transform(value => Number(value))
+    take?: number = 20;
+
+    @IsOptional()
+    @Min(0)
+    @IsInt()
+    @Transform(value => Number(value))
+    skip?: number = 0;
+}
+
+
+export class GetTelegramProfilesDto extends PaginationDto {
+    @IsOptional()
+    @IsBoolean()
+    isValid?: boolean
+}
+
+
+export class DocumentTypeDto {
+    @IsIn(['bio-data', 'picture', 'id-proof'])
+    @IsString()
+    documentType: string
+}
+
+
+export class BanProfileDto {
+    @IsIn(getEnumValues(ReasonForProfileBan))
+    @Transform(value => Number(value))
+    reasonForBan: ReasonForProfileBan;
+
+    @IsOptional()
+    @MaxLength(docRejectionReasonMaxLength)
+    @IsString()
+    banDescription: string;
+}
+
+
+export class DocumentValidationDto {
+    @IsInt()
+    @Transform(value => Number(value))
+    documentId: number;
+
+    @IsBoolean()
+    @Transform(value => Boolean(value))
+    valid: boolean;
+
+    @IsOptional()
+    // @IsIn(Object.values(DocRejectionReason).filter(value => typeof value === 'number'))
+    @IsIn(getEnumValues(DocRejectionReason))
+    @Transform(value => Number(value))
+    rejectionReason: DocRejectionReason;
+
+    @IsOptional()
+    @MaxLength(docRejectionReasonMaxLength)
+    @IsString()
+    rejectionDescription: string;
+}
 
 
 export class RegistrationDto {

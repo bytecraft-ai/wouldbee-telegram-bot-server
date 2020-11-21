@@ -1,7 +1,8 @@
+import { Exclude } from 'class-transformer';
 import { IsInt, IsOptional, IsPositive, IsString, MaxLength } from 'class-validator';
 import { WbAgent } from 'src/agent/entities/agent.entity';
 import { ProfileDeletionReason, ReasonForProfileBan, UserStatus } from 'src/common/enum';
-import { docRejectionReasonMaxLength } from 'src/common/field-length';
+import { docRejectionReasonMaxLength, nameMaxLength, phoneMaxLength } from 'src/common/field-length';
 import {
     Entity,
     Column,
@@ -16,13 +17,12 @@ import {
 } from 'typeorm';
 import { Verifiable } from './abstract-verifiable.entity';
 import { Document } from './document.entity';
-// import { BioData } from './bio-data.entity';
-// import { IdProof } from './id-proof.entity';
-// import { ProfilePicture } from './picture.entity';
 import { Profile } from './profile.entity';
 
+// TODO: add db validations using class-validator and run through custom repository.
+
 @Entity()
-export class TelegramProfile extends Verifiable {
+export class TelegramAccount extends Verifiable {
     @PrimaryGeneratedColumn("uuid")
     id: string;
 
@@ -35,17 +35,26 @@ export class TelegramProfile extends Verifiable {
     @UpdateDateColumn()
     updatedOn?: Date;
 
+    @Exclude()
     @DeleteDateColumn()
     deletedOn?: Date;
 
+    @Exclude()
     @Column({ unique: true })
-    telegramUserId: number;
+    userId: number;
 
+    @Exclude()
     @Column({ unique: true })
-    telegramChatId: number;
+    chatId: number;
+
+    @Column("varchar", { nullable: true, length: nameMaxLength })
+    name?: string;
+
+    @Column("varchar", { nullable: true, length: nameMaxLength })
+    username?: string;
 
     // allow creating profile before phone number is verified.
-    @Column({ unique: true, nullable: true })
+    @Column("varchar", { unique: true, nullable: true, length: phoneMaxLength })
     phone?: string;
 
     @OneToMany(type => Document, document => document.telegramProfile)
