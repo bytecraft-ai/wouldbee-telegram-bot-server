@@ -12,7 +12,7 @@ import {
 import { IsBoolean, IsInt, IsOptional, IsPositive, IsString, Length, MaxLength } from 'class-validator';
 import { docRejectionReasonMaxLength, fileNameMaxLength, fileNameMinLength, mimeMaxLength, urlMaxLength } from 'src/common/field-length';
 import { DocRejectionReason, TypeOfDocument, TypeOfIdProof } from 'src/common/enum';
-import { TelegramAccount } from './telegram-profile.entity';
+import { TelegramAccount } from './telegram-account.entity';
 import { Verifiable } from './abstract-verifiable.entity';
 import { Exclude } from 'class-transformer';
 // import { AwsDocument } from './aws-document.entity';
@@ -26,18 +26,18 @@ export class Document extends Verifiable {
     id?: number;
 
     @Column("uuid")
-    telegramProfileId: string;
+    telegramAccountId: string;
 
     @ManyToOne(
         type => TelegramAccount,
-        telegramProfile => telegramProfile.documents,
+        telegramAccount => telegramAccount.documents,
         { nullable: false }
     )
     @JoinColumn({
-        name: "telegramProfileId",
+        name: "telegramAccountId",
         referencedColumnName: "id",
     })
-    telegramProfile: TelegramAccount;
+    telegramAccount: TelegramAccount;
 
     @CreateDateColumn()
     createdOn?: Date;

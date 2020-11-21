@@ -7,7 +7,7 @@ import {
     OneToOne,
     PrimaryColumn,
 } from 'typeorm';
-import { TelegramAccount } from './telegram-profile.entity';
+import { TelegramAccount } from './telegram-account.entity';
 
 @Entity()
 export class ProfileMarkedForDeletion {
@@ -16,14 +16,14 @@ export class ProfileMarkedForDeletion {
 
     @OneToOne(
         type => TelegramAccount,
-        // telegramProfile => telegramProfile.profileToDelete,
+        // telegramAccount => telegramAccount.profileToDelete,
         { nullable: false }
     )
     @JoinColumn({
         name: "id",
         referencedColumnName: "id",
     })
-    telegramProfile: TelegramAccount;
+    telegramAccount: TelegramAccount;
 
     @CreateDateColumn()
     markedOn?: Date;

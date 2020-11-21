@@ -23,7 +23,7 @@ import { nameMaxLength, nameMinLength } from 'src/common/field-length';
 import { Caste } from './caste.entity';
 import { City } from './city.entity';
 import { PartnerPreference } from './partner-preference.entity';
-import { TelegramAccount } from './telegram-profile.entity';
+import { TelegramAccount } from './telegram-account.entity';
 import { Language, MaritalStatus } from 'src/common/enum';
 import { DeactivatedProfile } from './deactivated-profile.entity';
 import { Exclude } from 'class-transformer';
@@ -40,7 +40,7 @@ export class Profile {
     // @Field()
     @OneToOne(
         type => TelegramAccount,
-        telegramProfile => telegramProfile.profile,
+        telegramAccount => telegramAccount.profile,
         {
             // Can't use as part of composite primary key without this.
             nullable: false,
@@ -50,7 +50,7 @@ export class Profile {
         name: "id",
         referencedColumnName: "id",
     })
-    telegramProfile: TelegramAccount;
+    telegramAccount: TelegramAccount;
 
     // @Field()
     @CreateDateColumn()

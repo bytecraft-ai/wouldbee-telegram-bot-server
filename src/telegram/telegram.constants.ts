@@ -21,9 +21,9 @@ export const helpMessage = `Hi there. You can use the following commands to avai
 
 /reactivate - start sending you profiles and your profile to your matches again.
 
-/delete - delete your Would Bee account. First it marks your profile for deletion and deactivates your profile for a week. During this week, if you wish to reinstate your account, you can use /cancel_delete command. Otherwise, after a week, your account is permanently & irreversibly deleted.
+/delete - delete your Would Bee account. First it marks your profile for deletion and deactivates your profile for a week. During this week, if you wish to reinstate your account, you can use /recover command. Otherwise, after a week, your account is permanently & irreversibly deleted.
 
-/cancel_delete - cancel deletion of your Would Bee account. Only works before the account has been deleted.
+/recover - cancel deletion of your Would Bee account. Only works before the account has been deleted.
 
 /support - to get support or give feedback.
 

@@ -11,7 +11,7 @@ import {
 import { IsInt, IsOptional, IsPositive, IsString, Length } from 'class-validator';
 import { supportQueryMaxLength, supportQueryMinLength, supportResolutionMinLength, supportResolutionMaxLength } from 'src/common/field-length';
 import { SupportTicketCategory } from 'src/common/enum';
-import { TelegramAccount } from './telegram-profile.entity';
+import { TelegramAccount } from './telegram-account.entity';
 import { Verifiable } from './abstract-verifiable.entity';
 import { WbAgent } from 'src/agent/entities/agent.entity';
 import { Exclude } from 'class-transformer';
@@ -24,18 +24,18 @@ export class Support extends Verifiable {
     id?: number;
 
     @Column("uuid")
-    telegramProfileId: string;
+    telegramAccountId: string;
 
     @ManyToOne(
         type => TelegramAccount,
-        telegramProfile => telegramProfile.documents,
+        telegramAccount => telegramAccount.documents,
         { nullable: false }
     )
     @JoinColumn({
-        name: "telegramProfileId",
+        name: "telegramAccountId",
         referencedColumnName: "id",
     })
-    telegramProfile: TelegramAccount;
+    telegramAccount: TelegramAccount;
 
     @IsOptional()
     @Length(supportQueryMinLength, supportQueryMaxLength)

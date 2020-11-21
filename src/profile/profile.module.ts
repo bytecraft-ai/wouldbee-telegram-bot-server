@@ -8,7 +8,7 @@ import { Country } from './entities/country.entity';
 import { PartnerPreference } from './entities/partner-preference.entity';
 import { Profile } from './entities/profile.entity';
 import { State } from './entities/state.entity';
-import { TelegramAccount } from './entities/telegram-profile.entity';
+import { TelegramAccount } from './entities/telegram-account.entity';
 import { AwsServiceModule } from 'src/aws-service/aws-service.module';
 import { PassportModule } from '@nestjs/passport';
 import { Document } from './entities/document.entity';

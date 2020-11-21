@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { Transform, Type } from 'class-transformer';
 import { IsNotEmpty, IsString, IsNumberString, Length, IsEmail, IsInt, IsOptional, Min, Max, IsPositive, IsUUID, IsNumber, IsIn, IsBoolean, MaxLength } from 'class-validator';
 import { AnnualIncome, EducationDegree, EmployedIn, Gender, MaritalStatus, Occupation, Religion, SupportTicketCategory, Language, ReasonForProfileBan, DocRejectionReason } from 'src/common/enum';
@@ -21,9 +22,14 @@ export class PaginationDto {
 }
 
 
-export class GetTelegramProfilesDto extends PaginationDto {
+export class GetTelegramAccountsDto extends PaginationDto {
     @IsOptional()
     @IsBoolean()
+    @Transform(value => {
+        if (value === 'true' || value === true) return true;
+        else if (value === 'false' || value === false) return false;
+        else throw new BadRequestException(`${value} is not a boolean type! It's type is ${typeof value}`);
+    })
     isValid?: boolean
 }
 
@@ -53,10 +59,15 @@ export class DocumentValidationDto {
     documentId: number;
 
     @IsBoolean()
-    @Transform(value => Boolean(value))
+    // @Transform(value => Boolean(value))
+    @Transform(value => {
+        if (value === 'true' || value === true) return true;
+        else if (value === 'false' || value === false) return false;
+        else throw new BadRequestException(`${value} is not a boolean type! It's type is ${typeof value}`);
+    })
     valid: boolean;
 
-    @IsOptional()
+    // @IsOptional()
     // @IsIn(Object.values(DocRejectionReason).filter(value => typeof value === 'number'))
     @IsIn(getEnumValues(DocRejectionReason))
     @Transform(value => Number(value))
@@ -65,7 +76,7 @@ export class DocumentValidationDto {
     @IsOptional()
     @MaxLength(docRejectionReasonMaxLength)
     @IsString()
-    rejectionDescription: string;
+    rejectionDescription?: string;
 }
 
 
@@ -172,7 +183,7 @@ export class CreateUserDto {
 export class CreateProfileDto {
     @IsNotEmpty()
     @IsUUID(4)
-    telegramProfileId: string;
+    telegramAccountId: string;
 
     @IsNotEmpty()
     @Length(nameMinLength, nameMaxLength)

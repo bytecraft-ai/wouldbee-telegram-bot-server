@@ -1,10 +1,10 @@
 import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, UseInterceptors, UploadedFiles, Query, DefaultValuePipe, ParseIntPipe, ParseArrayPipe } from '@nestjs/common';
 import { CreateCasteDto, CreateProfileDto, FileUploadDto, PartnerPreferenceDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
-import { DocumentValidationDto, DocumentTypeDto, GetTelegramProfilesDto, BanProfileDto } from './dto/profile.dto';
+import { DocumentValidationDto, DocumentTypeDto, GetTelegramAccountsDto, BanProfileDto } from './dto/profile.dto';
 import { GetCitiesDto, GetCountriesDto, GetStatesDto } from './dto/location.dto';
 import { UserRole, UserStatus } from 'src/common/enum';
-import { TelegramAccount } from './entities/telegram-profile.entity';
+import { TelegramAccount } from './entities/telegram-account.entity';
 import { IList, IUserStats } from 'src/common/interface';
 import { Roles } from 'src/auth/set-role.decorator';
 import { GetAgent } from 'src/auth/get-agent.decorator';
@@ -149,9 +149,9 @@ export class TelegramProfileController {
 
     @Get('/')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
-    async getTelegramProfiles(@Query() options: GetTelegramProfilesDto): Promise<IList<TelegramAccount>> {
-        console.log('get all telegram profiles');
-        return this.profileService.getTelegramProfilesForVerification(
+    async getTelegramAccounts(@Query() options: GetTelegramAccountsDto): Promise<IList<TelegramAccount>> {
+        logger.log('getTelegramAccounts');
+        return this.profileService.getTelegramAccountsForVerification(
             options?.skip, options?.take
         );
     }
@@ -162,7 +162,7 @@ export class TelegramProfileController {
     async getTelegramProfile(@Param('id') id: string) {
         console.log('get profile with id', id);
         return {
-            'profile': await this.profileService.getTelegramProfileById(id, { throwOnFail: true }),
+            'profile': await this.profileService.getTelegramAccountById(id, { throwOnFail: true }),
             'bio': await this.profileService.getSignedDownloadUrl(id, 'bio-data', { throwOnFail: false }),
             'picture': await this.profileService.getSignedDownloadUrl(id, 'picture', { throwOnFail: false }),
         };
@@ -230,7 +230,6 @@ export class ProfileController {
         return this.profileService.saveProfile(createProfileDto);
     }
 }
-
 
 
 @Controller('preference')

@@ -337,9 +337,9 @@ export enum ReasonForProfileBan {
 
 
 export enum DocRejectionReason {
-    NOT_A_BIO = 1,
-    NOT_A_PROFILE_PIC,
-    NOT_AN_ID,
+    NOT_A_BIO_DATA = 1,
+    NOT_A_PROFILE_PICTURE,
+    NOT_AN_ID_PROOF,
     MISSING_INFO,
     INVALID_CONTACT,
     OBSCENE_OR_OFFENSIVE,

@@ -3,17 +3,18 @@
  *  1. Use payload to implement referrals and tracking (if a user is 
  *      given the link by another user, an agent, or website)
  * 
- *  2. Implement status - what does a user need to do next
- * 
  *  3. Test sharing of bio-data with user
  * 
  *  5. Implement thumbnails for bio-data
  * 
- *  6. Notify user on bio/picture verification, profile deletion, reactivation.
+ *  6. Notify user on profile deletion.
  * 
  *  7. Implement rate-limiter
  * 
  *  8. Handle bots
+ * 
+ *  9. Fix Bug - Registration asking for bio again, when after saving bio, 
+ *              registration is cancelled and then restarted.
  * 
  */
 
@@ -36,12 +37,13 @@ import {
 import { RegistrationActionRequired, TypeOfDocument, DocRejectionReason, UserStatus, ProfileDeactivationDuration, ProfileDeletionReason } from 'src/common/enum';
 import { deleteFile, mimeTypes } from 'src/common/util';
 import { Profile } from 'src/profile/entities/profile.entity';
-import { TelegramAccount } from 'src/profile/entities/telegram-profile.entity';
+import { TelegramAccount } from 'src/profile/entities/telegram-account.entity';
 import { ProfileService } from 'src/profile/profile.service';
 import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, registrationCancelled, supportMsg, deletionSuccessMsg, acknowledgeDeletionRequest } from './telegram.constants';
 import { getBioDataFileName, getPictureFileName, processBioDataFile, processPictureFile, validateBioDataFileSize, validatePhotoFileSize, } from './telegram.service.helper';
 import { Document } from 'src/profile/entities/document.entity';
 import { supportResolutionMaxLength, supportResolutionMinLength } from 'src/common/field-length';
+import { html as format } from 'telegram-format';
 
 const logger = new Logger('TelegramService');
 
@@ -91,26 +93,26 @@ export class TelegramService {
             { command: 'deactivate', description: 'Temporarily Deactivate Profile' },
             { command: 'reactivate', description: 'Reactivate profile' },
             { command: 'delete', description: 'Delete profile' },
-            { command: 'cancel_delete', description: 'Recover deleted profile within first week' },
+            { command: 'recover', description: 'Recover deleted profile within first week' },
             { command: 'support', description: 'Customer support options' },
         ]);
     }
 
 
-    async createTelegramProfile(ctx: Context): Promise<TelegramAccount> {
+    async createTelegramAccount(ctx: Context): Promise<TelegramAccount> {
         if (ctx.from.is_bot) {
             throw new Error('Not for bots');
         }
 
         const telegramProfile = await
-            this.profileService.createTelegramProfile(ctx);
+            this.profileService.createTelegramAccount(ctx);
         logger.log(`Telegram profile created: ${JSON.stringify(telegramProfile)}`);
         return telegramProfile;
     }
 
 
     async getProfile(ctx: Context) {
-        const telegramProfile = await this.profileService.getTelegramProfileByTelegramUserId(ctx.from.id, { throwOnFail: false });
+        const telegramProfile = await this.profileService.getTelegramAccountByTelegramUserId(ctx.from.id, { throwOnFail: false });
         logger.log(`getProfile() - telegramProfile: ${JSON.stringify(telegramProfile)}`);
         return telegramProfile;
     }
@@ -119,7 +121,7 @@ export class TelegramService {
     async getOrCreateProfile(ctx: Context) {
         let telegramProfile = await this.getProfile(ctx);
         if (!telegramProfile) {
-            telegramProfile = await this.createTelegramProfile(ctx);
+            telegramProfile = await this.createTelegramAccount(ctx);
         }
         return telegramProfile;
 
@@ -194,7 +196,7 @@ export class TelegramService {
                     logger.log(`status: ${JSON.stringify(status)}`);
                     ctx.wizard.state.data.status = status;
                 } else {
-                    ctx.wizard.state.data.telegramProfileId = (await this.createTelegramProfile(ctx)).id;
+                    ctx.wizard.state.data.telegramProfileId = (await this.createTelegramAccount(ctx)).id;
                     ctx.wizard.state.data.status = RegistrationActionRequired.VERIFY_PHONE;
                 }
 
@@ -513,7 +515,7 @@ export class TelegramService {
                     await ctx.reply(unregisteredUserMsg);
                     return ctx.scene.leave();
                 } else {
-                    logger.log(`telegram profile: ${telegramProfile}`);
+                    logger.log(`telegram profile: ${JSON.stringify(telegramProfile)}`);
                     ctx.wizard.state.data.telegramProfileId = telegramProfile.id;
                 }
 
@@ -605,7 +607,7 @@ export class TelegramService {
 
                     return ctx.scene.leave();
                 } else {
-                    logger.log(`telegram profile: ${telegramProfile}`);
+                    logger.log(`telegram profile: ${JSON.stringify(telegramProfile)}`);
                     ctx.wizard.state.data.telegramProfileId = telegramProfile.id;
                 }
 
@@ -701,9 +703,9 @@ export class TelegramService {
                 let telegramProfile = await this.getProfile(ctx);
 
                 if (!telegramProfile) {
-                    telegramProfile = await this.createTelegramProfile(ctx);
+                    telegramProfile = await this.createTelegramAccount(ctx);
                 } else {
-                    logger.log(`telegram profile: ${telegramProfile}`);
+                    logger.log(`telegram profile: ${JSON.stringify(telegramProfile)}`);
                 }
                 ctx.wizard.state.data.telegramProfileId = telegramProfile.id;
 
@@ -782,7 +784,7 @@ export class TelegramService {
                     logger.log(`referee: [${referee[0]}, ${referee[1]}]`);
                 }
             }
-            await this.createTelegramProfile(ctx);
+            await this.createTelegramAccount(ctx);
             await ctx.reply(welcomeMessage);
         }
     }
@@ -849,16 +851,12 @@ export class TelegramService {
     }
 
 
-    @Command('cancel-delete')
-    async cancel_delete(ctx: Context) {
+    @Command('recover')
+    async recover(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         const telegramProfile = await this.getProfile(ctx);
 
         if (telegramProfile.status === UserStatus.PENDING_DELETION) {
-            await ctx.reply('Your profile has already been marked for deletion!');
-        }
-        else {
-
             await ctx.telegram.sendMessage(ctx.chat.id, acknowledgeDeletionRequest, {
                 reply_markup: {
                     inline_keyboard: [
@@ -869,6 +867,9 @@ export class TelegramService {
                     ]
                 }
             });
+        }
+        else {
+            await ctx.reply('Your profile has already been marked for deletion!');
         }
     }
 
@@ -994,6 +995,10 @@ export class TelegramService {
                 msg = 'Your profile is deactivated. In this state, you will neither receive any matches nor your profile with be shared with your matches. To reactivate it, use /reactivate command.'
                 break;
 
+            case UserStatus.PENDING_DELETION:
+                msg = 'Your profile has been marked for deletion and will be deleted permanently & irrecoverably within a week. If you do not want it to be deleted, use /recover command.'
+                break;
+
             case UserStatus.DELETED:
                 msg = 'Your profile has been deleted.'
                 break;
@@ -1046,8 +1051,10 @@ export class TelegramService {
     async notifyUser(telegramAccount: TelegramAccount, message: string, sendHi = true) {
         try {
             const chatId = telegramAccount.chatId;
-            const name = telegramAccount.name || 'there'
-            message = `Hi ${name},\n${message}`;
+            if (sendHi) {
+                const name = telegramAccount.name || 'there';
+                message = `Hi ${name},\n${message}`;
+            }
             await this.bot.telegram.sendMessage(chatId, message);
         }
         catch (error) {
@@ -1059,36 +1066,44 @@ export class TelegramService {
     async notifyUserOfVerification(telegramAccount: TelegramAccount, doc: Document, result: boolean, invalidationReason?: DocRejectionReason, invalidationDescription?: string) {
         const chatId = telegramAccount.chatId;
         const docType: string = TypeOfDocument[doc.typeOfDocument].toLowerCase();
-        const reason: string = !!invalidationReason ? DocRejectionReason[invalidationReason].toLowerCase() : null;
+        const reason: string = !!invalidationReason ? DocRejectionReason[invalidationReason].replace(/_/g, ' ') : null;
         let message: string;
 
+        const name = telegramAccount.name || 'there';
+        message = `Hi ${name},\n`;
+
         if (result) {
-            message = `Hi. Your ${docType} has successfully been verified.`
+            message += `Your ${docType} has successfully been verified.`;
         } else {
-            message = `Hi. Your ${docType} has been rejected`
+            message += `Your ${docType} has been rejected for the following reason: `;
 
             if (reason) {
-                message += ` as it was found ${reason}.`
+                // message += format.bold(reason);
+                message += reason;
             } else {
-                message += '.'
+                message += '.';
             }
 
             if (invalidationDescription) {
-                message += `The verification team added the following comment:\n${invalidationDescription}`
+                // message += `\nComments from verification team: ${format.italic(invalidationDescription)}\n`;
+                message += `\nComments from verification team: ${invalidationDescription}
+            } \n`;
             }
 
-            message += `You can upload a new ${docType} or if you think that is a mistake, please contact our customer care.`
+            message += `You can upload a new ${docType} or if you think that is a mistake, please contact our customer care.`;
         }
+        // TODO - fix formatting.
+        // await this.bot.telegram.sendMessage(chatId, format.escape(message), { parse_mode: "HTML" });
         await this.bot.telegram.sendMessage(chatId, message);
     }
 
 
-    async sendProfile(sendToTelegramProfile: TelegramAccount, profileToSend: Profile, TelegramProfileToSend: TelegramAccount,) {
-        const chatId = sendToTelegramProfile.chatId;
-        const photoFileId = TelegramProfileToSend.picture.telegramFileId;
-        const bioFileId = TelegramProfileToSend.bioData.telegramFileId;
+    async sendProfile(sendToTelegramAccount: TelegramAccount, profileToSend: Profile, TelegramAccountToSend: TelegramAccount,) {
+        const chatId = sendToTelegramAccount.chatId;
+        const photoFileId = TelegramAccountToSend.picture.telegramFileId;
+        const bioFileId = TelegramAccountToSend.bioData.telegramFileId;
 
-        await this.bot.telegram.sendMessage(chatId, `Hi. Here's a new match for you.\nName: ${profileToSend.name}\nDoB: ${profileToSend.dob}`)
+        await this.bot.telegram.sendMessage(chatId, `Hi.Here's a new match for you.\nName: ${profileToSend.name}\nDoB: ${profileToSend.dob}`)
 
         await this.bot.telegram.sendPhoto(chatId, photoFileId, { caption: profileToSend.name });
 
@@ -1129,7 +1144,7 @@ export class TelegramService {
 
     //     await ctx.telegram.sendChatAction(ctx.message.chat.id, 'upload_document');
 
-    //     const telegramProfile = await this.profileService.getTelegramProfileByTelegramUserId(ctx.from.id, {
+    //     const telegramProfile = await this.profileService.getTelegramAccountByTelegramUserId(ctx.from.id, {
     //         throwOnFail: false
     //     });
     //     if (!telegramProfile) {

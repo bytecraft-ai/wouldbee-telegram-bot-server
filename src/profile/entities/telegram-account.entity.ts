@@ -26,7 +26,7 @@ export class TelegramAccount extends Verifiable {
     @PrimaryGeneratedColumn("uuid")
     id: string;
 
-    @OneToOne(type => Profile, profile => profile.telegramProfile)
+    @OneToOne(type => Profile, profile => profile.telegramAccount)
     profile?: Profile;
 
     @CreateDateColumn()
@@ -57,7 +57,7 @@ export class TelegramAccount extends Verifiable {
     @Column("varchar", { unique: true, nullable: true, length: phoneMaxLength })
     phone?: string;
 
-    @OneToMany(type => Document, document => document.telegramProfile)
+    @OneToMany(type => Document, document => document.telegramAccount)
     documents?: Document[];
 
     @Column({ nullable: true })
