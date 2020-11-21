@@ -22,10 +22,18 @@ export class SchedulerQueueConsumer {
     }
 
 
-    @Process('activate-profiles')
-    async activateProfile(job: Job<unknown>) {
+    @Process('reactivate-profiles')
+    async batchReactivateProfiles(job: Job<unknown>) {
         logger.log(`processing activate-profile task at ${new Date()}`);
-        await this.profileService.activateProfiles();
+        await this.profileService.batchReactivateProfiles();
+        return {};
+    }
+
+
+    @Process('delete-profiles')
+    async batchDeleteProfiles(job: Job<unknown>) {
+        logger.log(`processing activate-profile task at ${new Date()}`);
+        await this.profileService.batchDeleteProfiles();
         return {};
     }
 

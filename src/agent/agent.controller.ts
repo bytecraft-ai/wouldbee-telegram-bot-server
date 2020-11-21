@@ -44,46 +44,4 @@ export class AgentController {
         return { test: 'success' };
     }
 
-
-    @Get('/init')
-    async init() {
-        const rahul: AgentRegistrationDto = {
-            email: "rahul@wouldbee.com",
-            phone: "9611121073",
-            name: "Rahul Gupta",
-            password: "Password-1",
-            role: UserRole.ADMIN
-        }
-        const charul: AgentRegistrationDto = {
-            email: "charul@wouldbee.com",
-            phone: "97030726206",
-            name: "Kritika Agrawal",
-            password: "Password-1",
-            role: UserRole.AGENT
-        }
-        const nusrat: AgentRegistrationDto = {
-            email: "njnusrat53@gmail.com",
-            phone: "1883001002",
-            name: "Nusrat Jahan",
-            password: "Password-123",
-            role: UserRole.AGENT
-        }
-
-        try {
-            await this.agentService.registerAgent(rahul);
-        } catch (err) {
-            logger.log(`Could not init Admin: rahul. Error: ${err}`);
-        }
-
-        try {
-            await this.agentService.registerAgent(charul);
-        } catch (err) {
-            logger.log(`Could not init Agent: charul. Error: ${err}`);
-        }
-
-        return {
-            message: 'initialized admins and agents'
-        };
-    }
-
 }

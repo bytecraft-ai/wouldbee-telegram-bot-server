@@ -1,35 +1,38 @@
-export const welcomeMessage = `Hi, I am Would Bee Matrimony bot! To avail my services, please register by sharing your phone number and bio-data. I will then share with you the bio-data of your "Would Bees" (prospective matches) regularly. Similarly, your bio-data will be shared with them. 
+export const welcomeMessage = `Hi, I am Would Bee Matrimony bot! To avail my services, please register your profile by sharing your phone number, bio-data, and profile picture. I will then share with you the profiles of your "Would Bees" (prospective matches) regularly. Similarly, your profile will be shared with them. 
 
  - By using this service, you agree to our terms of use, available on www.wouldbee.com
 
- - To get started, please type or click on /register`;
+ - To get started, please type or click on /register
+ 
+ - To see how to interact with Would Bee bot, use the /help command.`;
 
 
 export const helpMessage = `Hi there. You can use the following commands to avail my services -
 
 /register - registers you for the Would Bee matrimony service. During the registration process, you will be asked for your phone number, bio-data and a profile picture.
 
-/upload_bio - uploads your bio-data. You can use it to update or change your bio_data after registration.
+/upload_bio - uploads your bio-data. You can use it to update or change your bio_data up to five times after registration. Every update of bio-data will be verified by us.
 
-/upload_picture - uploads your profile picture. You can use it to update or change your profile picture after registration.
+/upload_picture - uploads your profile picture. You can use it to update or change your profile picture up to five times after registration. Every update of picture will be verified by us.
 
-/status - tells you your registration status (pending, complete, verified) and what to do if pending. 
+/status - tells you your registration status (pending, complete, verified) and if any  action is required from you. 
 
-/pause - pause sending you profiles and your profile to your matches. Does not delete your profile.
+/deactivate - temporarily pause sending you profiles of your matches and your profile to them. Does not delete your profile.
 
-/resume - start sending you profiles and your profile to your matches again.
+/reactivate - start sending you profiles and your profile to your matches again.
 
-/delete - delete your Would Bee account. Stop sending you profiles and stop sending others your profile. This action is irreversible.
+/delete - delete your Would Bee account. First it marks your profile for deletion and deactivates your profile for a week. During this week, if you wish to reinstate your account, you can use /cancel_delete command. Otherwise, after a week, your account is permanently & irreversibly deleted.
 
-
--- The below features will be released soon --
+/cancel_delete - cancel deletion of your Would Bee account. Only works before the account has been deleted.
 
 /support - to get support or give feedback.
+
+-- The below features will be released soon --
 
 /preference - set your partner preference to fine-tune the matches you receive.
 
 /preview - shows you how your profile looks when sent to others.
-`
+`;
 // /get_app - get the download link to our 
 
 
@@ -69,7 +72,7 @@ export const alreadyRegisteredMsg = `You are already registered! If you'd like t
 export const fatalErrorMsg = `Some error occurred. We have notified our engineers and it will be fixed soon. Please try again later!`;
 
 
-export const unregisteredUserMsg = `You are not registered! To upload bio-data or profile picture, you need to register first. To register, please type or click on /register_me command. To see the list of all available commands, use /help command.`;
+export const unregisteredUserMsg = `You are not registered! To upload bio-data or profile picture, you need to register first. To register, please type or click on /register command. To see the list of all available commands, use /help command.`;
 
 
 export const unsupportedPictureFormat = `Error: Only 'jpg' and 'png' formats are accepted for profile pictures. Please retry with supported format or type "Cancel" to quit.`;
@@ -79,3 +82,9 @@ export const unsupportedBioFormat = `Error: Only 'pdf' and MS-Word files('docx' 
 
 
 export const supportMsg = `Please write your query or feedback (min 20 characters) or type Cancel to quit.`;
+
+
+export const deletionSuccessMsg = `Alright! We have deactivated your profile for a week, after which it will be deleted permanently. In case you change your mind within a week, you can use /recover command to reactivate your profile and cancel deletion. Note that once deleted, your profile will cannot be recovered. `;
+
+
+export const acknowledgeDeletionRequest = 'Sure. Kindly choose reason for deletion from below options. This will help us make our service better.';

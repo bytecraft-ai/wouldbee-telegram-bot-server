@@ -45,6 +45,7 @@ export enum UserStatus {
     ACTIVATION_FAILED,
     ACTIVATED,
     DEACTIVATED,
+    PENDING_DELETION,
     DELETED,
     BANNED,
 }
@@ -347,17 +348,19 @@ export enum DocRejectionReason {
 
 
 export enum ProfileDeletionReason {
-    FOUND_MATCH_HERE = 1,
-    FOUND_MATCH_ELSEWHERE,
-    POSTPONED_MARRIAGE_PLAN,
-    UNHAPPY_NEED_TO_CHANGE_PROFILE,
-    UNHAPPY_PRIVACY_ISSUE,
-    UNHAPPY_IRRELEVANT_MATCHES,
-    UNHAPPY_REPEATED_MATCHES,
-    UNHAPPY_FEW_MATCHES,
-    UNHAPPY_TECHNICAL_ISSUE,
-    BAN,
-    OTHER
+    Found_match_on_Would_Bee = 1,
+    Found_match_elsewhere,
+    Postponed_marriage_plan,
+    // Unhappy
+    Facing_technical_issue,
+    Facing_privacy_issue,
+    Need_to_update_profile,
+    Getting_irrelevant_matches,
+    Getting_repeated_matches,
+    Getting_very_few_matches,
+    Other,
+    // System
+    Ban
 }
 
 

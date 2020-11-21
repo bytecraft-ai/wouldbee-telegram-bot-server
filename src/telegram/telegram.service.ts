@@ -9,17 +9,11 @@
  * 
  *  5. Implement thumbnails for bio-data
  * 
- *  6. Notify user on bio/picture verification
- * 
- *  7. Implement temporary deactivation of profiles
- * 
- *  8. Implement permanent deletion of profiles
- * 
- *  9. Give status on /help - message
+ *  6. Notify user on bio/picture verification, profile deletion, reactivation.
  * 
  */
 
-import { ConflictException, forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { assert } from 'console';
 import {
     Start,
@@ -36,13 +30,14 @@ import {
     Stage,
     BaseScene,
     Command,
+    Action,
 } from 'nestjs-telegraf';
-import { RegistrationActionRequired, TypeOfDocument, DocRejectionReason, UserStatus } from 'src/common/enum';
+import { RegistrationActionRequired, TypeOfDocument, DocRejectionReason, UserStatus, ProfileDeactivationDuration, ProfileDeletionReason } from 'src/common/enum';
 import { deleteFile, mimeTypes } from 'src/common/util';
 import { Profile } from 'src/profile/entities/profile.entity';
 import { TelegramProfile } from 'src/profile/entities/telegram-profile.entity';
 import { ProfileService } from 'src/profile/profile.service';
-import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, registrationCancelled, supportMsg } from './telegram.constants';
+import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, registrationCancelled, supportMsg, deletionSuccessMsg, acknowledgeDeletionRequest } from './telegram.constants';
 import { getBioDataFileName, getPictureFileName, processBioDataFile, processPictureFile, validateBioDataFileSize, validatePhotoFileSize, } from './telegram.service.helper';
 import { Document } from 'src/profile/entities/document.entity';
 import { supportResolutionMaxLength, supportResolutionMinLength } from 'src/common/field-length';
@@ -71,6 +66,11 @@ export class TelegramService {
         this.createUploadBioWizard();
         this.createUploadPictureWizard();
 
+        this.bot.catch((err, ctx) => {
+            logger.error(`Bot encountered an error for updateType: ${ctx.updateType}, Error:\n${JSON.stringify(err)}`);
+            ctx.reply(fatalErrorMsg);
+        })
+
         // Handle all unsupported messages.
         // bot.on('message', ctx => ctx.reply('Please use /help command to see what this bot supports.'));
     }
@@ -88,6 +88,56 @@ export class TelegramService {
         const telegramProfile = await this.profileService.getTelegramProfileByTelegramUserId(ctx.from.id, { throwOnFail: false });
         logger.log(`getProfile() - telegramProfile: ${JSON.stringify(telegramProfile)}`);
         return telegramProfile;
+    }
+
+
+    async getOrCreateProfile(ctx: Context) {
+        let telegramProfile = await this.getProfile(ctx);
+        if (!telegramProfile) {
+            telegramProfile = await this.createTelegramProfile(ctx);
+        }
+        return telegramProfile;
+
+        // let msg = '';
+
+        // switch (telegramProfile.status) {
+        //     case UserStatus.UNREGISTERED:
+        //     case UserStatus.PHONE_VERIFIED:
+        //         msg = 'You are unregistered. Please type or click on /register to register.'
+        //         break;
+
+        //     case UserStatus.ACTIVATION_PENDING:
+        //         msg = 'Your profile activation is pending at our end. We will verify your submitted bio-data and profile-picture shortly and notify you of the decision.'
+        //         break;
+
+        //     case UserStatus.ACTIVATION_FAILED:
+        //         msg = `Your profile activation failed.`
+        //         const causingDocument = await this.profileService.getInvalidatedDocumentCausingProfileInvalidation(telegramProfile.id)
+        //         if (causingDocument?.invalidationReason) {
+        //             msg += `\n Reason - ${causingDocument.invalidationReason}.`
+        //         }
+        //         if (causingDocument?.invalidationDescription) {
+        //             msg += `\n Description - ${causingDocument.invalidationDescription}`
+        //         }
+        //         break;
+
+        //     case UserStatus.ACTIVATED:
+        //         msg = 'Your profile is activated and requires no action from you.'
+        //         break;
+
+        //     case UserStatus.DEACTIVATED:
+        //         msg = 'Your profile is deactivated. In this state, you will neither receive any matches nor your profile with be shared with your matches. To reactivate it, use /reactivate command.'
+        //         break;
+
+        //     case UserStatus.DELETED:
+        //         msg = 'Your profile has been deleted.'
+        //         break;
+
+        //     case UserStatus.BANNED:
+        //         msg = 'Your profile has been banned.'
+        //         break;
+        // }
+        // await ctx.reply(msg);
     }
 
 
@@ -412,7 +462,7 @@ export class TelegramService {
         );
         const stage = new Stage([registrationWizard]);
         this.bot.use(stage.middleware());
-        this.bot.command('register_me', ctx => {
+        this.bot.command('register', ctx => {
             ctx.scene.enter('registration-wizard');
         });
     }
@@ -718,15 +768,168 @@ export class TelegramService {
     }
 
 
-    // TODO
+    @Command('delete')
+    async delete(ctx: Context) {
+        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+        const telegramProfile = await this.getProfile(ctx);
+
+        // await this.profileService.markProfileForDeletion(ctx.from.id, );
+        if (telegramProfile.status < UserStatus.ACTIVATION_PENDING) {
+            await ctx.reply('Cannot delete unregistered profile.');
+        }
+        else if (telegramProfile.status === UserStatus.BANNED) {
+            // TODO: in terms and conditions, mention that we will not delete banned profiles.
+            await ctx.reply('Cannot delete banned profile.');
+        }
+        else if (telegramProfile.status === UserStatus.PENDING_DELETION) {
+            await ctx.reply('Your profile has already been marked for deletion!');
+        }
+        else {
+
+            const inlineKeyboardButtons = [{ text: 'Cancel', callback_data: `delete-0` }];
+            for (let i = 1; i <= ProfileDeletionReason.Other; i++) {
+                inlineKeyboardButtons.push({ text: ProfileDeletionReason[i].replace('_', ' '), callback_data: `delete-${i}` })
+            }
+
+            await ctx.telegram.sendMessage(ctx.chat.id, acknowledgeDeletionRequest, {
+                reply_markup: {
+                    inline_keyboard: [
+                        inlineKeyboardButtons
+                    ]
+                }
+            });
+        }
+    }
+
+
+    // delete callback function
+    @Action(/delete-[0-10]/)
+    async delete_callback(ctx: Context) {
+        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+        logger.log(`delete_callback data: ${ctx.callbackQuery.data}`);
+        await ctx.deleteMessage();
+
+        const callbackData = parseInt(ctx.callbackQuery.data.split('-')[1]);
+
+        if (callbackData === 0) {
+            await ctx.reply('Cancelled');
+        }
+        else {
+            await this.profileService.markProfileForDeletion(ctx.from.id, callbackData);
+            await ctx.reply(deletionSuccessMsg);
+        }
+
+    }
+
+
+    @Command('cancel-delete')
+    async cancel_delete(ctx: Context) {
+        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+        const telegramProfile = await this.getProfile(ctx);
+
+        if (telegramProfile.status === UserStatus.PENDING_DELETION) {
+            await ctx.reply('Your profile has already been marked for deletion!');
+        }
+        else {
+
+            await ctx.telegram.sendMessage(ctx.chat.id, acknowledgeDeletionRequest, {
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            { text: 'Confirm', callback_data: `cancel_delete-confirm` },
+                            { text: 'Cancel', callback_data: `cancel_delete-cancel` }
+                        ]
+                    ]
+                }
+            });
+        }
+    }
+
+
+    @Action(/cancel_delete-[confirm,cancel]/)
+    async cancel_delete_callback(ctx: Context) {
+        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+        logger.log(`cancel_delete callback data: ${ctx.callbackQuery.data}`);
+
+        if (ctx.callbackQuery.data === 'cancel_delete-confirm') {
+            await this.profileService.cancelProfileForDeletion(ctx.from.id);
+            await ctx.reply('Your profile deletion has been canceled.');
+        } else {
+            await ctx.reply('Cancelled');
+        }
+    }
+
+
+    @Command('deactivate')
+    async deactivate(ctx: Context) {
+        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+        const telegramProfile = await this.getOrCreateProfile(ctx);
+        if (telegramProfile.status === UserStatus.ACTIVATED) {
+            await ctx.telegram.sendMessage(ctx.chat.id, 'Okay. For how long do you want to deactivate?', {
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            { text: '1 week', callback_data: "deactivate-1" },
+                            { text: '2 weeks', callback_data: "deactivate-2" }
+                        ],
+                        [
+                            { text: '1 month', callback_data: "deactivate-3" },
+                            { text: '2 months', callback_data: "deactivate-4" }
+                        ]
+                    ]
+                }
+            });
+        } else {
+            await ctx.reply('Only Active profiles can be deactivated. Use the /help command to see how to interact with Would Bee bot.');
+        }
+    }
+
+
+    // deactivate callback handler
+    @Action(/deactivate-[1,2,3,4]/)
+    async deactivation_callback(ctx: Context) {
+        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+        logger.log(`deactivate data: ${ctx.callbackQuery.data}`);
+        await ctx.deleteMessage();
+
+        const duration = parseInt(ctx.callbackQuery.data.split('-')[1]);
+        const durationString = ProfileDeactivationDuration[duration];
+
+        try {
+            await this.profileService.deactivateProfile(ctx.from.id, duration);
+
+            await ctx.reply(`Alright! Deactivated your profile for ${durationString.toLocaleLowerCase().replace('_', ' ')}. Use /reactivate command to reactivate your profile anytime.`);
+        }
+        catch (error) {
+            await ctx.reply(fatalErrorMsg);
+        }
+    }
+
+
+    @Command('reactivate')
+    async reactivate(ctx: Context) {
+        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+        const telegramProfile = await this.getOrCreateProfile(ctx);
+        if (telegramProfile.status === UserStatus.DEACTIVATED) {
+            try {
+                await this.profileService.reactivateProfile(telegramProfile.telegramUserId);
+                await ctx.reply('Welcome back! Your profile has been reactivated successfully.');
+            }
+            catch (error) {
+                await ctx.reply(fatalErrorMsg);
+            }
+        } else {
+            ctx.reply('Only Deactivated profiles can be reactivated. Use the /help command to see how to interact with Would Bee bot.');
+        }
+    }
+
+
+    // TODO: test
     @Command('status')
     async status(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-
-        let telegramProfile = await this.getProfile(ctx);
-        if (!telegramProfile) {
-            telegramProfile = await this.createTelegramProfile(ctx);
-        }
+        const telegramProfile = await this.getOrCreateProfile(ctx);
+        logger.log(`status:, ${telegramProfile.status}`);
 
         let msg = '';
 
@@ -766,6 +969,10 @@ export class TelegramService {
             case UserStatus.BANNED:
                 msg = 'Your profile has been banned.'
                 break;
+
+            default:
+                msg = fatalErrorMsg;
+                logger.error(`Could not determine status for Telegram profile with id: ${telegramProfile.id}, telegram profile:\n${JSON.stringify(telegramProfile)}`);
         }
 
         await ctx.reply(msg);

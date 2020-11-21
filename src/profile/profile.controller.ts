@@ -1,19 +1,18 @@
-import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Render, Param, Logger, UseInterceptors, UploadedFiles, Query, DefaultValuePipe, ParseIntPipe, ParseArrayPipe } from '@nestjs/common';
-import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
+import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, UseInterceptors, UploadedFiles, Query, DefaultValuePipe, ParseIntPipe, ParseArrayPipe } from '@nestjs/common';
 import { CreateCasteDto, CreateProfileDto, CreateUserDto, FileUploadDto, PartnerPreferenceDto, RegistrationDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
-// import { User } from './entities/user.entity';
-import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { DocumentValidationDto, DocumentTypeDto, GetCitiesDto, GetCountriesDto, GetStatesDto, GetTelegramProfilesDto, PaginationDto, BanProfileDto } from './dto/location.dto';
-import { editFileName, imageOrDocFileFilter } from 'src/common/file-util';
-import { diskStorage } from 'multer';
-import { AwsService } from 'src/aws-service/aws-service.service';
 import { TypeOfDocument, UserRole, UserStatOptions } from 'src/common/enum';
 import { TelegramProfile } from './entities/telegram-profile.entity';
 import { IList, IUserStats } from 'src/common/interface';
 import { Roles } from 'src/auth/set-role.decorator';
 import { GetAgent } from 'src/auth/get-agent.decorator';
 import { WbAgent } from 'src/agent/entities/agent.entity';
+// import { AwsService } from 'src/aws-service/aws-service.service';
+// import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
+// import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
+// import { editFileName, imageOrDocFileFilter } from 'src/common/file-util';
+// import { diskStorage } from 'multer';
 
 const logger = new Logger('ProfileController');
 
@@ -23,7 +22,7 @@ const logger = new Logger('ProfileController');
 export class CommonController {
     constructor(
         private readonly profileService: ProfileService,
-        private readonly awsService: AwsService
+        // private readonly awsService: AwsService
     ) { }
 
     // @Get('/upload')      // meant for testing
@@ -37,13 +36,6 @@ export class CommonController {
     async getCommonData() {
         return this.profileService.getCommonData();
     }
-
-
-    // @Get('/seed')
-    // async seed() {
-    //     await this.profileService.seedCaste();
-    //     return this.getCastes();
-    // }
 
 
     @Get('/caste')
@@ -127,79 +119,6 @@ export class CommonController {
     }
 
 }
-
-
-// @Controller('user')
-// @UsePipes(ValidationPipe)
-// export class UserController {
-//     constructor(private readonly profileService: ProfileService) { }
-
-//     @Post('/')
-//     // @Render('index')
-//     @UseInterceptors(FileFieldsInterceptor([
-//         { name: 'bioData', maxCount: 1 },
-//         { name: 'idProof', maxCount: 1 },
-//     ], {
-//         // dest: 'uploads/',
-//         dest: '/tmp/wb-tg-uploads/',
-//         storage: diskStorage({
-//             destination: '/tmp/wb-tg-uploads/',
-//             filename: editFileName,
-//             //     function (req, file, cb) {
-//             //     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-//             //     cb(null, file.fieldname + '-' + uniqueSuffix)
-//             // }
-//         }),
-//         fileFilter: imageOrDocFileFilter,
-//         // limits: {
-//         //     fields: 100,
-//         //     fileSize: 5000000,       // ~ 5 MB
-//         //     files: 2,
-//         //     parts: 5000000
-//         // }
-//     }))
-//     async createUser(@Body() registerInput: CreateUserDto,
-//         @UploadedFiles() files): Promise<User> {
-//         logger.log('registerUser was hit with:', JSON.stringify(registerInput));
-//         console.log('files:', files);
-//         const user = await this.profileService.createUser(registerInput);
-//         console.log('registered user:', user);
-//         return user;
-//     }
-
-
-// @Post('/register')
-// @UseInterceptors(FileFieldsInterceptor([
-//     { name: 'bioData', maxCount: 1 },
-//     { name: 'idProof', maxCount: 1 },
-// ]))
-// async register(@Body() registrationDto: RegistrationDto, @UploadedFiles() files) {
-//     console.log(files);
-//     const user = await this.profileService.register(registrationDto);
-// }
-
-
-// @Get('/')
-// async getUsers() {
-//     console.log('get all users');
-//     return this.profileService.getUsers();
-// }
-
-
-// @Get('/find:phone')
-// async findUser(@Param('phone') phone: string) {
-//     console.log('get user with phone', phone);
-//     return this.profileService.getUserByPhone(phone);
-// }
-
-
-// @Get(':id')
-// async getUser(@Param('id') id: string) {
-//     console.log('get user with id', id);
-//     return this.profileService.getUser(id);
-// }
-
-// }
 
 
 @Controller('stats')

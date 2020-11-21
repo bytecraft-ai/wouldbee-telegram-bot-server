@@ -117,7 +117,7 @@ export class TelegramProfile extends Verifiable {
     @IsOptional()
     @IsPositive()
     @IsInt()
-    @Column("smallint", { nullable: true })
+    @Column("smallint") // { nullable: true }
     status?: UserStatus;
 
     @Column({ "nullable": true })

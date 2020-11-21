@@ -1,18 +1,41 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap, OnModuleInit } from '@nestjs/common';
 import { readFileSync } from 'fs';
-import { Religion } from 'src/common/enum';
+import { AgentService } from 'src/agent/agent.service';
+import { AgentRegistrationDto } from 'src/agent/dto/agent-register.dto';
+import { Religion, UserRole } from 'src/common/enum';
 import { ProfileService } from 'src/profile/profile.service';
 
-const countriesToSeed = ['nepal'];
+const logger = new Logger('SeederService');
+
+const countriesToSeed = ['india', 'australia', 'canada', 'france', 'germany', 'new zealand', 'singapore', 'united states', 'united kingdom'];
 // ['india', 'canada', 'united states', 'argentina', 'chile', 'australia', 'new zealand', 'finland', 'sweden', 'denmark', 'norway', 'united kingdom', 'portugal', 'spain', 'france', 'germany', 'netherlands the', 'switzerland', 'austria', 'belgium', 'czech republic', 'ireland', 'poland', 'russia', 'brunei', 'oman', 'qatar', 'saudi arabia', 'south africa', 'united arab emirates', 'china', 'nepal', 'japan', 'korea south', 'singapore'];
 
 
 @Injectable()
-export class SeederService {
+export class SeederService implements OnApplicationBootstrap {
     constructor(
-        private readonly profileService: ProfileService
+        private readonly profileService: ProfileService,
+        private readonly agentService: AgentService
     ) { }
 
+    async onApplicationBootstrap() {
+        try {
+            logger.log('seeding agents ...');
+            await this.seedAgents();
+
+            logger.log('seeding castes ...');
+            await this.seedCaste();
+
+            logger.log('seeding locations ...');
+            await this.seedLocation();
+
+            logger.log('Done.');
+        }
+        catch (error) {
+            logger.error('Error occurred while seeding agents, castes, and locations.');
+        }
+
+    }
 
     private getReligionEnum(religion: string): Religion | undefined {
         switch (religion) {
@@ -33,6 +56,9 @@ export class SeederService {
             readFileSync("assets/caste.data.json").toString()
         );
         const data = casteData.data;
+
+        const existingCastes = this.profileService.getCastesLike('', 0, 100);
+
         for (let i = 0; i < data.length; i++) {
             if (data[i].religion.startsWith('_')) {
                 continue
@@ -41,6 +67,8 @@ export class SeederService {
             const castes = data[i].castes;
             await this.profileService.createCastes(castes, religion);
         }
+
+        logger.log('Castes seeded.');
     }
 
 
@@ -49,12 +77,20 @@ export class SeederService {
             '{\n"countries": ' + readFileSync(jsonFileLocation).toString() + '\n}'
         );
 
+        const existingCountries = (await this.profileService.getCountries())
+            .map(country => country.name.toLocaleLowerCase());
+
+        console.log('countriesToSeed:', countriesToSeed);
+        // console.log('existingCountries:', existingCountries);
+
         const countries = data.countries;
         for await (let country of countries) {
-            if (countriesToSeed.includes(country['name'].toLowerCase()))
+            if (!countriesToSeed.includes(country['name'].toLocaleLowerCase()))
+                continue
+            else if (existingCountries.includes(country['name'].toLocaleLowerCase()))
                 continue
             else {
-                console.log(country["name"].toLowerCase(), country["phone_code"]);
+                console.log(country["name"].toLocaleLowerCase(), country["phone_code"]);
                 await this.profileService.createCountry(country);
                 // console.log('country-id:', country["id"]);
                 await this.profileService.createStates(country["states"], country["id"]);
@@ -63,7 +99,56 @@ export class SeederService {
                     await this.profileService.createCities(state["cities"], state["id"]);
                 }
             }
-
         }
+        logger.log('Locations seeded.');
     }
+
+
+    async seedAgents() {
+        const rahul: AgentRegistrationDto = {
+            email: "rahul@wouldbee.com",
+            phone: "9611121073",
+            name: "Rahul Gupta",
+            password: "Password-1",
+            role: UserRole.ADMIN
+        }
+        const charul: AgentRegistrationDto = {
+            email: "charul@wouldbee.com",
+            phone: "97030726206",
+            name: "Kritika Agrawal",
+            password: "Password-1",
+            role: UserRole.AGENT
+        }
+        const tanu: AgentRegistrationDto = {
+            email: "tanugupta17@gmail.com",
+            phone: "7023400244",
+            name: "Tanuja Gupta",
+            password: "Password-1",
+            role: UserRole.AGENT
+        }
+        const utkarsh: AgentRegistrationDto = {
+            email: "ub270390@gmail.com",
+            phone: "1234567890",
+            name: "Utkarsh Bhatnagar",
+            password: "Password-1",
+            role: UserRole.AGENT
+        }
+
+        const admins = [rahul, charul, tanu, utkarsh];
+        let admin = rahul;
+
+        try {
+            for await (admin of admins) {
+                const existingAgentEmails = (await this.agentService.getAgents())
+                    .map(agent => agent.email);
+                if (!existingAgentEmails.includes(admin.email)) {
+                    await this.agentService.registerAgent(admin);
+                }
+            }
+        } catch (err) {
+            logger.log(`Could not init Admin: ${admin}. Error: ${err}`);
+        }
+        logger.log('Agents seeded.');
+    }
+
 }

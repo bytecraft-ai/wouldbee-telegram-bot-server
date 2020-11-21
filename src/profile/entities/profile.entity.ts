@@ -25,6 +25,7 @@ import { City } from './city.entity';
 import { PartnerPreference } from './partner-preference.entity';
 import { TelegramProfile } from './telegram-profile.entity';
 import { Language, MaritalStatus } from 'src/common/enum';
+import { DeactivatedProfile } from './deactivated-profile.entity';
 
 // TODO: implement table indexing on important columns
 
@@ -141,15 +142,13 @@ export class Profile {
 
     // @Field()
     @OneToOne(type => PartnerPreference)
-    partnerPreference: PartnerPreference;
+    partnerPreference?: PartnerPreference;
 
-    @Column({ nullable: true })
-    deactivatedOn?: Date;
+    @OneToOne(type => DeactivatedProfile)
+    deactivatedProfile?: DeactivatedProfile;
 
-    // This will be null if the deactivation is done by the system
-    // upon activation, the record will be deleted
-    @Column({ nullable: true })
-    activateOn?: Date;
+    @Column({ default: true })
+    active: boolean;
 
     // @Column({ default: () => `now()` })
     // lastSeen: Date;

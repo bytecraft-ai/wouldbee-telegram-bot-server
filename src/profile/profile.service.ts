@@ -1,8 +1,8 @@
 import { Injectable, Logger, BadRequestException, NotFoundException, ConflictException, NotImplementedException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, MaritalStatus, ProfileSharedWith, S3Option, RegistrationActionRequired, UserStatOptions, ProfileDeactivationDuration, ProfileDeletionReason, UserStatus } from 'src/common/enum';
-import { daysAhead, deDuplicateArray, getAgeInYearsFromDOB, setDifferenceFromArrays } from 'src/common/util';
-import { IsNull, Not, Repository, SelectQueryBuilder } from 'typeorm';
+import { daysAhead, deDuplicateArray, getAgeInYearsFromDOB, nextWeek, setDifferenceFromArrays } from 'src/common/util';
+import { IsNull, LessThanOrEqual, Not, Repository, SelectQueryBuilder } from 'typeorm';
 import { PartnerPreferenceDto, CreateProfileDto, CreateCasteDto, SupportResolutionDto } from './dto/profile.dto';
 import { Caste } from './entities/caste.entity';
 import { City } from './entities/city.entity';
@@ -10,7 +10,7 @@ import { Country } from './entities/country.entity';
 import { PartnerPreference } from './entities/partner-preference.entity';
 import { Profile } from './entities/profile.entity';
 import { State } from './entities/state.entity';
-import { GetAllDocumentsOption, GetCityOptions, GetStateOptions } from './profile.interface';
+import { GetCityOptions, GetStateOptions } from './profile.interface';
 import { TelegramProfile } from './entities/telegram-profile.entity';
 import { AwsService } from 'src/aws-service/aws-service.service';
 import { Transactional } from 'typeorm-transactional-cls-hooked';
@@ -19,7 +19,7 @@ import { Document } from './entities/document.entity';
 import { isUUID } from 'class-validator';
 import { AgentService } from 'src/agent/agent.service';
 import { WbAgent } from 'src/agent/entities/agent.entity';
-import { isNil, sortBy } from 'lodash';
+import { isNil } from 'lodash';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
 import { Match } from './entities/match.entity';
@@ -29,9 +29,12 @@ import { BanProfileDto, DocumentValidationDto } from './dto/location.dto';
 import { Cron } from '@nestjs/schedule';
 import { assert } from 'console';
 import { Support } from './entities/support.entity';
+import { DeactivatedProfile } from './entities/deactivated-profile.entity';
+import { ProfileMarkedForDeletion } from './entities/to-delete-profile.entity';
 
 const logger = new Logger('ProfileService');
 
+// TODO: use data-loaders for speeding up stuff.
 @Injectable()
 export class ProfileService {
     constructor(
@@ -45,7 +48,9 @@ export class ProfileService {
 
         @InjectRepository(Profile) private profileRepository: Repository<Profile>,
         @InjectRepository(TelegramProfile) private telegramRepository: Repository<TelegramProfile>,
-        // @InjectRepository(DeactivatedProfile) private deactivatedProfileRepository: Repository<DeactivatedProfile>,
+        @InjectRepository(DeactivatedProfile) private deactivatedProfileRepository:
+            Repository<DeactivatedProfile>,
+        @InjectRepository(ProfileMarkedForDeletion) private toDeleteProfileRepository: Repository<ProfileMarkedForDeletion>,
 
         @InjectRepository(Match) private matchRepository: Repository<Match>,
         @InjectRepository(PartnerPreference) private prefRepository: Repository<PartnerPreference>,
@@ -206,8 +211,7 @@ export class ProfileService {
                 await this.telegramRepository.update({ id: telegramProfileId }, { status: UserStatus.ACTIVATED });
             }
         } catch (error) {
-            logger.error('Could not save profile. Error:');
-            logger.error(error);
+            logger.error(`Could not save profile. Error:\n${JSON.stringify(error)}`);
             throw error;
         }
 
@@ -330,6 +334,7 @@ export class ProfileService {
     // TODO: test
     @Transactional()
     async softDeleteProfile(telegramUserId: number, reason: ProfileDeletionReason) {
+        logger.log(`softDeleteProfile(telegramUserId: ${telegramUserId}): start`);
         const telegramProfile = await this.telegramRepository.findOne({
             where: { telegramUserId },
             relations: ['profile']
@@ -345,7 +350,7 @@ export class ProfileService {
         }
 
         try {
-            await this.profileRepository.softRemove(profile);
+            await this.profileRepository.softDelete(telegramProfile.id);
             await this.prefRepository.softDelete(telegramProfile.id);
 
             // delete documents
@@ -365,19 +370,117 @@ export class ProfileService {
 
             await matchDeleteQuery.softDelete().execute();
 
+            await this.deactivatedProfileRepository.createQueryBuilder()
+                .whereInIds(profile.id).softDelete().execute();
+
+            await this.toDeleteProfileRepository.createQueryBuilder()
+                .whereInIds(profile.id).softDelete().execute();
+
             telegramProfile.status = UserStatus.DELETED;
+            telegramProfile.reasonForDeletion = reason;
             await this.telegramRepository.save(telegramProfile);
 
         } catch (error) {
-            logger.error('Could not delete profile. Error:');
-            logger.error(error);
+            logger.error(`Could not delete profile. Error:\n${JSON.stringify(error)}`);
             throw error;
         }
     }
 
+
+    @Transactional()
+    async markProfileForDeletion(telegramUserId: number, reason: ProfileDeletionReason) {
+        logger.log(`markProfileForDeletion(telegramUserId: ${telegramUserId}): start`);
+        const telegramProfile: TelegramProfile = await this.telegramRepository.findOne({
+            where: { telegramUserId },
+            relations: ['profile']
+        });
+        if (!telegramProfile) {
+            throw new NotFoundException(`Telegram profile with telegram user id: ${telegramUserId} not found!`);
+        }
+        let profile = telegramProfile.profile;
+
+        if (telegramProfile.status >= UserStatus.ACTIVATION_PENDING
+            && telegramProfile.status < UserStatus.PENDING_DELETION) {
+            throw new ConflictException("Cannot delete banned or unregistered profiles.")
+        }
+
+        // if the profile exists and is not banned, mark it for deletion
+
+        let toDeleteProfile: ProfileMarkedForDeletion = await this.toDeleteProfileRepository.findOne(telegramProfile.id);
+
+        assert(!toDeleteProfile, `toDeleteProfile should not exist for this profile. Id: ${telegramProfile.id}`);
+
+        toDeleteProfile = this.toDeleteProfileRepository.create({
+            telegramProfile,
+            lastActiveStatus: profile?.active,
+            lastProfileStatus: telegramProfile.status,
+            deleteOn: nextWeek()
+        });
+
+        try {
+            await this.toDeleteProfileRepository.save(toDeleteProfile);
+
+            if (profile) {
+                profile.active = false;
+                profile = await this.profileRepository.save(profile);
+            }
+
+            telegramProfile.status = UserStatus.PENDING_DELETION;
+            telegramProfile.reasonForDeletion = reason;
+            await this.telegramRepository.save(telegramProfile);
+        }
+        catch (error) {
+            logger.error(`Could not mark profile for deletion. Telegram Profile Id: ${telegramProfile.id}, Error:\n${JSON.stringify(error)}`);
+            throw error;
+        }
+    }
+
+
+    @Transactional()
+    async cancelProfileForDeletion(telegramUserId: number) {
+        logger.log(`cancelProfileForDeletion(telegramUserId: ${telegramUserId}): start`);
+        const telegramProfile: TelegramProfile = await
+            this.getTelegramProfileByTelegramUserId(telegramUserId, {
+                throwOnFail: true,
+                relations: ['profile']
+            });
+
+        let profile = telegramProfile.profile;
+
+        if (telegramProfile.status !== UserStatus.PENDING_DELETION) {
+            throw new ConflictException("Cannot cancel deletion for a profile that is not marked for deletion.");
+        }
+
+        // if the profile exists and is marked for deletion, un-mark it.
+
+        let toDeleteProfile: ProfileMarkedForDeletion = await this.toDeleteProfileRepository.findOne(telegramProfile.id);
+
+        assert(toDeleteProfile, `toDeleteProfile should exist for this profile. Id: ${telegramProfile.id}`);
+
+        try {
+            if (profile) {
+                profile.active = toDeleteProfile?.lastActiveStatus;
+                profile = await this.profileRepository.save(profile);
+            }
+
+            telegramProfile.status = toDeleteProfile?.lastProfileStatus;
+            telegramProfile.reasonForDeletion = null;
+            await this.telegramRepository.save(telegramProfile);
+
+            await this.toDeleteProfileRepository.delete(telegramProfile.id);
+        }
+        catch (error) {
+            logger.error(`Could not cancel profile marked for deletion. Telegram Profile Id: ${telegramProfile.id}, Error:\n${JSON.stringify(error)}`);
+            throw error;
+        }
+    }
+
+
     // TODO: test
     @Transactional()
     async deactivateProfile(telegramUserId: number, deactivateFor: ProfileDeactivationDuration): Promise<Profile | undefined> {
+        logger.log(`deactivateProfile(telegramUserId: ${telegramUserId}): start`);
+
         const telegramProfile = await this.getTelegramProfileByTelegramUserId(telegramUserId, { throwOnFail: true, relations: ['profile'] });
 
         let profile = telegramProfile.profile;
@@ -386,6 +489,9 @@ export class ProfileService {
             logger.error(`Conflict - Profile with id: ${telegramProfile.id} is not in ACTIVATED state to be deactivated!`);
             throw new ConflictException('Profile is not in ACTIVATED state to be deactivated!');
         }
+
+        assert(profile.active);
+        profile.active = false;
 
         let activateOn: Date;
         switch (deactivateFor) {
@@ -408,16 +514,23 @@ export class ProfileService {
                 throw new Error('Choose one of the values from ProfileDeactivationDuration enum');
         }
 
-        profile.deactivatedOn = new Date();
-        profile.activateOn = activateOn;
+        let deactivatedProfile = await this.deactivatedProfileRepository.findOne(profile.id);
+        assert(!deactivatedProfile, `deactivatedProfile should not exist for an active profile. Profile Id: ${profile.id}`);
+
+        deactivatedProfile = this.deactivatedProfileRepository.create({
+            profile: profile,
+            deactivatedOn: new Date(),
+            activateOn
+        });
+
         telegramProfile.status = UserStatus.DEACTIVATED;
 
         try {
             profile = await this.profileRepository.save(profile);
             await this.telegramRepository.save(telegramProfile);
+            await this.deactivatedProfileRepository.save(deactivatedProfile);
         } catch (error) {
-            logger.error('Could not deactivate profile. Error:');
-            logger.error(error);
+            logger.error(`Could not deactivate profile. Error:\n${JSON.stringify(error)}`);
             throw error;
         }
 
@@ -428,25 +541,26 @@ export class ProfileService {
     // TODO: test
     @Transactional()
     async reactivateProfile(telegramUserId: number): Promise<Profile | undefined> {
+        logger.log(`reactivateProfile(telegramUserId: ${telegramUserId}): start`);
         const telegramProfile = await this.getTelegramProfileByTelegramUserId(telegramUserId, { throwOnFail: true, relations: ['profile'] });
 
         let profile = telegramProfile.profile;
+        assert(!(profile.active));
+        profile.active = true;
 
         if (telegramProfile.status !== UserStatus.DEACTIVATED) {
             logger.error(`Conflict - Profile with id: ${telegramProfile.id} is not in DEACTIVATED state to be activated!`);
             throw new ConflictException('Profile is not in DEACTIVATED state to be activated!');
         }
 
-        profile.deactivatedOn = null;
-        profile.activateOn = null;
         telegramProfile.status = UserStatus.ACTIVATED;
 
         try {
             profile = await this.profileRepository.save(profile);
             await this.telegramRepository.save(telegramProfile);
+            await this.deactivatedProfileRepository.delete(profile.id);
         } catch (error) {
-            logger.error('Could not reactivate profile. Error:');
-            logger.error(error);
+            logger.error(`Could not reactivate profile. Error:\n${JSON.stringify(error)}`);
             throw error;
         }
 
@@ -455,17 +569,133 @@ export class ProfileService {
 
 
     // TODO: test
-    async activateProfiles() {
+    @Transactional()
+    async batchReactivateProfiles() {
+        logger.log(`batchReactivateProfiles(): start`);
+
         const today = new Date();
         today.setHours(23, 59, 59);
 
-        await this.profileRepository
-            .createQueryBuilder('profile')
-            .update()
-            .set({ deactivatedOn: null, activateOn: null })
-            .where('profile.deactivatedOn IS NOT NULL')
-            .andWhere('profile.activateOn <= :today', { today })
-            .execute();
+        const count = await this.deactivatedProfileRepository
+            .createQueryBuilder('d_profile')
+            .where('d_profile.activateOn <= :today', { today })
+            .getCount();
+
+        const profileQuery = this.profileRepository
+            .createQueryBuilder('profile');
+
+        profileQuery.where(qb => {
+            const subQuery = qb.subQuery()
+                .select("deactivated_profile.id")
+                .from(DeactivatedProfile, "deactivated_profile")
+                .where("deactivated_profile.activateOn <= :today")
+                .getQuery();
+            return "profile.id IN " + subQuery;
+        });
+        profileQuery.setParameter("today", today);
+
+        const telegramProfileQuery = this.telegramRepository
+            .createQueryBuilder('tel_profile');
+
+        telegramProfileQuery.where(qb => {
+            const subQuery = qb.subQuery()
+                .select("deactivated_profile.id")
+                .from(DeactivatedProfile, "deactivated_profile")
+                .where("deactivated_profile.activateOn <= :today")
+                .getQuery();
+            return "tel_profile.id IN " + subQuery;
+        });
+        telegramProfileQuery.setParameter("today", today);
+
+        try {
+            await profileQuery.update()
+                .set({ active: true })
+                .execute();
+
+            await telegramProfileQuery.update()
+                .set({ status: UserStatus.ACTIVATED })
+                .execute();
+
+            // delete from deactivated_profile table
+            await this.deactivatedProfileRepository.delete({ activateOn: LessThanOrEqual(today) });
+
+            logger.log(`batch-reactivated ${count} profiles.`);
+        }
+        catch (error) {
+            logger.error(`Could not activate profiles. Error:\n${JSON.stringify(error)}`);
+            throw error;
+        }
+    }
+
+
+    @Transactional()
+    async batchDeleteProfiles() {
+        logger.log('batchDeleteProfiles():: start');
+
+        const today = new Date();
+        today.setHours(23, 59, 59);
+
+        const count = await this.toDeleteProfileRepository.count({
+            where: { deleteOn: LessThanOrEqual(today) }
+        });
+
+        let skip = 0, step = 1000, take = step;
+        while (skip < count) {
+            // const toDeleteProfiles = await this.toDeleteProfileRepository.find({
+            //     where: { deleteOn: LessThanOrEqual(today) },
+            //     skip, take
+            // });
+            const toDeleteProfileIds = await this.toDeleteProfileRepository.query(
+                `SELECT id FROM ProfileMarkedForDeletion WHERE deleteOn <= ${today}`
+            );
+
+            if (toDeleteProfileIds?.length) {
+                try {
+                    // Update, not delete, telegram profiles
+                    await this.telegramRepository.createQueryBuilder('t_profile')
+                        .whereInIds(toDeleteProfileIds)
+                        .update('t_profile.status = :status', { status: UserStatus.DELETED }).execute();
+
+                    // delete profile
+                    await this.profileRepository.createQueryBuilder()
+                        .whereInIds(toDeleteProfileIds).softDelete().execute();
+
+                    // delete preference
+                    await this.prefRepository.createQueryBuilder()
+                        .whereInIds(toDeleteProfileIds).softDelete().execute();
+
+                    // delete documents
+                    await this.documentRepository.createQueryBuilder('document')
+                        .where('document.telegramProfileId IN (:...ids)',
+                            { ids: toDeleteProfileIds }).softDelete().execute();
+
+                    // delete matches
+                    await this.matchRepository.createQueryBuilder('match')
+                        .where('match.maleProfileIds IN (: ...ids)',
+                            { ids: toDeleteProfileIds })
+                        .orWhere('match.femaleProfileIds IN (: ...ids)',
+                            { ids: toDeleteProfileIds })
+                        .softDelete().execute();
+
+                    // delete from deactivated profile repo
+                    await this.deactivatedProfileRepository.createQueryBuilder()
+                        .whereInIds(toDeleteProfileIds).softDelete().execute();
+
+                    // delete from to-delete profile repo
+                    await this.toDeleteProfileRepository.createQueryBuilder()
+                        .whereInIds(toDeleteProfileIds).softDelete().execute();
+
+                }
+                catch (error) {
+                    logger.error(`Could not batch delete profiles. Error:\n${JSON.stringify(error)}`);
+                    throw error;
+                }
+            }
+
+            skip += step;
+            take += step;
+        }
+        logger.log(`batch deleted ${count} profiles`);
     }
 
 
@@ -481,10 +711,10 @@ export class ProfileService {
             await this.telegramRepository.save(telegramProfile);
 
             await this.softDeleteProfile(telegramProfile.telegramUserId,
-                ProfileDeletionReason.BAN);
+                ProfileDeletionReason.Ban);
         }
         catch (error) {
-            logger.error(`Could not ban profile. Error: ${error}`);
+            logger.error(`Could not ban profile. Error:\n${JSON.stringify(error)}`);
             throw error;
         }
     }
@@ -703,6 +933,7 @@ export class ProfileService {
                 telegramChatId,
                 telegramUserId,
                 phone,
+                status: !!phone ? UserStatus.PHONE_VERIFIED : UserStatus.UNREGISTERED
             })
             telegramProfile = await this.telegramRepository.save(telegramProfile);
             logger.log(`Created new telegram profile!`);
@@ -898,6 +1129,7 @@ export class ProfileService {
         }
         let telegramProfile = await this.getTelegramProfileById(id, { throwOnFail: true });
         telegramProfile.phone = phone;
+        telegramProfile.status = UserStatus.PHONE_VERIFIED;
         return this.telegramRepository.save(telegramProfile);
     }
 
@@ -1054,7 +1286,7 @@ export class ProfileService {
             return document;
         }
         catch (error) {
-            logger.error(`Could not upload document. Error: ${error}`);
+            logger.error(`Could not upload document. Error:\n${JSON.stringify(error)}`);
             throw error;
         }
     }
@@ -1172,7 +1404,7 @@ export class ProfileService {
             return document;
         }
         catch (error) {
-            logger.error(`Could not verify document. Error: ${error}`);
+            logger.error(`Could not verify document. Error:\n${JSON.stringify(error)}`);
             throw error;
         }
     }
@@ -1261,7 +1493,13 @@ export class ProfileService {
                 religion
             }));
         }
-        return this.casteRepository.save(castes);
+        let savedCastes: Caste[] = [];
+        try {
+            savedCastes = await this.casteRepository.save(castes);
+        } catch (error) {
+            logger.error(`Could not create castes. Error: ${JSON.stringify(error)}`);
+        }
+        return savedCastes;
     }
 
 
@@ -1782,11 +2020,12 @@ export class ProfileService {
     }
 
 
-    @Cron('1 1 0 * * *')   // try everyday at 12:01:01 am
-    async queueActivateProfilesTask() {
+    @Cron('1 31 2 * * *')   // try everyday at 02:31:01 am
+    async queueProfileMaintenanceTasks() {
         logger.debug('Scheduling activate-profiles task');
         const jobId = (new Date()).setSeconds(0, 0);
         // setting job-id equal to date value up to minute ensure that duplicate values added in the minute (every 16th second) are not added. This is done to make it more probable that the task gets scheduled at least once (at 16th, 32nd, or 48th second) and at most once.
-        await this.schedulerQueue.add({ task: 'activate-profiles' }, { jobId })
+        await this.schedulerQueue.add({ task: 'reactivate-profiles' }, { jobId });
+        await this.schedulerQueue.add({ task: 'delete-profiles' }, { jobId });
     }
 }

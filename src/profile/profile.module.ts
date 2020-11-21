@@ -19,11 +19,12 @@ import { BullModule } from '@nestjs/bull';
 import { TelegramModule } from 'src/telegram/telegram.module';
 import { SchedulerQueueConsumer } from './queue-consumers/scheduler-queue-consumer';
 import { Support } from './entities/support.entity';
-// import { DeactivatedProfile } from './entities/deactivated-profile.entity';
+import { DeactivatedProfile } from './entities/deactivated-profile.entity';
+import { ProfileMarkedForDeletion } from './entities/to-delete-profile.entity';
 
 @Module({
     imports: [AuthModule, AgentModule,
-        TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, TelegramProfile, Document, Match, Support]), AwsServiceModule,
+        TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, TelegramProfile, Document, Match, Support, DeactivatedProfile, ProfileMarkedForDeletion]), AwsServiceModule,
         PassportModule.register({ defaultStrategy: 'jwt' }),
         BullModule.registerQueue(
             { name: 'scheduler-queue' },

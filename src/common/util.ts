@@ -201,6 +201,11 @@ export function lastWeek(): Date {
 }
 
 
+export function nextWeek(): Date {
+    return daysAhead(7);
+}
+
+
 export function showObjectProperties(object, objectName) {
     var result = ``;
     for (var property in object) {
