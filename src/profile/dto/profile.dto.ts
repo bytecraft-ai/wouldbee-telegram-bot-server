@@ -313,6 +313,7 @@ export class PartnerPreferenceDto {
     @IsUUID(4)
     id: string;
 
+    // TODO: fix - IsOptional() should allow null but it is not.
     @IsOptional()
     @Min(18)
     @Max(100)
@@ -320,6 +321,7 @@ export class PartnerPreferenceDto {
     @Transform(value => Number(value))
     minAge?: number;
 
+    // TODO: fix - IsOptional() should allow null but it is not.
     @IsOptional()
     @Min(21)
     @Max(100)
@@ -327,23 +329,37 @@ export class PartnerPreferenceDto {
     @Transform(value => Number(value))
     maxAge?: number;
 
+    // TODO: fix - IsOptional() should allow null but it is not.
+    @IsOptional()
+    @IsIn(getEnumValues(AnnualIncome))
+    @IsInt()
+    @Transform(value => Number(value))
+    minimumIncome?: AnnualIncome;
+
+    // TODO: fix - IsOptional() should allow null but it is not.
+    @IsOptional()
+    @IsIn(getEnumValues(AnnualIncome))
+    @IsInt()
+    @Transform(value => Number(value))
+    maximumIncome?: AnnualIncome;
+
     @Type(() => Number)
     @IsOptional()
-    @IsIn(getEnumValues(AnnualIncome), { each: true })
+    @IsIn(getEnumValues(Religion), { each: true })
     @IsInt({ each: true })
     religions?: Religion[];
+
+    @Type(() => Number)
+    @IsOptional()
+    @IsIn(getEnumValues(MaritalStatus), { each: true })
+    @IsInt({ each: true })
+    maritalStatuses?: MaritalStatus[];
 
     @Type(() => Number)
     @IsOptional()
     @IsPositive({ each: true })
     @IsInt({ each: true })
     casteIds?: number[];
-
-    @IsOptional()
-    @IsIn(getEnumValues(AnnualIncome))
-    @IsInt()
-    @Transform(value => Number(value))
-    minimumIncome?: AnnualIncome;
 
     @IsOptional()
     @IsPositive({ each: true })

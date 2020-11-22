@@ -50,19 +50,28 @@ export class PartnerPreference {
     @Column({ nullable: true })
     maxAge: number;
 
-    @Column("enum", { enum: Religion, array: true, nullable: true })
-    religions?: Religion[];
-
-    // eager is helpful in the "getMatch" function in the `profile.service.ts` 
-    @ManyToMany(type => Caste, { eager: true, nullable: true })
-    @JoinTable()
-    castes?: Caste[];
-
     @IsOptional()
     @Length(5, 15)
     @IsString()
     @Column("smallint", { nullable: true })
     minimumIncome?: AnnualIncome;
+
+    @IsOptional()
+    @Length(5, 15)
+    @IsString()
+    @Column("smallint", { nullable: true })
+    maximumIncome?: AnnualIncome;
+
+    @Column("enum", { enum: Religion, array: true, nullable: true })
+    religions?: Religion[];
+
+    @Column("enum", { enum: MaritalStatus, array: true, nullable: true })
+    maritalStatuses: MaritalStatus[];
+
+    // eager is helpful in the "getMatch" function in the `profile.service.ts` 
+    @ManyToMany(type => Caste, { eager: true, nullable: true })
+    @JoinTable()
+    castes?: Caste[];
 
     @ManyToMany(type => City, { eager: true, nullable: true })
     @JoinTable()
@@ -79,9 +88,6 @@ export class PartnerPreference {
     @Exclude()
     @DeleteDateColumn()
     deletedOn?: Date;
-
-    @Column("enum", { enum: MaritalStatus, array: true, nullable: true })
-    maritalStatuses: MaritalStatus[];
 
     // @IsOptional()
     // @Length(5, 15)

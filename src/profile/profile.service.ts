@@ -236,13 +236,23 @@ export class ProfileService {
 
 
     async savePartnerPreference(preferenceInput: PartnerPreferenceDto): Promise<PartnerPreference> {
-        let { id, minAge, maxAge, religions, casteIds, minimumIncome, cityIds, stateIds, countryIds } = preferenceInput;
+        let { id, minAge, maxAge, minimumIncome, maximumIncome, religions, maritalStatuses, casteIds, cityIds, stateIds, countryIds } = preferenceInput;
+
+        if (minimumIncome && maximumIncome) {
+            if (maximumIncome < minimumIncome) {
+                throw new ConflictException('maximumIncome cannot be lesser than minimumIncome');
+            }
+        }
+
         const profile = await this.getProfileById(id, { throwOnFail: true });
 
         let pref = await this.getPreferenceById(id, { throwOnFail: false });
         if (!pref) {
             pref = this.prefRepository.create();
         }
+
+        console.log('preferenceInput:', preferenceInput);
+        console.log('existing pref:', pref);
 
         minAge = minAge
             ? Math.max(profile.gender === Gender.MALE ? 18 : 21, minAge)
@@ -289,9 +299,14 @@ export class ProfileService {
 
             pref.minAge = minAge;
             pref.maxAge = maxAge;
-            pref.religions = religions;
             pref.minimumIncome = minimumIncome;
+            pref.maximumIncome = maximumIncome;
+            pref.religions = religions;
+            pref.maritalStatuses = maritalStatuses;
             pref.profile = profile;
+
+            assert(pref.minimumIncome <= pref.maximumIncome, `minIncome should be <= maxIncome. Pref: ${JSON.stringify(pref)}`);
+            assert(pref.minAge <= pref.maxAge, `minAge should be <= maxAge. Pref: ${JSON.stringify(pref)}`);
 
             pref = await this.prefRepository.save(pref)
 
@@ -697,8 +712,11 @@ export class ProfileService {
     }
 
 
-    // TODO: test
+    // TODO: Test
+    // TODO: Use newly added maximum-income field of partner-preference.
     async getMatches(profileId: string, skip = 0, take = 20): Promise<IList<Profile>> {
+        logger.log(`running getMatches(${profileId}) ...`);
+
         const profile = await this.profileRepository.findOne(profileId, {
             relations: ["partnerPreference", "caste", "city"]
         });
@@ -997,7 +1015,10 @@ export class ProfileService {
 
         if (!isNil(isNew)) {
             if (isNew)
-                query.where('tel_profile.status < :status', { status: UserStatus.ACTIVATED });
+                query.where('tel_profile.status >= :unverified AND tel_profile.status < :activated ', {
+                    unverified: UserStatus.UNVERIFIED,
+                    activated: UserStatus.ACTIVATED
+                });
             else
                 query.where('tel_profile.status >= :status', { status: UserStatus.ACTIVATED });
         }
