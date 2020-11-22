@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, MaritalStatus, ProfileSharedWith, S3Option, RegistrationActionRequired, ProfileDeactivationDuration, ProfileDeletionReason, UserStatus, DocRejectionReason } from 'src/common/enum';
 import { daysAhead, deDuplicateArray, getAgeInYearsFromDOB, nextWeek, setDifferenceFromArrays } from 'src/common/util';
 import { LessThanOrEqual, Repository } from 'typeorm';
-import { PartnerPreferenceDto, CreateProfileDto, CreateCasteDto, SupportResolutionDto } from './dto/profile.dto';
+import { PartnerPreferenceDto, CreateProfileDto, CreateCasteDto, SupportResolutionDto, GetTelegramAccountsDto } from './dto/profile.dto';
 import { Caste } from './entities/caste.entity';
 import { City } from './entities/city.entity';
 import { Country } from './entities/country.entity';
@@ -145,14 +145,14 @@ export class ProfileService {
                 await this.telegramRepository.update({ id: telegramAccountId }, { status: UserStatus.ACTIVATED });
             }
 
-            await this.setDefaultPartnerPreference(profile);
+            profile.partnerPreference = await this.setDefaultPartnerPreference(profile);
         } catch (error) {
             logger.error(`Could not save profile. Error:\n${JSON.stringify(error)}`);
             throw error;
         }
 
         if (createTrueEditFalse) {
-            this.telegramService.notifyUser(telegramAccount, 'Your profile has been activated! You will now receive matches as soon as we find one suitable for you.');
+            this.telegramService.notifyUser(telegramAccount, 'Congratulations! Your profile has been activated. From now on, matching profiles will be forwarded to you!');
         }
 
         // add match-finding job to queue for create profile
@@ -170,8 +170,13 @@ export class ProfileService {
     }
 
 
-    async getProfile(id: string, { throwOnFail = true }): Promise<Profile | undefined> {
-        const profile = await this.profileRepository.findOne(id);
+    async getProfileById(id: string, {
+        throwOnFail = true,
+        relations = []
+    }): Promise<Profile | undefined> {
+        const profile = await this.profileRepository.findOne(id, {
+            relations
+        });
         if (throwOnFail && !profile) {
             throw new NotFoundException(`Profile with id: ${id} not found`);
         }
@@ -179,7 +184,7 @@ export class ProfileService {
     }
 
 
-    async getPreference(id: string, { throwOnFail = true }): Promise<PartnerPreference | undefined> {
+    async getPreferenceById(id: string, { throwOnFail = true }): Promise<PartnerPreference | undefined> {
         const preference = await this.prefRepository.findOne(id);
         if (throwOnFail && !preference) {
             throw new NotFoundException(`Preference with id: ${id} not found`);
@@ -195,7 +200,7 @@ export class ProfileService {
 
     async setDefaultPartnerPreference(profile: Profile): Promise<PartnerPreference | undefined> {
 
-        let pref = await this.getPreference(profile.id, { throwOnFail: false });
+        let pref = await this.getPreferenceById(profile.id, { throwOnFail: false });
         if (pref) {
             return pref;
         } else {
@@ -232,9 +237,9 @@ export class ProfileService {
 
     async savePartnerPreference(preferenceInput: PartnerPreferenceDto): Promise<PartnerPreference> {
         let { id, minAge, maxAge, religions, casteIds, minimumIncome, cityIds, stateIds, countryIds } = preferenceInput;
-        const profile = await this.getProfile(id, { throwOnFail: true });
+        const profile = await this.getProfileById(id, { throwOnFail: true });
 
-        let pref = await this.getPreference(id, { throwOnFail: false });
+        let pref = await this.getPreferenceById(id, { throwOnFail: false });
         if (!pref) {
             pref = this.prefRepository.create();
         }
@@ -775,7 +780,8 @@ export class ProfileService {
 
     // TODO: test
     async saveMatches(profileId: string, matches: Profile[]): Promise<Match[]> {
-        const profile = await this.getProfile(profileId, { throwOnFail: true });
+        logger.log('running saveMatches ...');
+        const profile = await this.getProfileById(profileId, { throwOnFail: true });
         const toSave: Match[] = [];
         if (profile.gender === Gender.MALE) {
             for (const match of matches) {
@@ -798,7 +804,8 @@ export class ProfileService {
 
     @Transactional()
     async updateMatches(profileId: string, matches: Profile[]): Promise<Match[]> {
-        const profile = await this.getProfile(profileId, { throwOnFail: true });
+        logger.log('running sendMatches ...');
+        const profile = await this.getProfileById(profileId, { throwOnFail: true });
 
         // remove existing matches which have not been shared.
         await this.matchRepository.delete(profile.gender === Gender.MALE ?
@@ -861,6 +868,7 @@ export class ProfileService {
 
 
     async sendMatches() {
+        logger.log('running sendMatches ...');
         let skip = 0
         const take = 50;
         let [profiles, count] = await this.profileRepository.findAndCount({
@@ -930,10 +938,14 @@ export class ProfileService {
             throw new Error('1 ≤ take ≥ 100');
         }
 
-
         const query = this.telegramRepository.createQueryBuilder('tel_profile');
-        query.leftJoin('tel_profile.profile', 'profile')
-            .where('profile.createdOn IS NULL')
+
+        // query.leftJoin('tel_profile.profile', 'profile')
+        // .where('profile.createdOn IS NULL')
+
+        query.where('tel_profile.unverifiedBioDataId IS NOT NULL')
+            .orWhere('tel_profile.unverifiedPictureId IS NOT NULL')
+            .orWhere('tel_profile.unverifiedIdProofId IS NOT NULL');
 
         const [telegramAccounts, count] = await query.skip(skip).take(take).getManyAndCount();
 
@@ -956,6 +968,50 @@ export class ProfileService {
         query.leftJoin('tel_profile.documents', 'document')
             .where('document.isValid IS NULL')
             .andWhere('document.isActive IS NULL')
+
+        const [telegramAccounts, count] = await query.skip(skip).take(take).getManyAndCount();
+
+        return {
+            count,
+            values: telegramAccounts
+        };
+    }
+
+
+    async getTelegramAccounts(options?: GetTelegramAccountsDto): Promise<IList<TelegramAccount> | undefined> {
+
+        const { isNew, isUpdated, getProfile, skip, take } = options;
+
+        if (take < 1 || take > 100) {
+            throw new Error('1 ≤ take ≥ 100');
+        }
+
+        const query = this.telegramRepository.createQueryBuilder('tel_profile');
+
+        if (getProfile)
+            query.leftJoinAndSelect('tel_profile.profile', 'profile');
+
+        // TODO: fix
+        // if (getPreference)
+        //     query.leftJoinAndSelect(PartnerPreference, 'preference', 'tel_profile.id = preference.id');
+
+        if (!isNil(isNew)) {
+            if (isNew)
+                query.where('tel_profile.status < :status', { status: UserStatus.ACTIVATED });
+            else
+                query.where('tel_profile.status >= :status', { status: UserStatus.ACTIVATED });
+        }
+
+        else if (!isNil(isUpdated)) {
+            if (isUpdated)
+                query.where('tel_profile.unverifiedBioDataId IS NOT NULL')
+                    .orWhere('tel_profile.unverifiedPictureId IS NOT NULL')
+                    .orWhere('tel_profile.unverifiedIdProofId IS NOT NULL');
+            else
+                query.where('tel_profile.unverifiedBioDataId IS NULL')
+                    .andWhere('tel_profile.unverifiedPictureId IS NULL')
+                    .andWhere('tel_profile.unverifiedIdProofId IS NULL');
+        }
 
         const [telegramAccounts, count] = await query.skip(skip).take(take).getManyAndCount();
 
@@ -1058,7 +1114,9 @@ export class ProfileService {
     async getTelegramAccountById(id: string, {
         throwOnFail = true,
         relations = [],
+
     }): Promise<TelegramAccount | undefined> {
+        // console.log('relations:', relations);
         const telegramAccount = await this.telegramRepository.findOne(id, {
             relations
         });
@@ -1135,7 +1193,7 @@ export class ProfileService {
     // }
 
 
-    async getDocumentById(id: number, {
+    async getDocumentById(id: string, {
         throwOnFail = true,
         relations = [],
     }): Promise<Document | undefined> {
@@ -1269,7 +1327,7 @@ export class ProfileService {
     }
 
 
-    async downloadDocument(documentId: number, typeOfDocument: TypeOfDocument, dir: string): Promise<string | undefined> {
+    async downloadDocument(documentId: string, typeOfDocument: TypeOfDocument, dir: string): Promise<string | undefined> {
 
         // const telegramAccount = await this.getTelegramAccountByTelegramUserId(telegramUserId, { throwOnFail: true });
 
@@ -1417,8 +1475,36 @@ export class ProfileService {
     // }
 
 
+    async getSignedDownloadUrl(documentId: string): Promise<{ id: string, url: string } | undefined> {
+        const document = await this.getDocumentById(documentId, {
+            throwOnFail: true,
+            relations: ['telegramAccount']
+        });
+
+        const telegramAccount = document.telegramAccount;
+
+        if (!document.fileName) {
+            assert(document.isValid === false || document.isActive === false,
+                `document should either be invalidated or outdated!`)
+            throw new Error('This document is either invalidated or outdated. It is not available anymore!');
+        }
+
+        try {
+            const urlObj = await this.awsService.createSignedURL(telegramAccount.id, document.fileName, document.typeOfDocument, S3Option.GET);
+            return {
+                id: document.id,
+                url: urlObj.preSignedUrl
+            };
+        }
+        catch (err) {
+            logger.error(`Could not generate signed url for document with id: ${documentId}. Error: ${err}`);
+            throw err;
+        };
+    }
+
+
     // TODO: Refactor -- This method cannot decide which document to send
-    async getSignedDownloadUrl(telegramAccountId: string, docType: string, { throwOnFail = true }): Promise<{ id: number, url: string } | undefined> {
+    async getSignedDownloadUrlForUnverifiedDoc(telegramAccountId: string, docType: string, { throwOnFail = true }): Promise<{ id: string, url: string } | undefined> {
         if (!docType) {
             throw new BadRequestException('docType is required!')
         }
@@ -1565,46 +1651,42 @@ export class ProfileService {
             });
         let output: RegistrationActionRequired;
 
-        if (!telegramAccount.phone) {
+        if (telegramAccount.status === UserStatus.UNREGISTERED) {
             output = RegistrationActionRequired.VERIFY_PHONE;
         }
-
-        const documents: Document[] = telegramAccount.documents;
-        // console.log('documents:', documents);
-
-        if (!documents?.length) {
-            output = RegistrationActionRequired.UPLOAD_BIO_AND_PICTURE;
-        }
         else {
-            let bioRequired = true, bioVerified = false,
-                picRequired = true, picVerified = false;
+            const documents: Document[] = telegramAccount.documents;
+            console.log('documents:', documents);
 
-            for (let doc of documents) {
-                console.log(doc);
-                if (doc.typeOfDocument === TypeOfDocument.BIO_DATA
-                    && doc.isValid !== false) {
-                    bioRequired = false;
-                    if (doc.isValid) {
-                        bioVerified = true;
-                    }
-                } else if (doc.typeOfDocument === TypeOfDocument.PICTURE && doc.isValid !== false) {
-                    picRequired = false;
-                    if (doc.isValid) {
-                        picVerified = true;
+            if (!documents?.length) {
+                output = RegistrationActionRequired.UPLOAD_BIO_AND_PICTURE;
+            }
+            else {
+                let bioRequired = true,
+                    picRequired = true;
+
+                for (let doc of documents) {
+                    console.log(doc);
+                    if (doc.typeOfDocument === TypeOfDocument.BIO_DATA
+                        && doc.isValid !== false) {
+                        bioRequired = false;
+                    } else if (doc.typeOfDocument === TypeOfDocument.PICTURE && doc.isValid !== false) {
+                        picRequired = false;
                     }
                 }
-            }
 
-            if (bioRequired && picRequired) {
-                output = RegistrationActionRequired.UPLOAD_BIO_AND_PICTURE;
-            } else if (picRequired) {
-                output = RegistrationActionRequired.UPLOAD_PICTURE;
-            } else if (bioRequired) {
-                output = RegistrationActionRequired.UPLOAD_BIO;
-            } else { // if (!bioRequired && !picRequired) {
-                output = RegistrationActionRequired.NONE;
+                if (bioRequired && picRequired) {
+                    output = RegistrationActionRequired.UPLOAD_BIO_AND_PICTURE;
+                } else if (picRequired) {
+                    output = RegistrationActionRequired.UPLOAD_PICTURE;
+                } else if (bioRequired) {
+                    output = RegistrationActionRequired.UPLOAD_BIO;
+                } else { // if (!bioRequired && !picRequired) {
+                    output = RegistrationActionRequired.NONE;
+                }
             }
         }
+
         logger.log(`getRegistrationAction() output - ${output}`);
         return output;
     }

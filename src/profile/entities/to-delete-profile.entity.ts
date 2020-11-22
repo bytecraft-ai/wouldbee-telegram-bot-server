@@ -16,7 +16,7 @@ export class ProfileMarkedForDeletion {
 
     @OneToOne(
         type => TelegramAccount,
-        // telegramAccount => telegramAccount.profileToDelete,
+        telegramAccount => telegramAccount.profileToDelete,
         { nullable: false }
     )
     @JoinColumn({

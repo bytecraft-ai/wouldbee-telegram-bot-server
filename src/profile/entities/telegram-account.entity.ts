@@ -18,16 +18,20 @@ import {
 import { Verifiable } from './abstract-verifiable.entity';
 import { Document } from './document.entity';
 import { Profile } from './profile.entity';
+import { ProfileMarkedForDeletion } from './to-delete-profile.entity';
 
 // TODO: add db validations using class-validator and run through custom repository.
 
 @Entity()
-export class TelegramAccount extends Verifiable {
+export class TelegramAccount { // extends Verifiable {
     @PrimaryGeneratedColumn("uuid")
     id: string;
 
     @OneToOne(type => Profile, profile => profile.telegramAccount)
     profile?: Profile;
+
+    @OneToOne(type => ProfileMarkedForDeletion, profileToDelete => profileToDelete.telegramAccount)
+    profileToDelete?: ProfileMarkedForDeletion;
 
     @CreateDateColumn()
     createdOn?: Date;
@@ -61,7 +65,7 @@ export class TelegramAccount extends Verifiable {
     documents?: Document[];
 
     @Column({ nullable: true })
-    bioDataId?: number;
+    bioDataId?: string;
 
     @OneToOne(type => Document)
     @JoinColumn({
@@ -71,7 +75,7 @@ export class TelegramAccount extends Verifiable {
     bioData?: Document;
 
     @Column({ nullable: true })
-    pictureId?: number;
+    pictureId?: string;
 
     @OneToOne(type => Document)
     @JoinColumn({
@@ -81,7 +85,7 @@ export class TelegramAccount extends Verifiable {
     picture?: Document;
 
     @Column({ nullable: true })
-    idProofId?: number;
+    idProofId?: string;
 
     @OneToOne(type => Document)
     @JoinColumn({
@@ -91,7 +95,7 @@ export class TelegramAccount extends Verifiable {
     idProof?: Document;
 
     @Column({ nullable: true })
-    unverifiedBioDataId?: number;
+    unverifiedBioDataId?: string;
 
     @OneToOne(type => Document)
     @JoinColumn({
@@ -101,7 +105,7 @@ export class TelegramAccount extends Verifiable {
     unverifiedBioData?: Document;
 
     @Column({ nullable: true })
-    unverifiedPictureId?: number;
+    unverifiedPictureId?: string;
 
     @OneToOne(type => Document)
     @JoinColumn({
@@ -111,7 +115,7 @@ export class TelegramAccount extends Verifiable {
     unverifiedPicture?: Document;
 
     @Column({ nullable: true })
-    unverifiedIdProofId?: number;
+    unverifiedIdProofId?: string;
 
     @OneToOne(type => Document)
     @JoinColumn({
@@ -126,8 +130,8 @@ export class TelegramAccount extends Verifiable {
     @IsOptional()
     @IsPositive()
     @IsInt()
-    @Column("smallint") // { nullable: true }
-    status?: UserStatus;
+    @Column("smallint", { default: UserStatus.UNREGISTERED }) // { nullable: true }
+    status: UserStatus;
 
     @Column({ "nullable": true })
     bannedOn?: Date;

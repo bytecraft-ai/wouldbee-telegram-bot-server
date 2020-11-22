@@ -1,5 +1,5 @@
-import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, UseInterceptors, UploadedFiles, Query, DefaultValuePipe, ParseIntPipe, ParseArrayPipe } from '@nestjs/common';
-import { CreateCasteDto, CreateProfileDto, FileUploadDto, PartnerPreferenceDto } from './dto/profile.dto';
+import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, UseInterceptors, UploadedFiles, Query, DefaultValuePipe, ParseIntPipe, ParseArrayPipe, ClassSerializerInterceptor, SerializeOptions, ParseUUIDPipe } from '@nestjs/common';
+import { CreateCasteDto, CreateProfileDto, FileUploadDto, GetProfileDto, GetTelegramAccountDto, PartnerPreferenceDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
 import { DocumentValidationDto, DocumentTypeDto, GetTelegramAccountsDto, BanProfileDto } from './dto/profile.dto';
 import { GetCitiesDto, GetCountriesDto, GetStatesDto } from './dto/location.dto';
@@ -9,6 +9,7 @@ import { IList, IUserStats } from 'src/common/interface';
 import { Roles } from 'src/auth/set-role.decorator';
 import { GetAgent } from 'src/auth/get-agent.decorator';
 import { WbAgent } from 'src/agent/entities/agent.entity';
+import { Profile } from './entities/profile.entity';
 // import { AwsService } from 'src/aws-service/aws-service.service';
 // import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
 // import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
@@ -147,38 +148,59 @@ export class TelegramProfileController {
         };
     }
 
+
     @Get('/')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getTelegramAccounts(@Query() options: GetTelegramAccountsDto): Promise<IList<TelegramAccount>> {
         logger.log('getTelegramAccounts');
-        return this.profileService.getTelegramAccountsForVerification(
-            options?.skip, options?.take
-        );
+        // return this.profileService.getTelegramAccountsForVerification(
+        //     options?.skip, options?.take
+        // );
+        return this.profileService.getTelegramAccounts(options);
     }
 
 
-    @Get(':id')
+    @Get(':uuid')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
-    async getTelegramProfile(@Param('id') id: string) {
-        console.log('get profile with id', id);
-        return {
-            'profile': await this.profileService.getTelegramAccountById(id, { throwOnFail: true }),
-            'bio': await this.profileService.getSignedDownloadUrl(id, 'bio-data', { throwOnFail: false }),
-            'picture': await this.profileService.getSignedDownloadUrl(id, 'picture', { throwOnFail: false }),
-        };
+    async getTelegramAccount(
+        @Param('uuid', new ParseUUIDPipe()) uuid: string,
+        @Query() options: GetTelegramAccountDto
+    ): Promise<TelegramAccount> {
+        const relations = [];
+
+        if (options.getProfile)
+            relations.push('profile');
+        // if (options.getPreference)
+        //     relations.push('profile.partnerPreference');
+
+        console.log('get telegramAccount with id', uuid,
+            'options:', options, 'relations:', relations);
+
+        return this.profileService.getTelegramAccountById(uuid, {
+            throwOnFail: true,
+            relations
+        });
     }
+
+
+
+    // @Get('/url/:id')
+    // @Roles(UserRole.AGENT, UserRole.ADMIN)
+    // async getSignedDownloadUrl(@Param('id') id: string, @Query() query: DocumentTypeDto): Promise<{ url: string }> {
+    //     console.log('id:', id, 'docType:', query);
+    //     return await this.profileService.getSignedDownloadUrlForUnverifiedDoc(id, query.documentType, { throwOnFail: true });
+    // }
 
 
     // TODO: implement caching on client side
-    @Get('/url/:id')
+    @Get('/url/:uuid')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
-    async getSignedDownloadUrl(@Param('id') id: string, @Query() query: DocumentTypeDto): Promise<{ url: string }> {
-        console.log('id:', id, 'docType:', query);
-        return await this.profileService.getSignedDownloadUrl(id, query.documentType, { throwOnFail: true });
+    async getSignedDownloadUrl(@Param('uuid', new ParseUUIDPipe()) uuid: string): Promise<{ url: string }> {
+        console.log('id:', uuid, 'type:', typeof uuid);
+        return await this.profileService.getSignedDownloadUrl(uuid);
     }
 
 
-    // @Post('/validate/:id')
     @Post('/validate')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async validateOrRejectDocument(
@@ -189,14 +211,14 @@ export class TelegramProfileController {
     }
 
 
-    @Post('/ban/:id')
+    @Post('/ban/:uuid')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async banProfile(
         @GetAgent() agent: WbAgent,
-        @Param('id') id: string,
+        @Param('uuid', new ParseUUIDPipe()) uuid: string,
         @Body() body: BanProfileDto) {
-        console.log('id:', id, 'body:', body);
-        await this.profileService.banProfile(id, body, agent);
+        console.log('uuid:', uuid, 'body:', body);
+        await this.profileService.banProfile(uuid, body, agent);
         return { status: 'OK' };
     }
 }
@@ -215,11 +237,23 @@ export class ProfileController {
     }
 
 
-    @Get(':id')
+    @Get(':uuid')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
-    async getProfile(@Param('id') id: string) {
-        console.log('get profile with id', id);
-        return this.profileService.getProfile(id, { throwOnFail: true });
+    async getProfile(
+        @Param('uuid', new ParseUUIDPipe()) uuid: string,
+        @Query() options: GetProfileDto
+    ) {
+        const relations = [];
+        if (options.getPreference)
+            relations.push('partnerPreference')
+
+        console.log('get profile with id', uuid, 'options:', options,
+            'relations:', relations);
+
+        return this.profileService.getProfileById(uuid, {
+            throwOnFail: true,
+            relations
+        });
     }
 
 
@@ -245,11 +279,11 @@ export class PreferenceController {
     }
 
 
-    @Get(':id')
+    @Get(':uuid')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
-    async getPreference(@Param('id') id: string) {
-        console.log('get preference with id', id);
-        return this.profileService.getPreference(id, { throwOnFail: true });
+    async getPreference(@Param('uuid', new ParseUUIDPipe()) uuid: string) {
+        console.log('get preference with id', uuid);
+        return this.profileService.getPreferenceById(uuid, { throwOnFail: true });
     }
 
 
@@ -270,7 +304,7 @@ export class FileController {
 
     @Post('/')
     async updateFile(@Body() fileUploadDto: FileUploadDto) {
-
+        //
     }
 
 

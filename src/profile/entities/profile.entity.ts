@@ -65,20 +65,6 @@ export class Profile {
     @DeleteDateColumn()
     deletedOn?: Date;
 
-    // @Column({ unique: true })
-    // email: string;
-
-    // @Column("int")
-    // countryId?: number;
-
-    // @ManyToOne(type => Country)
-    // @JoinColumn()
-    // country?: Country;
-
-    // @Column({ unique: true })
-    // @Length(10, 10, { message: 'Phone number must be of 10 digits only!' })
-    // phone?: string;
-
     // @Field()
     @Length(nameMinLength, nameMaxLength)
     @IsString()
@@ -143,10 +129,10 @@ export class Profile {
     maritalStatus?: MaritalStatus;
 
     // @Field()
-    @OneToOne(type => PartnerPreference)
+    @OneToOne(type => PartnerPreference, pp => pp.profile)
     partnerPreference?: PartnerPreference;
 
-    @OneToOne(type => DeactivatedProfile)
+    @OneToOne(type => DeactivatedProfile, dp => dp.profile)
     deactivatedProfile?: DeactivatedProfile;
 
     @Column({ default: true })

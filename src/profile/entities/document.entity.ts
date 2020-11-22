@@ -22,8 +22,8 @@ import { Exclude } from 'class-transformer';
 // Records all document updates.
 @Entity()
 export class Document extends Verifiable {
-    @PrimaryGeneratedColumn()
-    id?: number;
+    @PrimaryGeneratedColumn("uuid")
+    id: string;
 
     @Column("uuid")
     telegramAccountId: string;

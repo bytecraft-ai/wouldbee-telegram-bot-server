@@ -43,8 +43,8 @@ export const helpMessage = `Hi there. You can use the following commands to avai
 export const registrationCancelled = `Registration cancelled. Use /register command to start registration process again or use /help command to see how to interact with the Would Bee bot.`;
 
 
-export const askForBioUploadMsg = `Upload your bio-data or use /cancel to quit.
- - Your bio-data should have the same phone number you used to register with us, otherwise it will fail the verification process.`;
+export const askForBioUploadMsg = `Upload your bio-data (in PDF or MS-Word format) or use /cancel to quit.
+ - Your bio-data must have the phone number you used to register with us, otherwise it will fail verification.`;
 
 
 export const bioCreateSuccessMsg = `Success! Your bio-data has been saved!` // You can update it anytime using the /update_bio command.
@@ -75,10 +75,12 @@ export const fatalErrorMsg = `Some error occurred. We have notified our engineer
 export const unregisteredUserMsg = `You are not registered! To upload bio-data or profile picture, you need to register first. To register, please type or click on /register command. To see the list of all available commands, use /help command.`;
 
 
-export const unsupportedPictureFormat = `Error: Only 'jpg' and 'png' formats are accepted for profile pictures. Please retry with supported format or use /cancel to quit.`;
+export const unsupportedPictureFormat = `Error: Only 'jpg' and 'png' formats are accepted for profile pictures. 
+Please retry with supported format or use /cancel to quit.`;
 
 
-export const unsupportedBioFormat = `Error: Only 'pdf' and MS-Word files('docx' and 'doc') are supported for bio-data. Please retry with supported format or use /cancel to quit.`;
+export const unsupportedBioFormat = `Error: Only 'pdf' and MS-Word files('docx' and 'doc') are supported for bio-data. 
+Please retry with supported format or use /cancel to quit.`;
 
 
 export const supportMsg = `Please write your query or feedback (min 20 characters) or use /cancel to quit.`;

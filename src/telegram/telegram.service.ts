@@ -39,7 +39,7 @@ import { deleteFile, mimeTypes } from 'src/common/util';
 import { Profile } from 'src/profile/entities/profile.entity';
 import { TelegramAccount } from 'src/profile/entities/telegram-account.entity';
 import { ProfileService } from 'src/profile/profile.service';
-import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, registrationCancelled, supportMsg, deletionSuccessMsg, acknowledgeDeletionRequest } from './telegram.constants';
+import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, registrationCancelled, supportMsg, deletionSuccessMsg, acknowledgeDeletionRequest, unsupportedBioFormat } from './telegram.constants';
 import { getBioDataFileName, getPictureFileName, processBioDataFile, processPictureFile, validateBioDataFileSize, validatePhotoFileSize, } from './telegram.service.helper';
 import { Document } from 'src/profile/entities/document.entity';
 import { supportResolutionMaxLength, supportResolutionMinLength } from 'src/common/field-length';
@@ -124,47 +124,6 @@ export class TelegramService {
             telegramProfile = await this.createTelegramAccount(ctx);
         }
         return telegramProfile;
-
-        // let msg = '';
-
-        // switch (telegramProfile.status) {
-        //     case UserStatus.UNREGISTERED:
-        //     case UserStatus.PHONE_VERIFIED:
-        //         msg = 'You are unregistered. Please type or click on /register to register.'
-        //         break;
-
-        //     case UserStatus.ACTIVATION_PENDING:
-        //         msg = 'Your profile activation is pending at our end. We will verify your submitted bio-data and profile-picture shortly and notify you of the decision.'
-        //         break;
-
-        //     case UserStatus.ACTIVATION_FAILED:
-        //         msg = `Your profile activation failed.`
-        //         const causingDocument = await this.profileService.getInvalidatedDocumentCausingProfileInvalidation(telegramProfile.id)
-        //         if (causingDocument?.invalidationReason) {
-        //             msg += `\n Reason - ${causingDocument.invalidationReason}.`
-        //         }
-        //         if (causingDocument?.invalidationDescription) {
-        //             msg += `\n Description - ${causingDocument.invalidationDescription}`
-        //         }
-        //         break;
-
-        //     case UserStatus.ACTIVATED:
-        //         msg = 'Your profile is activated and requires no action from you.'
-        //         break;
-
-        //     case UserStatus.DEACTIVATED:
-        //         msg = 'Your profile is deactivated. In this state, you will neither receive any matches nor your profile with be shared with your matches. To reactivate it, use /reactivate command.'
-        //         break;
-
-        //     case UserStatus.DELETED:
-        //         msg = 'Your profile has been deleted.'
-        //         break;
-
-        //     case UserStatus.BANNED:
-        //         msg = 'Your profile has been banned.'
-        //         break;
-        // }
-        // await ctx.reply(msg);
     }
 
 
@@ -339,7 +298,6 @@ export class TelegramService {
                         // size check
                         const sizeErrorMessage = validateBioDataFileSize(ctx);
                         if (sizeErrorMessage) {
-                            await ctx.deleteMessage();
                             await ctx.reply(sizeErrorMessage);
                             return;
                         }
@@ -357,18 +315,15 @@ export class TelegramService {
                                 await this.profileService.uploadDocument(ctx.from.id, fileToUpload, DIR, mime_type, TypeOfDocument.BIO_DATA, document.file_id);
 
                                 await deleteFile(fileToUpload, DIR);
-                                await ctx.deleteMessage();
                                 await ctx.reply(bioCreateSuccessMsg);
 
                             } catch (error) {
                                 logger.error("Could not download/upload the bio-data. Error:", error);
-                                await ctx.deleteMessage();
                                 await ctx.reply(fatalErrorMsg);
                                 return ctx.scene.leave();
                             }
                         } else {
                             assert(!!errorMessage, 'Both fileName and errorMessage cannot be null/undefined');
-                            await ctx.deleteMessage();
                             await ctx.reply(errorMessage);
                             if (quitOnError) {
                                 return ctx.scene.leave();
@@ -384,7 +339,11 @@ export class TelegramService {
                         if (ctx.wizard.state.data?.next_without_user_input) {
                             ctx.wizard.state.data.next_without_user_input = false;
                         } else {
-                            await ctx.reply(`Send bio-data or use /cancel to quit the registration process!`);
+                            if (ctx.update.message?.photo?.length) {
+                                await ctx.reply(unsupportedBioFormat);
+                            } else {
+                                await ctx.reply(`Send bio-data or use /cancel to quit the registration process!`);
+                            }
                         }
                         return;
                     }
@@ -405,7 +364,7 @@ export class TelegramService {
                     return ctx.wizard.steps[ctx.wizard.cursor](ctx);
                 } else {
                     await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-                    await ctx.reply(`Upload your profile picture or use /cancel to quit.`);
+                    await ctx.reply(`Upload your profile picture (in PNG/JPG/JPEG format only) or use /cancel to quit.`);
                 }
 
                 logger.log('calling step-6');
@@ -484,7 +443,7 @@ export class TelegramService {
                         if (ctx.wizard.state.data.next_without_user_input) {
                             ctx.wizard.state.data.next_without_user_input = false;
                         } else {
-                            await ctx.reply(`Send profile picture or use /cancel to quit the registration process!`);
+                            await ctx.reply(`Send profile picture or use /cancel to quit the registration process! Note that only accepted formats are PNG, JPG, and JPEG.`);
                         }
                         return;
                     }
@@ -578,7 +537,11 @@ export class TelegramService {
                     return ctx.scene.leave();
                 }
                 else {
-                    await ctx.reply(`Send bio-data or use /cancel to quit the registration process!`);
+                    if (ctx.update.message?.photo?.length) {
+                        await ctx.reply(unsupportedBioFormat);
+                    } else {
+                        await ctx.reply(`Send bio-data or use /cancel to quit the registration process!`);
+                    }
                     return;
                 }
             }
@@ -782,7 +745,7 @@ export class TelegramService {
                 logger.log('payload:', payload)
                 // TODO: Check whose referral is this
                 // 1 - another user
-                const referee = await this.profileService.getProfile(payload, { throwOnFail: false });
+                const referee = await this.profileService.getProfileById(payload, { throwOnFail: false });
                 if (referee) {
                     // TODO: mark as referee
                     logger.log(`referee: [${referee[0]}, ${referee[1]}]`);
@@ -1091,19 +1054,18 @@ export class TelegramService {
         if (result) {
             message += `Your ${docType} has successfully been verified.`;
         } else {
-            message += `Your ${docType} has been rejected for the following reason: `;
+            message += `Your ${docType} has been rejected.`;
 
             if (reason) {
                 // message += format.bold(reason);
-                message += reason;
+                message += `\nReason: ${reason}`;
             } else {
                 message += '.';
             }
 
             if (invalidationDescription) {
                 // message += `\nComments from verification team: ${format.italic(invalidationDescription)}\n`;
-                message += `\nComments from verification team: ${invalidationDescription}
-            } \n`;
+                message += `\nAdditional comments: ${invalidationDescription}\n`;
             }
 
             message += `You can upload a new ${docType} or if you think that is a mistake, please contact our customer care.`;
@@ -1148,158 +1110,4 @@ export class TelegramService {
         ctx.reply('Please use /help command to see what this bot supports.');
     }
 
-
-
-
-    // @Command('update_bio')
-    // async uploadBio(ctx: Context) {
-
-    //     // TODO: Set context for accepting bio-data with a 1 minute timeout in session
-
-    //     await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-
-    //     await ctx.telegram.sendMessage(ctx.chat.id, `Ok. Send me your bio-data, preferably in PDF format. It should not be more than 2 MB in size. Don't include profile pictures in the bio-data. You can send profile picture separately using /upload_pic command. Note that it will be verified manually before being sent to prospective matches.`);
-    // }
-
-
-    // @On('document')
-    // async onDocument(ctx: Context) {
-    //     const document = ctx.message.document;
-    //     console.log('document-upload:', ctx.update);
-
-    //     await ctx.telegram.sendChatAction(ctx.message.chat.id, 'upload_document');
-
-    //     const telegramProfile = await this.profileService.getTelegramAccountByTelegramUserId(ctx.from.id, {
-    //         throwOnFail: false
-    //     });
-    //     if (!telegramProfile) {
-    //         ctx.reply('Please verify your phone number first by using /start command.');
-    //         return;
-    //     }
-
-    //     // file should not be more than 
-    //     // (2MBs = 2 * 1024 * 1024 = 2097152)
-    //     // for some tolerance, use 2.1 MB = 2202009.6
-    //     if (document.file_size > 2202009.6) {
-    //         const size = (ctx.message.document.file_size / 1048576).toFixed(2);
-    //         ctx.reply(`Bio-data should not be more than 2 MB in size. The size of file you sent is ${size} MB. Please reduce the bio-data size and resend by giving /uploadbio command.`)
-
-    //         return;
-    //     }
-
-    //     // TODO: Test doc file. docx works
-    //     // file should be in one of - pdf, doc, or docx format
-    //     if (document.mime_type === 'application/pdf' || document.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-
-    //         // ref - https://github.com/telegraf/telegraf/issues/277
-    //         const link = await ctx.telegram.getFileLink(document.file_id);
-
-    //         let fileName = telegramProfile.id + '_bio.';
-    //         let extension: string = link.split('.')[-1];
-    //         if (!extension ||
-    //             (extension !== 'pdf'
-    //                 && extension !== 'doc'
-    //                 && extension !== 'docx')
-    //         ) {
-    //             extension = document.mime_type === 'application/pdf' ? 'pdf' : 'docx'
-    //         }
-    //         fileName = fileName + extension;
-    //         console.log('fileName:', fileName);
-
-    //         await downloadFile(link, fileName);
-
-    //         await this.profileService.uploadDocument(ctx.from.id, fileName, document.mime_type, TypeOfDocument.BIO_DATA, document.file_id);
-
-    //         await ctx.reply(`Success! Your bio-data has been saved! You can update it anytime using the /uploadbio command.
-
-    //         Now our agent will manually verify your bio-data, which may a take a couple of days. Once verified, you will start receiving profiles.
-
-    //         Till then, you can set your match preferences. To see how, use the /help command.
-    //         `);
-
-    //         // TODO: Remove context for accepting bio-data.
-    //         return;
-
-    //     } else {
-    //         await ctx.reply(`Only PDF and Word files are supported for Bio-data. Please try again with a PDF or Word file using /uploadbio command.`);
-
-    //         return;
-    //     }
-    // }
-
-
-    // @Command('upload_pic')
-    // async uploadPicture(ctx: Context) {
-
-    //     // TODO: Set context for accepting profile picture with a 1 minute timeout in session
-
-    //     await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-
-    //     await ctx.telegram.sendMessage(ctx.chat.id, `Ok. Send me your Picture. It should clearly show your face and not be more than 5 MB in size. Your picture will be manually verified before being sent to prospective matches.`);
-    // }
-
-
-    // @On('photo')
-    // async onPhoto(ctx: Context) {
-    //     console.log('photo-upload:', ctx.update.message.photo);
-    //     await ctx.reply(`Thanks!`);
-    //     // return;
-
-    //     // Choose the smallest picture to save
-    //     const photo = ctx.update.message.photo[0];
-
-    //     // photo should not be more than 1 MB)
-    //     // for some tolerance, use 1.1 MB = 1152433.6
-    //     if (photo.file_size > 1152433.6) {
-    //         const size = (ctx.message.document.file_size / 1048576).toFixed(2);
-    //         ctx.reply(`Photo should not be more than 5 MB in size. Please use a smaller sized photo and resend by giving /uploadpicture command.`)
-
-    //         return;
-    //     }
-
-    //     // No need to handle GIFs as they come as documents
-
-    //     const link = await ctx.telegram.getFileLink(photo.file_id);
-    //     // console.log('link:', link);
-    //     // const fileName = 'user-id.' + photo.mime_type === 'application/pdf' ? 'pdf' : 'doc'
-    //     // await downloadFile(fileName, link);
-    //     download_file_httpget(link, 'photo');
-
-    //     await ctx.reply(`Success! Your Profile picture has been saved! It will be manually verified before it is sent to other members.`);
-    // }
-
-
-    // @Command('updates')
-    // async sendBio(ctx: Context) {
-    //     await ctx.telegram.sendChatAction(ctx.chat.id, 'upload_document');
-    //     await ctx.telegram.sendMessage(ctx.message.chat.id, 'Sending a bio-data');
-    //     const document = await ctx.telegram.sendDocument(
-    //         ctx.message.chat.id,
-    //         // option 1: use publicly accessible url
-    //         // 'http://www.africau.edu/images/default/sample.pdf',
-
-    //         // option 2: use file_id generated by telegram
-    //         'BQACAgQAAxkDAAOGX5Jyq2s3oqkBfMGkR356U-VkPwUAAiMCAAKTWkVQthkVols1F6YbBA',
-
-    //         // option 3: use file from source
-    //         // {
-    //         // url: 'http://www.africau.edu/images/default/sample.pdf',
-    //         // source: 'biodatas/sample.docx',
-    //         // filename: 'sample.docx'
-    //         // },
-    //         { caption: 'Match Score: 80%' }
-    //     );
-    //     console.log(document.document);
-    // }
-
-
-    // TODO
-    // @Command('my_profile_picture')
-    // async sendPhoto(ctx: Context) {
-    //     await ctx.telegram.sendChatAction(ctx.chat.id, 'upload_photo');
-    //     await ctx.telegram.sendPhoto(ctx.message.chat.id,
-    //         // 'AgACAgUAAxkBAAOxX5Om1-bJ6u-jtMMdbWygyNZaQ_kAAgOrMRvnlJhUTRAQuRQnHpNNF8FsdAADAQADAgADbQADlpYCAAEbBA',
-    //         `https://tenor.com/view/taj-mahal-india-castle-gif-15070813`,
-    //         { caption: 'Your current profile picture' })
-    // }
 }

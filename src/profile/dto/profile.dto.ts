@@ -8,17 +8,41 @@ import { getEnumValues } from 'src/common/util';
 
 export class PaginationDto {
     @IsOptional()
+    @Min(0)
+    @IsInt()
+    @Transform(value => Number(value))
+    skip?: number = 0;
+
+    @IsOptional()
     @Max(20)
     @Min(1)
     @IsInt()
     @Transform(value => Number(value))
     take?: number = 20;
+}
 
+
+export class GetProfileDto {
     @IsOptional()
-    @Min(0)
-    @IsInt()
-    @Transform(value => Number(value))
-    skip?: number = 0;
+    @IsBoolean()
+    @Transform(value => {
+        if (value === 'true' || value === true) return true;
+        else if (value === 'false' || value === false) return false;
+        else throw new BadRequestException(`${value} is not a boolean type! It's type is ${typeof value}`);
+    })
+    getPreference?: boolean;
+}
+
+
+export class GetTelegramAccountDto { //extends GetProfileDto {
+    @IsOptional()
+    @IsBoolean()
+    @Transform(value => {
+        if (value === 'true' || value === true) return true;
+        else if (value === 'false' || value === false) return false;
+        else throw new BadRequestException(`${value} is not a boolean type! It's type is ${typeof value}`);
+    })
+    getProfile?: boolean;
 }
 
 
@@ -30,7 +54,35 @@ export class GetTelegramAccountsDto extends PaginationDto {
         else if (value === 'false' || value === false) return false;
         else throw new BadRequestException(`${value} is not a boolean type! It's type is ${typeof value}`);
     })
-    isValid?: boolean
+    isNew?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    @Transform(value => {
+        if (value === 'true' || value === true) return true;
+        else if (value === 'false' || value === false) return false;
+        else throw new BadRequestException(`${value} is not a boolean type! It's type is ${typeof value}`);
+    })
+    isUpdated?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    @Transform(value => {
+        if (value === 'true' || value === true) return true;
+        else if (value === 'false' || value === false) return false;
+        else throw new BadRequestException(`${value} is not a boolean type! It's type is ${typeof value}`);
+    })
+    getProfile?: boolean;
+
+    //// NOT WORKING
+    // @IsOptional()
+    // @IsBoolean()
+    // @Transform(value => {
+    //     if (value === 'true' || value === true) return true;
+    //     else if (value === 'false' || value === false) return false;
+    //     else throw new BadRequestException(`${value} is not a boolean type! It's type is ${typeof value}`);
+    // })
+    // getPreference?: boolean;
 }
 
 
@@ -54,9 +106,8 @@ export class BanProfileDto {
 
 
 export class DocumentValidationDto {
-    @IsInt()
-    @Transform(value => Number(value))
-    documentId: number;
+    @IsUUID(4)
+    documentId: string;
 
     @IsBoolean()
     // @Transform(value => Boolean(value))
@@ -67,7 +118,7 @@ export class DocumentValidationDto {
     })
     valid: boolean;
 
-    // @IsOptional()
+    @IsOptional()
     // @IsIn(Object.values(DocRejectionReason).filter(value => typeof value === 'number'))
     @IsIn(getEnumValues(DocRejectionReason))
     @Transform(value => Number(value))
@@ -278,7 +329,6 @@ export class PartnerPreferenceDto {
 
     @Type(() => Number)
     @IsOptional()
-    // @IsPositive({ each: true })
     @IsIn(getEnumValues(AnnualIncome), { each: true })
     @IsInt({ each: true })
     religions?: Religion[];

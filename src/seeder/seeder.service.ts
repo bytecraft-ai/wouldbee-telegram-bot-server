@@ -111,37 +111,37 @@ export class SeederService implements OnApplicationBootstrap {
             name: "Rahul Gupta",
             password: "Password-1",
             role: UserRole.ADMIN
-        }
+        };
         const charul: AgentRegistrationDto = {
             email: "charul@wouldbee.com",
             phone: "97030726206",
             name: "Kritika Agrawal",
             password: "Password-1",
             role: UserRole.AGENT
-        }
+        };
         const tanu: AgentRegistrationDto = {
             email: "tanugupta17@gmail.com",
             phone: "7023400244",
             name: "Tanuja Gupta",
             password: "Password-1",
             role: UserRole.AGENT
-        }
+        };
         const yash: AgentRegistrationDto = {
-            email: 'yashsharma170898@gmail.com',
+            email: "yashsharma170898@gmail.com",
             phone: "8910719147",
             name: "Yash Sharma",
             password: "Password-1",
             role: UserRole.AGENT
-        }
+        };
         const utkarsh: AgentRegistrationDto = {
             email: "ub270390@gmail.com",
             phone: "1234567890",
             name: "Utkarsh Bhatnagar",
             password: "Password-1",
             role: UserRole.AGENT
-        }
+        };
 
-        const admins = [rahul, charul, tanu, utkarsh];
+        const admins = [rahul, charul, tanu, yash, utkarsh];
         let admin = rahul;
 
         try {
