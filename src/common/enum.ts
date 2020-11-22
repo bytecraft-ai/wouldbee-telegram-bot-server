@@ -32,7 +32,7 @@ export enum Referee {
 export enum RegistrationActionRequired {
     VERIFY_PHONE = 1,
     UPLOAD_BIO,
-    UPLOAD_BIO_AND_PICTURE,
+    UPLOAD_BIO_AND_PICTURE,     // at this position, it has continuity with both picture and bio.
     UPLOAD_PICTURE,
     NONE
 }

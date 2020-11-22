@@ -1557,28 +1557,32 @@ export class ProfileService {
 
 
     async getRegistrationAction(telegramAccountId: string): Promise<RegistrationActionRequired | undefined> {
-        // const telegramAccount = await this.telegramRepository.findOne(telegramAccountId, { relations: ['documents'] });
-
-        // if (!telegramAccount) {
-        //     logger.log(`getRegistrationStatus(): profile ${telegramAccount} not registered!`);
-        //     throw new NotFoundException(`Telegram profile with id: ${telegramAccount.id} not found!`);
-        // }
-
-        const telegramAccount = await this.getTelegramAccountById(telegramAccountId, { throwOnFail: true });
+        logger.log(`start getRegistrationAction(${telegramAccountId})`);
+        const telegramAccount = await
+            this.getTelegramAccountById(telegramAccountId, {
+                throwOnFail: true,
+                relations: ['documents']
+            });
+        let output: RegistrationActionRequired;
 
         if (!telegramAccount.phone) {
-            return RegistrationActionRequired.VERIFY_PHONE;
+            output = RegistrationActionRequired.VERIFY_PHONE;
         }
 
         const documents: Document[] = telegramAccount.documents;
+        // console.log('documents:', documents);
+
         if (!documents?.length) {
-            return RegistrationActionRequired.UPLOAD_BIO_AND_PICTURE;
+            output = RegistrationActionRequired.UPLOAD_BIO_AND_PICTURE;
         }
         else {
             let bioRequired = true, bioVerified = false,
                 picRequired = true, picVerified = false;
+
             for (let doc of documents) {
-                if (doc.typeOfDocument === TypeOfDocument.BIO_DATA && doc.isValid !== false) {
+                console.log(doc);
+                if (doc.typeOfDocument === TypeOfDocument.BIO_DATA
+                    && doc.isValid !== false) {
                     bioRequired = false;
                     if (doc.isValid) {
                         bioVerified = true;
@@ -1590,16 +1594,19 @@ export class ProfileService {
                     }
                 }
             }
+
             if (bioRequired && picRequired) {
-                return RegistrationActionRequired.UPLOAD_BIO_AND_PICTURE;
+                output = RegistrationActionRequired.UPLOAD_BIO_AND_PICTURE;
             } else if (picRequired) {
-                return RegistrationActionRequired.UPLOAD_PICTURE;
+                output = RegistrationActionRequired.UPLOAD_PICTURE;
             } else if (bioRequired) {
-                return RegistrationActionRequired.UPLOAD_BIO;
+                output = RegistrationActionRequired.UPLOAD_BIO;
             } else { // if (!bioRequired && !picRequired) {
-                return RegistrationActionRequired.NONE;
+                output = RegistrationActionRequired.NONE;
             }
         }
+        logger.log(`getRegistrationAction() output - ${output}`);
+        return output;
     }
 
 

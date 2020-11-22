@@ -84,12 +84,12 @@ export class TelegramService {
 
     async setCommands() {
         await this.bot.telegram.setMyCommands([
-            { command: 'start', description: 'See the welcome message' },
+            // { command: 'start', description: 'See the welcome message' },
             { command: 'help', description: 'See the help menu' },
             { command: 'register', description: 'register for a new Would Bee account' },
-            { command: 'upload_bio', description: 'Update bio-data up to 5 times.' },
-            { command: 'update_picture', description: 'Update profile picture up to 5 times.' },
             { command: 'status', description: 'See your Wouldbee account status' },
+            { command: 'update_bio', description: 'Update bio-data up to 5 times.' },
+            { command: 'update_picture', description: 'Update profile picture up to 5 times.' },
             { command: 'deactivate', description: 'Temporarily Deactivate Profile' },
             { command: 'reactivate', description: 'Reactivate profile' },
             { command: 'delete', description: 'Delete profile' },
@@ -111,15 +111,15 @@ export class TelegramService {
     }
 
 
-    async getProfile(ctx: Context) {
+    async getTelegramAccount(ctx: Context) {
         const telegramProfile = await this.profileService.getTelegramAccountByTelegramUserId(ctx.from.id, { throwOnFail: false });
-        logger.log(`getProfile() - telegramProfile: ${JSON.stringify(telegramProfile)}`);
+        logger.log(`getTelegramAccount(): ${JSON.stringify(telegramProfile)}`);
         return telegramProfile;
     }
 
 
-    async getOrCreateProfile(ctx: Context) {
-        let telegramProfile = await this.getProfile(ctx);
+    async getOrCreateTelegramAccount(ctx: Context) {
+        let telegramProfile = await this.getTelegramAccount(ctx);
         if (!telegramProfile) {
             telegramProfile = await this.createTelegramAccount(ctx);
         }
@@ -168,8 +168,8 @@ export class TelegramService {
     }
 
 
-    async doesProfileExist(ctx: Context) {
-        const telegramProfile = await this.getProfile(ctx);
+    async doesTelegramAccountExist(ctx: Context) {
+        const telegramProfile = await this.getTelegramAccount(ctx);
         console.log(telegramProfile, !telegramProfile, !!telegramProfile);
         return !!telegramProfile;
     }
@@ -189,7 +189,7 @@ export class TelegramService {
                 await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
                 // check if the user has already been registered.
-                let telegramProfile = await this.getProfile(ctx);
+                let telegramProfile = await this.getTelegramAccount(ctx);
                 if (telegramProfile) {
                     ctx.wizard.state.data.telegramProfileId = telegramProfile.id;
                     const status: RegistrationActionRequired = await this.profileService.getRegistrationAction(telegramProfile.id);
@@ -238,7 +238,7 @@ export class TelegramService {
 
             },
 
-            // Step-2 :: Read Phone number, update into profile
+            // Step-2 :: Read Phone number, update into telegram account
             async (ctx: Context) => {
                 logger.log(`Step-2:: status-${ctx.wizard.state.data.status}`);
 
@@ -270,7 +270,7 @@ export class TelegramService {
                                 logger.log(`Saved Phone number for Telegram Profile with  id: ${telegramProfile.id}`);
                             }
                             catch (error) {
-                                logger.error('Could not save phone number for telegram profile. Error', error);
+                                logger.error('Could not save phone number for telegram account. Error', error);
                                 await ctx.reply("Some error occurred. Please try again later!");
                                 return ctx.scene.leave();
                             }
@@ -279,7 +279,7 @@ export class TelegramService {
                         }
                     }
                     else if (ctx.message.text?.toLocaleLowerCase() === 'cancel') {
-                        await ctx.reply(`Canceling registration!`);
+                        await ctx.reply(registrationCancelled);
                         return ctx.scene.leave();
                     }
                     else {
@@ -339,6 +339,7 @@ export class TelegramService {
                         // size check
                         const sizeErrorMessage = validateBioDataFileSize(ctx);
                         if (sizeErrorMessage) {
+                            await ctx.deleteMessage();
                             await ctx.reply(sizeErrorMessage);
                             return;
                         }
@@ -356,15 +357,18 @@ export class TelegramService {
                                 await this.profileService.uploadDocument(ctx.from.id, fileToUpload, DIR, mime_type, TypeOfDocument.BIO_DATA, document.file_id);
 
                                 await deleteFile(fileToUpload, DIR);
+                                await ctx.deleteMessage();
                                 await ctx.reply(bioCreateSuccessMsg);
 
                             } catch (error) {
                                 logger.error("Could not download/upload the bio-data. Error:", error);
+                                await ctx.deleteMessage();
                                 await ctx.reply(fatalErrorMsg);
                                 return ctx.scene.leave();
                             }
                         } else {
                             assert(!!errorMessage, 'Both fileName and errorMessage cannot be null/undefined');
+                            await ctx.deleteMessage();
                             await ctx.reply(errorMessage);
                             if (quitOnError) {
                                 return ctx.scene.leave();
@@ -372,7 +376,7 @@ export class TelegramService {
                                 return;
                             }
                         }
-                    } else if (ctx.message.text?.toLocaleLowerCase() === 'cancel') {
+                    } else if (ctx.message.text?.toLocaleLowerCase() === '/cancel') {
                         await ctx.reply(registrationCancelled);
                         return ctx.scene.leave();
                     }
@@ -380,7 +384,7 @@ export class TelegramService {
                         if (ctx.wizard.state.data?.next_without_user_input) {
                             ctx.wizard.state.data.next_without_user_input = false;
                         } else {
-                            await ctx.reply(`Send bio-data or type "Cancel" to quit the registration process!`);
+                            await ctx.reply(`Send bio-data or use /cancel to quit the registration process!`);
                         }
                         return;
                     }
@@ -401,7 +405,7 @@ export class TelegramService {
                     return ctx.wizard.steps[ctx.wizard.cursor](ctx);
                 } else {
                     await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-                    await ctx.reply(`Upload your profile picture or type Cancel to quit.`);
+                    await ctx.reply(`Upload your profile picture or use /cancel to quit.`);
                 }
 
                 logger.log('calling step-6');
@@ -472,7 +476,7 @@ export class TelegramService {
                             }
                         }
                     }
-                    else if (ctx.message.text?.toLocaleLowerCase() === 'cancel') {
+                    else if (ctx.message.text?.toLocaleLowerCase() === '/cancel') {
                         await ctx.reply(registrationCancelled);
                         return ctx.scene.leave();
                     }
@@ -480,7 +484,7 @@ export class TelegramService {
                         if (ctx.wizard.state.data.next_without_user_input) {
                             ctx.wizard.state.data.next_without_user_input = false;
                         } else {
-                            await ctx.reply(`Send profile picture or type "Cancel" to quit the registration process!`);
+                            await ctx.reply(`Send profile picture or use /cancel to quit the registration process!`);
                         }
                         return;
                     }
@@ -509,7 +513,7 @@ export class TelegramService {
                 await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
                 // check if the user has already been registered.
-                const telegramProfile = await this.getProfile(ctx);
+                const telegramProfile = await this.getTelegramAccount(ctx);
 
                 if (!telegramProfile) {
                     await ctx.reply(unregisteredUserMsg);
@@ -569,12 +573,12 @@ export class TelegramService {
                             return;
                         }
                     }
-                } else if (ctx.message.text?.toLocaleLowerCase() === 'cancel') {
+                } else if (ctx.message.text?.toLocaleLowerCase() === '/cancel') {
                     await ctx.reply('Cancelled');
                     return ctx.scene.leave();
                 }
                 else {
-                    await ctx.reply(`Send bio-data or type "Cancel" to quit the registration process!`);
+                    await ctx.reply(`Send bio-data or use /cancel to quit the registration process!`);
                     return;
                 }
             }
@@ -582,7 +586,7 @@ export class TelegramService {
 
         const stage = new Stage([bioWizard]);
         this.bot.use(stage.middleware());
-        this.bot.command('upload_bio', ctx => {
+        this.bot.command('update_bio', ctx => {
             ctx.scene.enter('bio-wizard');
         });
     }
@@ -600,7 +604,7 @@ export class TelegramService {
                 await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
                 // check if the user has already been registered.
-                const telegramProfile = await this.getProfile(ctx);
+                const telegramProfile = await this.getTelegramAccount(ctx);
 
                 if (!telegramProfile) {
                     await ctx.reply(unregisteredUserMsg);
@@ -611,7 +615,7 @@ export class TelegramService {
                     ctx.wizard.state.data.telegramProfileId = telegramProfile.id;
                 }
 
-                await ctx.reply(`Upload your Profile picture or type Cancel to quit.`);
+                await ctx.reply(`Upload your Profile picture or use /cancel to quit.`);
 
                 logger.log('calling step-2');
                 return ctx.wizard.next();
@@ -675,14 +679,14 @@ export class TelegramService {
                     return ctx.scene.leave();
                 }
                 else {
-                    await ctx.reply(`Send profile picture or type "Cancel" to quit the registration process!`);
+                    await ctx.reply(`Send profile picture or use /cancel to quit the registration process!`);
                     return;
                 }
             });
 
         const stage = new Stage([pictureWizard]);
         this.bot.use(stage.middleware());
-        this.bot.command('upload_picture', ctx => {
+        this.bot.command('update_picture', ctx => {
             ctx.scene.enter('picture-wizard');
         });
     }
@@ -700,7 +704,7 @@ export class TelegramService {
                 logger.log(`createSupportWizard():: step-1`);
 
                 // check if the user has already been registered.
-                let telegramProfile = await this.getProfile(ctx);
+                let telegramProfile = await this.getTelegramAccount(ctx);
 
                 if (!telegramProfile) {
                     telegramProfile = await this.createTelegramAccount(ctx);
@@ -745,7 +749,7 @@ export class TelegramService {
 
                 }
                 else {
-                    await ctx.reply(`Type your query/feedback or type "Cancel" to quit.`);
+                    await ctx.reply(`Type your query/feedback or use /cancel to quit.`);
                     return;
                 }
             }
@@ -764,7 +768,7 @@ export class TelegramService {
         const msg = ctx.message;
 
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        const exists = await this.doesProfileExist(ctx)
+        const exists = await this.doesTelegramAccountExist(ctx)
         if (exists) {
             await ctx.reply('Welcome back! Please use (click on or type) /help command to see how you can interact with me.')
             return;
@@ -800,7 +804,7 @@ export class TelegramService {
     @Command('delete')
     async delete(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        const telegramProfile = await this.getProfile(ctx);
+        const telegramProfile = await this.getTelegramAccount(ctx);
 
         // await this.profileService.markProfileForDeletion(ctx.from.id, );
         if (telegramProfile.status < UserStatus.UNVERIFIED) {
@@ -854,7 +858,7 @@ export class TelegramService {
     @Command('recover')
     async recover(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        const telegramProfile = await this.getProfile(ctx);
+        const telegramProfile = await this.getTelegramAccount(ctx);
 
         if (telegramProfile.status === UserStatus.PENDING_DELETION) {
             await ctx.telegram.sendMessage(ctx.chat.id, acknowledgeDeletionRequest, {
@@ -891,7 +895,7 @@ export class TelegramService {
     @Command('deactivate')
     async deactivate(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        const telegramProfile = await this.getOrCreateProfile(ctx);
+        const telegramProfile = await this.getOrCreateTelegramAccount(ctx);
         if (telegramProfile.status === UserStatus.ACTIVATED) {
             await ctx.telegram.sendMessage(ctx.chat.id, 'Okay. For how long do you want to deactivate?', {
                 reply_markup: {
@@ -938,7 +942,7 @@ export class TelegramService {
     @Command('reactivate')
     async reactivate(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        const telegramProfile = await this.getOrCreateProfile(ctx);
+        const telegramProfile = await this.getOrCreateTelegramAccount(ctx);
         if (telegramProfile.status === UserStatus.DEACTIVATED) {
             try {
                 await this.profileService.reactivateProfile(telegramProfile.userId);
@@ -957,7 +961,7 @@ export class TelegramService {
     @Command('status')
     async status(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        const telegramProfile = await this.getOrCreateProfile(ctx);
+        const telegramProfile = await this.getOrCreateTelegramAccount(ctx);
         logger.log(`status:, ${telegramProfile.status}`);
 
         let msg = '';
@@ -1046,6 +1050,17 @@ export class TelegramService {
     }
 
 
+    silent_send(): boolean {
+        let silent = false;
+        const now = new Date();
+        // silent notifications before 8 am and after 9:59 pm
+        if (now.getHours() < 8 || now.getHours() > 21) {
+            silent = true;
+        }
+        return silent;
+    }
+
+
     // TODO: if at odd time, send notification silently.
     // fails silently
     async notifyUser(telegramAccount: TelegramAccount, message: string, sendHi = true) {
@@ -1055,7 +1070,8 @@ export class TelegramService {
                 const name = telegramAccount.name || 'there';
                 message = `Hi ${name},\n${message}`;
             }
-            await this.bot.telegram.sendMessage(chatId, message);
+            await this.bot.telegram.sendMessage(chatId, message,
+                { disable_notification: this.silent_send() });
         }
         catch (error) {
             logger.error(`Could not notify user. Telegram account id: ${JSON.stringify(telegramAccount.id)}, message: ${message}, name: ${name}, ERROR:\n${JSON.stringify(error)}`);
@@ -1092,9 +1108,11 @@ export class TelegramService {
 
             message += `You can upload a new ${docType} or if you think that is a mistake, please contact our customer care.`;
         }
+
         // TODO - fix formatting.
         // await this.bot.telegram.sendMessage(chatId, format.escape(message), { parse_mode: "HTML" });
-        await this.bot.telegram.sendMessage(chatId, message);
+        await this.bot.telegram.sendMessage(chatId, message,
+            { disable_notification: this.silent_send() });
     }
 
 
@@ -1103,11 +1121,18 @@ export class TelegramService {
         const photoFileId = TelegramAccountToSend.picture.telegramFileId;
         const bioFileId = TelegramAccountToSend.bioData.telegramFileId;
 
-        await this.bot.telegram.sendMessage(chatId, `Hi.Here's a new match for you.\nName: ${profileToSend.name}\nDoB: ${profileToSend.dob}`)
+        await this.bot.telegram.sendMessage(chatId, `Hi.Here's a new match for you.\nName: ${profileToSend.name}\nDoB: ${profileToSend.dob}`,
+            { disable_notification: this.silent_send() });
 
-        await this.bot.telegram.sendPhoto(chatId, photoFileId, { caption: profileToSend.name });
+        await this.bot.telegram.sendPhoto(chatId, photoFileId, {
+            caption: profileToSend.name,
+            disable_notification: this.silent_send()
+        });
 
-        await this.bot.telegram.sendDocument(chatId, bioFileId, { caption: profileToSend.name });
+        await this.bot.telegram.sendDocument(chatId, bioFileId, {
+            caption: profileToSend.name,
+            disable_notification: this.silent_send()
+        });
     }
 
 
@@ -1126,7 +1151,7 @@ export class TelegramService {
 
 
 
-    // @Command('upload_bio')
+    // @Command('update_bio')
     // async uploadBio(ctx: Context) {
 
     //     // TODO: Set context for accepting bio-data with a 1 minute timeout in session
