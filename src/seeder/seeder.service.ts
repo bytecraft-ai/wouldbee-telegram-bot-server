@@ -109,7 +109,7 @@ export class SeederService implements OnApplicationBootstrap {
             email: "rahul@wouldbee.com",
             phone: "9611121073",
             name: "Rahul Gupta",
-            password: "Password-1",
+            password: process.env.NODE_ENV === 'production' ? 'bahuthi-mushkill' : "Password-1",
             role: UserRole.ADMIN
         };
         const charul: AgentRegistrationDto = {
@@ -134,14 +134,16 @@ export class SeederService implements OnApplicationBootstrap {
             role: UserRole.AGENT
         };
         const utkarsh: AgentRegistrationDto = {
-            email: "ub270390@gmail.com",
-            phone: "1234567890",
+            email: "u.b.27031990@gmail.com",
+            phone: "8130168109",
             name: "Utkarsh Bhatnagar",
-            password: "Password-1",
+            password: process.env.NODE_ENV === 'production' ? 'kathin-passw0rd' : "Password-1",
             role: UserRole.AGENT
         };
 
-        const admins = [rahul, charul, tanu, yash, utkarsh];
+        process.env.NODE_ENV === 'production' ? true : true
+
+        const admins = process.env.NODE_ENV === 'production' ? [rahul, utkarsh] : [rahul, charul, tanu, yash, utkarsh];
         let admin = rahul;
 
         try {

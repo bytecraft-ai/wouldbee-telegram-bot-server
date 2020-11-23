@@ -1,5 +1,5 @@
-import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, UseInterceptors, UploadedFiles, Query, DefaultValuePipe, ParseArrayPipe, ParseUUIDPipe, Req } from '@nestjs/common';
-import { CreateCasteDto, CreateProfileDto, FileUploadDto, GetProfileDto, GetTelegramAccountDto, PartnerPreferenceDto } from './dto/profile.dto';
+import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, Query, DefaultValuePipe, ParseArrayPipe, ParseUUIDPipe, Req } from '@nestjs/common';
+import { CreateCasteDto, CreateProfileDto, GetMatchesDto, GetProfileDto, GetTelegramAccountDto, PaginationDto, PartnerPreferenceDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
 import { DocumentValidationDto, GetTelegramAccountsDto, BanProfileDto } from './dto/profile.dto';
 import { GetCitiesDto, GetCountriesDto, GetStatesDto } from './dto/location.dto';
@@ -9,6 +9,7 @@ import { IList, IUserStats } from 'src/common/interface';
 import { Roles } from 'src/auth/set-role.decorator';
 import { GetAgent } from 'src/auth/get-agent.decorator';
 import { WbAgent } from 'src/agent/entities/agent.entity';
+import { Profile } from './entities/profile.entity';
 // import { Profile } from './entities/profile.entity';
 // import { AwsService } from 'src/aws-service/aws-service.service';
 // import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
@@ -20,18 +21,11 @@ const logger = new Logger('ProfileController');
 
 
 @Controller('common')
-// @UsePipes(ValidationPipe)
 export class CommonController {
     constructor(
         private readonly profileService: ProfileService,
-        // private readonly awsService: AwsService
     ) { }
 
-    // @Get('/upload')      // meant for testing
-    // async upload() {
-    //     const link = await this.awsService.uploadFileToS3("1e904bf2-5b84-427d-b169-c57deccd9655", "1e904bf2-5b84-427d-b169-c57deccd9655_bio.pdf", "application/pdf", TypeOfDocument.BIO_DATA);
-    //     return { link };
-    // }
 
     @Get('/')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
@@ -183,15 +177,6 @@ export class TelegramProfileController {
     }
 
 
-
-    // @Get('/url/:id')
-    // @Roles(UserRole.AGENT, UserRole.ADMIN)
-    // async getSignedDownloadUrl(@Param('id') id: string, @Query() query: DocumentTypeDto): Promise<{ url: string }> {
-    //     console.log('id:', id, 'docType:', query);
-    //     return await this.profileService.getSignedDownloadUrlForUnverifiedDoc(id, query.documentType, { throwOnFail: true });
-    // }
-
-
     // TODO: implement caching on client side
     @Get('/url/:uuid')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
@@ -263,6 +248,28 @@ export class ProfileController {
         console.log('create profile with', createProfileDto);
         return this.profileService.saveProfile(createProfileDto);
     }
+
+
+    @Get('/matches/find/:uuid')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
+    async findMatches(
+        @Param('uuid', new ParseUUIDPipe()) uuid: string,
+        @Query() options: GetMatchesDto
+    ): Promise<IList<Profile>> {
+        logger.log(`getMatches(${uuid}, ${options?.skip}, ${options?.take})`);
+        return this.profileService.findMatches(uuid, options?.skip, options?.take);
+    }
+
+
+    @Get('/matches/:uuid')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
+    async getMatches(
+        @Param('uuid', new ParseUUIDPipe()) uuid: string,
+        @Query() options: PaginationDto
+    ): Promise<IList<Profile>> {
+        logger.log(`getMatches(${uuid}, ${options?.skip}, ${options?.take})`);
+        return this.profileService.findMatches(uuid, options?.skip, options?.take);
+    }
 }
 
 
@@ -295,24 +302,5 @@ export class PreferenceController {
     ) {
         // console.log('set preference to', preference, req);
         return this.profileService.savePartnerPreference(preference);
-    }
-}
-
-
-@Controller('file')
-@UsePipes(ValidationPipe)
-export class FileController {
-    constructor(private readonly profileService: ProfileService) { }
-
-
-    @Post('/')
-    async updateFile(@Body() fileUploadDto: FileUploadDto) {
-        //
-    }
-
-
-    @Get('/uploadlink')
-    async getUploadLink(@Body() fileUploadDto: FileUploadDto) {
-
     }
 }

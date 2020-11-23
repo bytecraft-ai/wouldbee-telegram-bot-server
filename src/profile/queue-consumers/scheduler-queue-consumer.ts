@@ -41,7 +41,7 @@ export class SchedulerQueueConsumer {
     @Process('create-profile')
     async findMatchesAndSave(job: Job<unknown>) {
         logger.log(`Running find matches and save. ${job.data}`);
-        const matches = await this.profileService.getMatches(job.data['profileId']);
+        const matches = await this.profileService.findMatches(job.data['profileId']);
         await this.profileService.saveMatches(job['profileId'], matches.values);
         return {};
     }
@@ -50,7 +50,7 @@ export class SchedulerQueueConsumer {
     @Process('update-profile')
     async updateMatchesAndSave(job: Job<unknown>) {
         logger.log(`Running update matches and save. ${job.data}`);
-        const matches = await this.profileService.getMatches(job.data['profileId']);
+        const matches = await this.profileService.findMatches(job.data['profileId']);
         await this.profileService.updateMatches(job['profileId'], matches.values);
         return {};
     }

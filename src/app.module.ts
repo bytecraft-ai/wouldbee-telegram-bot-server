@@ -74,11 +74,13 @@ import { LoggerMiddleware } from './common/logger.middleware';
   controllers: [AppController]
 })
 
+export class AppModule { }
 
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(LoggerMiddleware)
-      .forRoutes({ path: 'preference', method: RequestMethod.POST });
-  }
-}
+// Use it to apply logging middleware to intercept requests.
+// export class AppModule implements NestModule {
+//   configure(consumer: MiddlewareConsumer) {
+//     consumer
+//       .apply(LoggerMiddleware)
+//       .forRoutes({ path: 'preference', method: RequestMethod.POST });
+//   }
+// }

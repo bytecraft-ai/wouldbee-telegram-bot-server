@@ -1,9 +1,9 @@
-import { Injectable, Logger, BadRequestException, NotFoundException, ConflictException, NotImplementedException, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, ConflictException, NotImplementedException, forwardRef, Inject, NotAcceptableException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, MaritalStatus, ProfileSharedWith, S3Option, RegistrationActionRequired, ProfileDeactivationDuration, ProfileDeletionReason, UserStatus, DocRejectionReason } from 'src/common/enum';
+import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, MaritalStatus, ProfileSharedWith, S3Option, RegistrationActionRequired, ProfileDeactivationDuration, ProfileDeletionReason, UserStatus, DocRejectionReason, AnnualIncome } from 'src/common/enum';
 import { daysAhead, deDuplicateArray, getAgeInYearsFromDOB, nextWeek, setDifferenceFromArrays } from 'src/common/util';
 import { LessThanOrEqual, Repository } from 'typeorm';
-import { PartnerPreferenceDto, CreateProfileDto, CreateCasteDto, SupportResolutionDto, GetTelegramAccountsDto } from './dto/profile.dto';
+import { PartnerPreferenceDto, CreateProfileDto, CreateCasteDto, SupportResolutionDto, GetTelegramAccountsDto, GetMatchesDto } from './dto/profile.dto';
 import { Caste } from './entities/caste.entity';
 import { City } from './entities/city.entity';
 import { Country } from './entities/country.entity';
@@ -67,7 +67,7 @@ export class ProfileService {
 
     // TODO: test
     async userStats(status: UserStatus): Promise<IUserStats> {
-
+        logger.log(`userStats(${status})`);
         return {
             total: await this.telegramRepository.count({
                 where: { status }
@@ -96,6 +96,7 @@ export class ProfileService {
 
     @Transactional()
     async saveProfile(profileDto: CreateProfileDto): Promise<Profile | undefined> {
+        logger.log(`saveProfile(${JSON.stringify(profileDto)})`);
         const { telegramAccountId, name, gender, dob, religion, casteId, annualIncome, cityId, highestDegree, employedIn, occupation, motherTongue, maritalStatus } = profileDto;
 
         const telegramAccount = await this.getTelegramAccountById(telegramAccountId, {
@@ -119,6 +120,10 @@ export class ProfileService {
             profile = this.profileRepository.create();
         } else {
             createTrueEditFalse = false;
+        }
+
+        if (createTrueEditFalse === false && profile.gender !== gender) {
+            throw new NotAcceptableException('Cannot edit gender!');
         }
 
         const caste = await this.getCaste(casteId, true);
@@ -155,6 +160,8 @@ export class ProfileService {
             this.telegramService.notifyUser(telegramAccount, 'Congratulations! Your profile has been activated. From now on, matching profiles will be forwarded to you!');
         }
 
+        // delete-matches involving this profile.
+
         // add match-finding job to queue for create profile
         await this.schedulerQueue.add('create-profile',
             { profileId: profile.id },
@@ -166,6 +173,7 @@ export class ProfileService {
 
 
     async getProfiles(): Promise<Profile[] | undefined> {
+        logger.log(`getProfiles()`);
         return this.profileRepository.find();
     }
 
@@ -174,6 +182,7 @@ export class ProfileService {
         throwOnFail = true,
         relations = []
     }): Promise<Profile | undefined> {
+        logger.log(`getProfileById(${id}, ${throwOnFail}, ${relations})`);
         const profile = await this.profileRepository.findOne(id, {
             relations
         });
@@ -185,6 +194,7 @@ export class ProfileService {
 
 
     async getPreferenceById(id: string, { throwOnFail = true }): Promise<PartnerPreference | undefined> {
+        logger.log(`getProfileById(${id}, ${throwOnFail})`);
         const preference = await this.prefRepository.findOne(id);
         if (throwOnFail && !preference) {
             throw new NotFoundException(`Preference with id: ${id} not found`);
@@ -194,35 +204,56 @@ export class ProfileService {
 
 
     async getPreferences(): Promise<PartnerPreference[] | undefined> {
+        logger.log(`getPreferences()`);
         return this.prefRepository.find();
     }
 
 
     async setDefaultPartnerPreference(profile: Profile): Promise<PartnerPreference | undefined> {
+        logger.log(`setDefaultPartnerPreference(${JSON.stringify(profile)})`);
 
         let pref = await this.getPreferenceById(profile.id, { throwOnFail: false });
         if (pref) {
             return pref;
         } else {
-            const age = getAgeInYearsFromDOB(profile.dob);
+            const profileAge = getAgeInYearsFromDOB(profile.dob);
+            const profileIncome = profile.annualIncome;
+            const isMaleProfile = profile.gender === Gender.MALE;
 
-            const minAge = profile.gender === Gender.MALE ?
-                Math.max(age - 6, 18) :
-                Math.max(age - 1, 21);
+            // determine attributes for the match
 
-            const maxAge = profile.gender === Gender.MALE ?
-                Math.max(age + 1, 18) :
-                Math.max(age + 6, 21)
+            const minAge = isMaleProfile ?
+                Math.max(profileAge - 6, 18) :
+                Math.max(profileAge - 1, 21);
 
-            const religions = [profile.religion]
+            const maxAge = isMaleProfile ?
+                Math.max(profileAge + 1, 18) :
+                Math.max(profileAge + 6, 21);
+
+            const minimumIncome = isMaleProfile
+                ? AnnualIncome.ZERO
+                : Math.max(profileIncome - 1, AnnualIncome.ZERO);
+
+            const maximumIncome = isMaleProfile
+                ? Math.min(profileIncome + 2, AnnualIncome.TEN_CR_OR_MORE)
+                : Math.min(profileIncome + 6, AnnualIncome.TEN_CR_OR_MORE);
+
+            const maritalStatuses = profile.maritalStatus === MaritalStatus.NEVER_MARRIED
+                ? [MaritalStatus.NEVER_MARRIED]
+                : null;
+
+            const religions = [profile.religion];
             const castes = [profile.caste];
 
             let pref = this.prefRepository.create({
                 profile,
                 minAge,
                 maxAge,
+                minimumIncome,
+                maximumIncome,
                 religions,
-                castes
+                castes,
+                maritalStatuses
             });
 
             pref = await this.prefRepository.save(pref)
@@ -236,11 +267,19 @@ export class ProfileService {
 
 
     async savePartnerPreference(preferenceInput: PartnerPreferenceDto): Promise<PartnerPreference> {
+        logger.log(`savePartnerPreference(${JSON.stringify(preferenceInput)})`);
+
         let { id, minAge, maxAge, minimumIncome, maximumIncome, religions, maritalStatuses, casteIds, cityIds, stateIds, countryIds } = preferenceInput;
 
         if (minimumIncome && maximumIncome) {
             if (maximumIncome < minimumIncome) {
                 throw new ConflictException('maximumIncome cannot be lesser than minimumIncome');
+            }
+        }
+
+        if (minAge && maxAge) {
+            if (maxAge < minAge) {
+                throw new ConflictException('maxAge cannot be lesser than minAge');
             }
         }
 
@@ -251,15 +290,14 @@ export class ProfileService {
             pref = this.prefRepository.create();
         }
 
-        console.log('preferenceInput:', preferenceInput);
-        console.log('existing pref:', pref);
+        // console.log('preferenceInput:', preferenceInput);
+        // console.log('existing pref:', pref);
 
-        minAge = minAge
-            ? Math.max(profile.gender === Gender.MALE ? 18 : 21, minAge)
-            : minAge;
-        maxAge = maxAge ?
-            Math.max(profile.gender === Gender.MALE ? 18 : 21, maxAge)
-            : maxAge;
+        minAge = Math.max(profile.gender === Gender.MALE ? 18 : 21, minAge ?? 18)
+        maxAge = Math.max(profile.gender === Gender.MALE ? 18 : 21, maxAge ?? 100)
+
+        minimumIncome = minimumIncome ?? AnnualIncome.ZERO;
+        maximumIncome = maximumIncome ?? AnnualIncome.TEN_CR_OR_MORE;
 
         const castes: Caste[] = [];
         if (casteIds) {
@@ -327,13 +365,13 @@ export class ProfileService {
     // TODO: test
     @Transactional()
     async softDeleteProfile(telegramUserId: number, reason: ProfileDeletionReason) {
-        logger.log(`softDeleteProfile(telegramUserId: ${telegramUserId}): start`);
+        logger.log(`softDeleteProfile(${telegramUserId})`);
         const telegramAccount = await this.telegramRepository.findOne({
             where: { userId: telegramUserId },
             relations: ['profile']
         });
         if (!telegramAccount) {
-            throw new NotFoundException(`Telegram profile with telegram user id: ${telegramUserId} not found!`);
+            throw new NotFoundException(`Telegram account with telegram user id: ${telegramUserId} not found!`);
         }
 
         const profile: Profile = telegramAccount.profile;
@@ -382,13 +420,13 @@ export class ProfileService {
 
     @Transactional()
     async markProfileForDeletion(telegramUserId: number, reason: ProfileDeletionReason) {
-        logger.log(`markProfileForDeletion(telegramUserId: ${telegramUserId}): start`);
+        logger.log(`markProfileForDeletion(${telegramUserId})`);
         const telegramAccount: TelegramAccount = await this.telegramRepository.findOne({
             where: { userId: telegramUserId },
             relations: ['profile']
         });
         if (!telegramAccount) {
-            throw new NotFoundException(`Telegram profile with telegram user id: ${telegramUserId} not found!`);
+            throw new NotFoundException(`Telegram account with telegram user id: ${telegramUserId} not found!`);
         }
         let profile = telegramAccount.profile;
 
@@ -423,7 +461,7 @@ export class ProfileService {
             await this.telegramRepository.save(telegramAccount);
         }
         catch (error) {
-            logger.error(`Could not mark profile for deletion. Telegram Profile Id: ${telegramAccount.id}, Error:\n${JSON.stringify(error)}`);
+            logger.error(`Could not mark profile for deletion. Telegram account Id: ${telegramAccount.id}, Error:\n${JSON.stringify(error)}`);
             throw error;
         }
     }
@@ -431,7 +469,7 @@ export class ProfileService {
 
     @Transactional()
     async cancelProfileForDeletion(telegramUserId: number) {
-        logger.log(`cancelProfileForDeletion(telegramUserId: ${telegramUserId}): start`);
+        logger.log(`cancelProfileForDeletion(${telegramUserId})`);
         const telegramAccount: TelegramAccount = await
             this.getTelegramAccountByTelegramUserId(telegramUserId, {
                 throwOnFail: true,
@@ -463,7 +501,7 @@ export class ProfileService {
             await this.toDeleteProfileRepository.delete(telegramAccount.id);
         }
         catch (error) {
-            logger.error(`Could not cancel profile marked for deletion. Telegram Profile Id: ${telegramAccount.id}, Error:\n${JSON.stringify(error)}`);
+            logger.error(`Could not cancel profile marked for deletion. Telegram account Id: ${telegramAccount.id}, Error:\n${JSON.stringify(error)}`);
             throw error;
         }
     }
@@ -472,7 +510,7 @@ export class ProfileService {
     // TODO: test
     @Transactional()
     async deactivateProfile(telegramUserId: number, deactivateFor: ProfileDeactivationDuration): Promise<Profile | undefined> {
-        logger.log(`deactivateProfile(telegramUserId: ${telegramUserId}): start`);
+        logger.log(`deactivateProfile(${telegramUserId})`);
 
         const telegramAccount = await this.getTelegramAccountByTelegramUserId(telegramUserId, { throwOnFail: true, relations: ['profile'] });
 
@@ -534,7 +572,7 @@ export class ProfileService {
     // TODO: test
     @Transactional()
     async reactivateProfile(telegramUserId: number): Promise<Profile | undefined> {
-        logger.log(`reactivateProfile(telegramUserId: ${telegramUserId}): start`);
+        logger.log(`reactivateProfile(${telegramUserId})`);
         const telegramAccount = await this.getTelegramAccountByTelegramUserId(telegramUserId, { throwOnFail: true, relations: ['profile'] });
 
         let profile = telegramAccount.profile;
@@ -564,7 +602,7 @@ export class ProfileService {
     // TODO: test
     @Transactional()
     async batchReactivateProfiles() {
-        logger.log(`batchReactivateProfiles(): start`);
+        logger.log(`batchReactivateProfiles()`);
 
         const today = new Date();
         today.setHours(23, 59, 59);
@@ -623,7 +661,7 @@ export class ProfileService {
 
     @Transactional()
     async batchDeleteProfiles() {
-        logger.log('batchDeleteProfiles():: start');
+        logger.log('batchDeleteProfiles()');
 
         const today = new Date();
         today.setHours(23, 59, 59);
@@ -644,7 +682,7 @@ export class ProfileService {
 
             if (toDeleteProfileIds?.length) {
                 try {
-                    // Update, not delete, telegram profiles
+                    // Update, not delete, Telegram accounts
                     await this.telegramRepository.createQueryBuilder('t_profile')
                         .whereInIds(toDeleteProfileIds)
                         .update('t_profile.status = :status', { status: UserStatus.DELETED }).execute();
@@ -694,6 +732,7 @@ export class ProfileService {
 
     @Transactional()
     async banProfile(telegramAccountId: string, banInput: BanProfileDto, agent: WbAgent) {
+        logger.log(`banProfile(${telegramAccountId}, ${JSON.stringify(banInput)})`);
         const telegramAccount = await this.getTelegramAccountById(telegramAccountId, { throwOnFail: true });
         try {
             telegramAccount.status = UserStatus.BANNED;
@@ -715,8 +754,8 @@ export class ProfileService {
 
     // TODO: Test
     // TODO: Use newly added maximum-income field of partner-preference.
-    async getMatches(profileId: string, skip = 0, take = 20): Promise<IList<Profile>> {
-        logger.log(`running getMatches(${profileId}) ...`);
+    async findMatches(profileId: string, skip = 0, take = 20): Promise<IList<Profile>> {
+        logger.log(`findMatches(${profileId})`);
 
         const profile = await this.profileRepository.findOne(profileId, {
             relations: ["partnerPreference", "caste", "city"]
@@ -728,7 +767,7 @@ export class ProfileService {
         const partnerPref = profile.partnerPreference;
         const caste = profile.caste;
         const city = profile.city;
-        const oppGender = profile.gender === Gender.MALE ? Gender.FEMALE : Gender.MALE
+        const oppGender = profile.gender === Gender.MALE ? Gender.FEMALE : Gender.MALE;
 
         const matchQuery = this.profileRepository.createQueryBuilder("t_profile")
             .leftJoin("t_profile.partnerPreference", "t_partner_pref")
@@ -799,18 +838,20 @@ export class ProfileService {
 
     // TODO: test
     async saveMatches(profileId: string, matches: Profile[]): Promise<Match[]> {
-        logger.log('running saveMatches ...');
+        logger.log(`saveMatches(${profileId}, ${matches.length})`);
         const profile = await this.getProfileById(profileId, { throwOnFail: true });
         const toSave: Match[] = [];
         if (profile.gender === Gender.MALE) {
             for (const match of matches) {
+                assert(match.gender === Gender.FEMALE, match.id);
                 toSave.push(this.matchRepository.create({
                     maleProfile: profile,
                     femaleProfile: match
                 }));
             }
-        } else {
+        } else { // profile is of a female
             for (const match of matches) {
+                assert(match.gender === Gender.MALE, match.id);
                 toSave.push(this.matchRepository.create({
                     maleProfile: match,
                     femaleProfile: profile
@@ -821,9 +862,38 @@ export class ProfileService {
     }
 
 
+    async getMatches(profileId: string, options: GetMatchesDto): Promise<IList<Match>> {
+        logger.log(`getMatches(${profileId}, ${JSON.stringify(options)})`);
+
+        const profile = await this.getProfileById(profileId, { throwOnFail: true });
+
+        const matchQuery =
+            this.matchRepository.createQueryBuilder('match');
+
+        if (profile.gender === Gender.MALE) {
+            matchQuery.where('match.maleProfileId = :id', { id: profile.id });
+        } else {
+            matchQuery.where('match.femaleProfileId = :id', { id: profile.id });
+        }
+
+        if (options?.sharedWith) {
+            matchQuery.andWhere('match.profileSharedWith = :who', {
+                who: options.sharedWith
+            });
+        }
+
+        const [matches, count] = await matchQuery.skip(options.skip ?? 0).take(options.take ?? 20).getManyAndCount();
+
+        return {
+            count,
+            values: matches
+        };
+    }
+
+
     @Transactional()
     async updateMatches(profileId: string, matches: Profile[]): Promise<Match[]> {
-        logger.log('running sendMatches ...');
+        logger.log(`getMatches(${profileId}, ${JSON.stringify(matches.length)})`);
         const profile = await this.getProfileById(profileId, { throwOnFail: true });
 
         // remove existing matches which have not been shared.
@@ -860,6 +930,8 @@ export class ProfileService {
 
 
     async getTelegramAccountForSending(profile: Profile): Promise<TelegramAccount | undefined> {
+        logger.log(`getTelegramAccountForSending(${profile})`);
+
         return this.getTelegramAccountById(profile.id, {
             throwOnFail: true,
             relations: ['bioData', 'picture', 'idProof']
@@ -868,9 +940,13 @@ export class ProfileService {
 
 
     async sendMatch(match: Match) {
+        logger.log(`sendMatch(${JSON.stringify(match)})`);
+
         if (!match?.maleProfile || !match.femaleProfile) {
             throw new Error('Match object does not contain male or/and female profiles');
         }
+
+        assert(match.maleProfile.gender === Gender.MALE, `Male profile does not have male gender. Male profile Id: ${match.maleProfileId}, Female profile Id: ${match.femaleProfileId}`);
 
         const maleProfile = match.maleProfile;
         const femaleProfile = match.femaleProfile;
@@ -887,7 +963,7 @@ export class ProfileService {
 
 
     async sendMatches() {
-        logger.log('running sendMatches ...');
+        logger.log('sendMatches()');
         let skip = 0
         const take = 50;
         let [profiles, count] = await this.profileRepository.findAndCount({
@@ -917,6 +993,7 @@ export class ProfileService {
 
 
     async createTelegramAccount(ctx: TelgrafContext): Promise<TelegramAccount | undefined> {
+        logger.log(`createTelegramAccount(${JSON.stringify(ctx)})`);
         const telegramChatId = ctx.chat.id;
         const { id: telegramUserId, first_name, last_name, username } = ctx.from;
         const name = (first_name || '' + ' ' + last_name || '').trim()
@@ -939,13 +1016,13 @@ export class ProfileService {
                 status: UserStatus.UNREGISTERED
             })
             telegramAccount = await this.telegramRepository.save(telegramAccount);
-            logger.log(`Created new telegram profile with id: ${telegramAccount.id}`);
+            logger.log(`Created new Telegram account with id: ${telegramAccount.id}`);
         } else {
-            logger.error(`Telegram profile already exists, for inputs - telegramUserId: ${telegramUserId},  telegramChatId: ${telegramChatId}`);
-            throw new ConflictException('Telegram profile already exists!');
+            logger.error(`Telegram account already exists, for inputs - telegramUserId: ${telegramUserId},  telegramChatId: ${telegramChatId}`);
+            throw new ConflictException('Telegram account already exists!');
         }
 
-        // logger.log(`Returning telegram profile:`, JSON.stringify(telegramAccount));
+        // logger.log(`Returning Telegram account:`, JSON.stringify(telegramAccount));
         return telegramAccount;
     }
 
@@ -1024,13 +1101,11 @@ export class ProfileService {
                 query.where('tel_profile.status >= :status', { status: UserStatus.ACTIVATED });
         }
 
-        else if (!isNil(isUpdated)) {
+        if (!isNil(isUpdated)) {
             if (isUpdated)
-                query.where('tel_profile.unverifiedBioDataId IS NOT NULL')
-                    .orWhere('tel_profile.unverifiedPictureId IS NOT NULL')
-                    .orWhere('tel_profile.unverifiedIdProofId IS NOT NULL');
+                query.andWhere('(tel_profile.unverifiedBioDataId IS NOT NULL OR tel_profile.unverifiedPictureId IS NOT NULL OR tel_profile.unverifiedIdProofId IS NOT NULL)');
             else
-                query.where('tel_profile.unverifiedBioDataId IS NULL')
+                query.andWhere('tel_profile.unverifiedBioDataId IS NULL')
                     .andWhere('tel_profile.unverifiedPictureId IS NULL')
                     .andWhere('tel_profile.unverifiedIdProofId IS NULL');
         }
@@ -1143,8 +1218,8 @@ export class ProfileService {
             relations
         });
         if (throwOnFail && !telegramAccount) {
-            logger.log(`Telegram profile with id: ${id} not found!`);
-            throw new NotFoundException(`Telegram profile with id: ${id} not found!`);
+            logger.log(`Telegram account with id: ${id} not found!`);
+            throw new NotFoundException(`Telegram account with id: ${id} not found!`);
         }
         return telegramAccount;
     }
@@ -1159,7 +1234,7 @@ export class ProfileService {
             relations
         });
         if (throwOnFail && !telegramAccount) {
-            throw new NotFoundException(`Telegram profile with telegram user id: ${telegramUserId} not found!`);
+            throw new NotFoundException(`Telegram account with Telegram user id: ${telegramUserId} not found!`);
         }
         return telegramAccount;
     }
@@ -1174,7 +1249,7 @@ export class ProfileService {
     //         relations
     //     });
     //     if (throwOnFail && !telegramAccount) {
-    //         throw new NotFoundException(`Telegram profile with chat id: ${telegramChatId} not found!`);
+    //         throw new NotFoundException(`Telegram account with chat id: ${telegramChatId} not found!`);
     //     }
     //     return telegramAccount;
     // }
@@ -1367,6 +1442,8 @@ export class ProfileService {
 
 
     async getInvalidatedDocumentCausingProfileInvalidation(telegramAccountId: string, typeOfDocument = TypeOfDocument.BIO_DATA): Promise<Document | undefined> {
+        logger.log(`getInvalidatedDocumentCausingProfileInvalidation(${telegramAccountId}, ${typeOfDocument})`);
+
         const document = await this.documentRepository.findOne({
             where: { telegramAccountId: telegramAccountId, typeOfDocument, isValid: false },
             order: { createdOn: 'DESC' }
@@ -1416,7 +1493,7 @@ export class ProfileService {
             document.verifierId = agent.id;
             document.verifiedOn = new Date();
 
-            // Mark this document as active doc in telegram profile for that doc type
+            // Mark this document as active doc in Telegram account for that doc type
             switch (document.typeOfDocument) {
                 case TypeOfDocument.BIO_DATA:
                     telegramAccount.unverifiedBioData = null;
@@ -1498,6 +1575,7 @@ export class ProfileService {
 
 
     async getSignedDownloadUrl(documentId: string): Promise<{ id: string, url: string } | undefined> {
+        logger.log(`getSignedDownloadUrl(${documentId})`);
         const document = await this.getDocumentById(documentId, {
             throwOnFail: true,
             relations: ['telegramAccount']
@@ -1526,55 +1604,55 @@ export class ProfileService {
 
 
     // TODO: Refactor -- This method cannot decide which document to send
-    async getSignedDownloadUrlForUnverifiedDoc(telegramAccountId: string, docType: string, { throwOnFail = true }): Promise<{ id: string, url: string } | undefined> {
-        if (!docType) {
-            throw new BadRequestException('docType is required!')
-        }
+    // async getSignedDownloadUrlForUnverifiedDoc(telegramAccountId: string, docType: string, { throwOnFail = true }): Promise<{ id: string, url: string } | undefined> {
+    //     if (!docType) {
+    //         throw new BadRequestException('docType is required!')
+    //     }
 
-        let typeOfDocument: TypeOfDocument;
-        switch (docType) {
-            case 'bio-data':
-                typeOfDocument = TypeOfDocument.BIO_DATA;
-                break;
-            case 'picture':
-                typeOfDocument = TypeOfDocument.PICTURE;
-                break;
-            case 'id-proof':
-                typeOfDocument = TypeOfDocument.ID_PROOF;
-                break;
-            default:
-                throw new BadRequestException(`docType should be one of [bio-data, picture, id-proof]`);
-        }
+    //     let typeOfDocument: TypeOfDocument;
+    //     switch (docType) {
+    //         case 'bio-data':
+    //             typeOfDocument = TypeOfDocument.BIO_DATA;
+    //             break;
+    //         case 'picture':
+    //             typeOfDocument = TypeOfDocument.PICTURE;
+    //             break;
+    //         case 'id-proof':
+    //             typeOfDocument = TypeOfDocument.ID_PROOF;
+    //             break;
+    //         default:
+    //             throw new BadRequestException(`docType should be one of [bio-data, picture, id-proof]`);
+    //     }
 
-        const telegramAccount = await this.getTelegramAccountById(telegramAccountId, { throwOnFail: true });
+    //     const telegramAccount = await this.getTelegramAccountById(telegramAccountId, { throwOnFail: true });
 
-        const document = await this.documentRepository.createQueryBuilder('doc')
-            .where('doc.telegramAccountId = :telegramAccountId', { telegramAccountId })
-            .andWhere('doc.typeOfDocument = :typeOfDocument', { typeOfDocument })
-            .andWhere('doc.isActive IS NULL')
-            .orderBy('doc.createdOn', 'DESC')
-            .getOne();
+    //     const document = await this.documentRepository.createQueryBuilder('doc')
+    //         .where('doc.telegramAccountId = :telegramAccountId', { telegramAccountId })
+    //         .andWhere('doc.typeOfDocument = :typeOfDocument', { typeOfDocument })
+    //         .andWhere('doc.isActive IS NULL')
+    //         .orderBy('doc.createdOn', 'DESC')
+    //         .getOne();
 
-        if (!document) {
-            if (throwOnFail) {
-                throw new NotFoundException(`Document for telegram profile with id: ${telegramAccountId} and docType: ${typeOfDocument} does not exist!`);
-            } else {
-                return null;
-            }
-        }
+    //     if (!document) {
+    //         if (throwOnFail) {
+    //             throw new NotFoundException(`Document for Telegram account with id: ${telegramAccountId} and docType: ${typeOfDocument} does not exist!`);
+    //         } else {
+    //             return null;
+    //         }
+    //     }
 
-        try {
-            const urlObj = await this.awsService.createSignedURL(telegramAccountId, document.fileName, document.typeOfDocument, S3Option.GET);
-            return {
-                id: document.id,
-                url: urlObj.preSignedUrl
-            };
-        }
-        catch (err) {
-            logger.error(`Could not generate signed url for telegramAccountId: ${telegramAccountId}, and docType: ${docType}. Error: ${err}`);
-            throw err;
-        };
-    }
+    //     try {
+    //         const urlObj = await this.awsService.createSignedURL(telegramAccountId, document.fileName, document.typeOfDocument, S3Option.GET);
+    //         return {
+    //             id: document.id,
+    //             url: urlObj.preSignedUrl
+    //         };
+    //     }
+    //     catch (err) {
+    //         logger.error(`Could not generate signed url for telegramAccountId: ${telegramAccountId}, and docType: ${docType}. Error: ${err}`);
+    //         throw err;
+    //     };
+    // }
 
 
     async getCastesLike(like: string, skip = 0, take = 20): Promise<Caste[]> {
@@ -1715,6 +1793,7 @@ export class ProfileService {
 
 
     async getActiveSupportTicket(telegramAccountId: string): Promise<Support | undefined> {
+        logger.log(`getActiveSupportTicket(${telegramAccountId})`);
         return this.supportRepository.findOne({
             where: { telegramAccountId, resolved: false }
         });
@@ -1722,15 +1801,17 @@ export class ProfileService {
 
 
     async userCloseActiveSupportTicket(telegramAccountId: string) {
+        logger.log(`userCloseActiveSupportTicket(${telegramAccountId})`);
         const activeSupportTicket = await this.getActiveSupportTicket(telegramAccountId);
         if (!activeSupportTicket) {
-            throw new NotFoundException(`No active support ticket was found for Telegram profile with id: ${telegramAccountId}`);
+            throw new NotFoundException(`No active support ticket was found for Telegram account with id: ${telegramAccountId}`);
         }
         await this.supportRepository.delete(activeSupportTicket);
     }
 
 
     async createSupportTicket(telegramAccountId: string, description: string): Promise<Support | undefined> {
+        logger.log(`createSupportTicket(${telegramAccountId})`);
         const telegramAccount = await this.getTelegramAccountById(telegramAccountId, { throwOnFail: true });
 
         const activeSupportTicket = await this.getActiveSupportTicket(telegramAccountId);
@@ -1749,6 +1830,7 @@ export class ProfileService {
 
 
     async resolveSupportTicket(ticketId: number, supportResolutionDto: SupportResolutionDto, agent: WbAgent): Promise<Support | undefined> {
+        logger.log(`resolveSupportTicket(${ticketId}, ${JSON.stringify(supportResolutionDto)})`);
         const supportTicket = await this.supportRepository.findOne(ticketId);
         if (!supportTicket) {
             throw new NotFoundException(`No support ticket was found for ticket id: ${ticketId}`);
@@ -1769,6 +1851,7 @@ export class ProfileService {
     // Common data
 
     async getOrCreateState(stateName: string, countryName: string): Promise<State | undefined> {
+        logger.log(`getOrCreateState(${stateName}, ${countryName})`);
         if (!stateName) throw new BadRequestException("Empty or null stateName")
         let state = await this.getStateByName(stateName, countryName);
         if (!state) {
@@ -1784,6 +1867,7 @@ export class ProfileService {
 
 
     async getOrCreateCountry(countryName: string): Promise<Country | undefined> {
+        logger.log(`getOrCreateCountry(${countryName})`);
         if (!countryName) throw new BadRequestException("Empty or null countryName")
         let country = await this.getCountryByName(countryName);
         if (!country) {

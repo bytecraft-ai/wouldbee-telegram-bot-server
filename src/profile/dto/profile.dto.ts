@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { Transform, Type } from 'class-transformer';
 import { IsNotEmpty, IsString, IsNumberString, Length, IsEmail, IsInt, IsOptional, Min, Max, IsPositive, IsUUID, IsNumber, IsIn, IsBoolean, MaxLength } from 'class-validator';
-import { AnnualIncome, EducationDegree, EmployedIn, Gender, MaritalStatus, Occupation, Religion, SupportTicketCategory, Language, ReasonForProfileBan, DocRejectionReason } from 'src/common/enum';
+import { AnnualIncome, EducationDegree, EmployedIn, Gender, MaritalStatus, Occupation, Religion, SupportTicketCategory, Language, ReasonForProfileBan, DocRejectionReason, ProfileSharedWith } from 'src/common/enum';
 import { nameMaxLength, nameMinLength, supportResolutionMinLength, supportResolutionMaxLength, docRejectionReasonMaxLength } from 'src/common/field-length';
 import { getEnumValues } from 'src/common/util';
 
@@ -31,6 +31,15 @@ export class GetProfileDto {
         else throw new BadRequestException(`${value} is not a boolean type! It's type is ${typeof value}`);
     })
     getPreference?: boolean;
+}
+
+
+export class GetMatchesDto extends PaginationDto {
+    @IsOptional()
+    @IsIn(getEnumValues(ProfileSharedWith))
+    @IsInt()
+    @Transform(value => Number(value))
+    sharedWith: ProfileSharedWith;
 }
 
 

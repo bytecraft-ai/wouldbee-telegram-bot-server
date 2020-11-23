@@ -110,7 +110,16 @@ export class TelegramService {
 
 
     async getTelegramAccount(ctx: Context) {
-        const telegramAccount = await this.profileService.getTelegramAccountByTelegramUserId(ctx.from.id, { throwOnFail: false });
+        let telegramAccount: TelegramAccount;
+        try {
+            telegramAccount = await this.profileService.getTelegramAccountByTelegramUserId(ctx.from.id, { throwOnFail: false });
+        }
+        catch (error) {
+            logger.error(`Could not get telegram account. Context: ${JSON.stringify(ctx)} \nERROR: ${JSON.stringify(error)}`);
+            await ctx.reply(fatalErrorMsg);
+            throw error;
+        }
+
         logger.log(`getTelegramAccount(): ${JSON.stringify(telegramAccount)}`);
         return telegramAccount;
     }
@@ -137,7 +146,6 @@ export class TelegramService {
 
             const telegramAccount = await
                 this.profileService.createTelegramAccount(ctx);
-            logger.log(`Telegram account created: ${JSON.stringify(telegramAccount)}`);
             return telegramAccount;
         }
 
@@ -146,6 +154,18 @@ export class TelegramService {
             telegramAccount = await createTelegramAccount(ctx, payload);
         }
         return telegramAccount;
+    }
+
+
+    async getRegistrationAction(ctx: Context, telegramAccount: TelegramAccount): Promise<RegistrationActionRequired | undefined> {
+        try {
+            return this.profileService.getRegistrationAction(telegramAccount.id);
+        }
+        catch (error) {
+            logger.error(`Could not get required registration action for telegram account: ${JSON.stringify(telegramAccount)} \nERROR: ${JSON.stringify(error)}`);
+            await ctx.reply(fatalErrorMsg);
+            throw error;
+        }
     }
 
 
@@ -171,7 +191,9 @@ export class TelegramService {
 
                 let telegramAccount = await this.getOrCreateTelegramAccount(ctx);
                 ctx.wizard.state.data.telegramAccountId = telegramAccount.id;
-                const status: RegistrationActionRequired = await this.profileService.getRegistrationAction(telegramAccount.id);
+
+                const status: RegistrationActionRequired = await this.getRegistrationAction(ctx, telegramAccount);
+
                 logger.log(`status: ${JSON.stringify(status)}`);
                 ctx.wizard.state.data.status = status;
 
@@ -244,8 +266,8 @@ export class TelegramService {
                                 logger.log(`Saved Phone number for Telegram account with  id: ${telegramAccount.id}`);
                             }
                             catch (error) {
-                                logger.error('Could not save phone number for Telegram account. Error', error);
-                                await ctx.reply("Some error occurred. Please try again later!");
+                                logger.error(`Could not save phone number for Telegram account. \nERROR: ${JSON.stringify(error)}`);
+                                await ctx.reply(fatalErrorMsg);
                                 return ctx.scene.leave();
                             }
 
@@ -333,7 +355,7 @@ export class TelegramService {
                                 await ctx.reply(bioCreateSuccessMsg);
 
                             } catch (error) {
-                                logger.error("Could not download/upload the bio-data. Error:", error);
+                                logger.error(`Could not download/upload the bio-data.  \nERROR: ${JSON.stringify(error)}`);
                                 await ctx.reply(fatalErrorMsg);
                                 return ctx.scene.leave();
                             }
@@ -435,7 +457,7 @@ export class TelegramService {
                                 await ctx.reply(pictureCreateSuccessMsg);
 
                             } catch (error) {
-                                logger.error("Could not download/upload the picture. Error:", error);
+                                logger.error(`Could not download/upload the picture.  \nERROR: ${JSON.stringify(error)}`);
                                 await ctx.reply(fatalErrorMsg);
                                 return ctx.scene.leave();
                             }
@@ -537,7 +559,7 @@ export class TelegramService {
                             return ctx.scene.leave();
 
                         } catch (error) {
-                            logger.error("Could not download/upload the bio-data. Error:", error);
+                            logger.error(`Could not download/upload the bio-data.  \nERROR: ${JSON.stringify(error)}`);
                             await ctx.reply(fatalErrorMsg);
                             return ctx.scene.leave();
                         }
@@ -642,7 +664,7 @@ export class TelegramService {
                             return ctx.scene.leave();
 
                         } catch (error) {
-                            logger.error("Could not download/upload the picture. Error:", error);
+                            logger.error(`Could not download/upload the picture.  \nERROR: ${JSON.stringify(error)}`);
                             await ctx.reply(fatalErrorMsg);
                             return ctx.scene.leave();
                         }
@@ -717,10 +739,12 @@ export class TelegramService {
                         const ticket = await this.profileService.createSupportTicket(ctx.wizard.state.data.telegramAccountId, msg.toLocaleLowerCase());
                         await ctx.reply(`Your query/feedback has been saved. We will get back to you in a few days.`);
                     } catch (error) {
-                        logger.log('Could not Open new support ticket due to the following error:\n' + JSON.stringify(error));
+                        logger.log(`Could not open new support ticket. \nERROR: ${JSON.stringify(error)}`);
 
                         // TODO: Confirm that this is actually a conflict error
                         await ctx.reply('You have already opened one support ticket. Cannot open another until that is resolved or closed from your end.');
+
+                        return ctx.scene.leave();
                     }
 
                 }
@@ -769,7 +793,6 @@ export class TelegramService {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         const telegramAccount = await this.getOrCreateTelegramAccount(ctx);
 
-        // await this.profileService.markProfileForDeletion(ctx.from.id, );
         if (telegramAccount.status < UserStatus.UNVERIFIED) {
             await ctx.reply(`You are not registered! There's nothing to delete`);
         }
@@ -810,7 +833,14 @@ export class TelegramService {
             await ctx.reply('Cancelled');
         }
         else {
-            await this.profileService.markProfileForDeletion(ctx.from.id, callbackData);
+            try {
+                await this.profileService.markProfileForDeletion(ctx.from.id, callbackData);
+            } catch (error) {
+                logger.error(`Could not mark profile for deletion. Context: ${JSON.stringify(ctx)} \nERROR: ${JSON.stringify(error)}`);
+                await ctx.reply(fatalErrorMsg);
+                return;
+            }
+
             await ctx.reply(deletionSuccessMsg);
         }
 
@@ -827,8 +857,8 @@ export class TelegramService {
                 reply_markup: {
                     inline_keyboard: [
                         [
-                            { text: 'Confirm', callback_data: `cancel_delete-confirm` },
-                            { text: 'Cancel', callback_data: `cancel_delete-cancel` }
+                            { text: 'Confirm', callback_data: `recover-confirm` },
+                            { text: 'Cancel', callback_data: `recover-cancel` }
                         ]
                     ]
                 }
@@ -840,14 +870,21 @@ export class TelegramService {
     }
 
 
-    @Action(/cancel_delete-(confirm|cancel)/)
-    async cancel_delete_callback(ctx: Context) {
+    @Action(/recover-(confirm|cancel)/)
+    async recover_callback(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        logger.log(`cancel_delete callback data: ${ctx.callbackQuery.data}`);
+        logger.log(`recover callback data: ${ctx.callbackQuery.data}`);
 
-        if (ctx.callbackQuery.data === 'cancel_delete-confirm') {
-            await this.profileService.cancelProfileForDeletion(ctx.from.id);
-            await ctx.reply('Your profile deletion has been canceled.');
+        if (ctx.callbackQuery.data === 'recover-confirm') {
+            try {
+                await this.profileService.cancelProfileForDeletion(ctx.from.id);
+                await ctx.reply('Your profile deletion has been canceled.');
+            }
+            catch (error) {
+                logger.error(`Could not recover profile. Context: ${JSON.stringify(ctx)} \nERROR: ${JSON.stringify(error)}`);
+                await ctx.reply(fatalErrorMsg);
+                return;
+            }
         } else {
             await ctx.reply('Cancelled');
         }
@@ -892,11 +929,17 @@ export class TelegramService {
         if (duration === 0) {
             await ctx.reply('Cancelled');
         } else {
-            const durationString = ProfileDeactivationDuration[duration];
-            await this.profileService.deactivateProfile(ctx.from.id, duration);
+            try {
+                const durationString = ProfileDeactivationDuration[duration];
+                await this.profileService.deactivateProfile(ctx.from.id, duration);
 
-            await ctx.reply(`Alright! Deactivated your profile for ${durationString.toLocaleLowerCase().replace(/_/g, ' ')}. Use /reactivate command to reactivate your profile anytime.`);
-
+                await ctx.reply(`Alright! Deactivated your profile for ${durationString.toLocaleLowerCase().replace(/_/g, ' ')}. Use /reactivate command to reactivate your profile anytime.`);
+            }
+            catch (error) {
+                logger.error(`Could not deactivate profile. Context: ${JSON.stringify(ctx)} \nERROR: ${JSON.stringify(error)}`);
+                await ctx.reply(fatalErrorMsg);
+                return;
+            }
         }
     }
 
@@ -911,7 +954,9 @@ export class TelegramService {
                 await ctx.reply('Welcome back! Your profile has been reactivated successfully.');
             }
             catch (error) {
+                logger.error(`Could not get reactivateProfile profile. Telegram account: ${JSON.stringify(telegramAccount)} \nERROR: ${JSON.stringify(error)}`);
                 await ctx.reply(fatalErrorMsg);
+                return;
             }
         } else {
             ctx.reply('Only Deactivated profiles can be reactivated. Use the /help command to see how to interact with Would Bee bot.');
@@ -940,12 +985,20 @@ export class TelegramService {
 
             case UserStatus.VERIFICATION_FAILED:
                 msg = `Your profile activation failed.`
-                const causingDocument = await this.profileService.getInvalidatedDocumentCausingProfileInvalidation(telegramAccount.id)
-                if (causingDocument?.invalidationReason) {
-                    msg += `\n Reason: ${causingDocument.invalidationReason}.`
+                try {
+                    const causingDocument = await this.profileService.getInvalidatedDocumentCausingProfileInvalidation(telegramAccount.id);
+
+                    if (causingDocument?.invalidationReason) {
+                        msg += `\n Reason: ${causingDocument.invalidationReason}.`
+                    }
+
+                    if (causingDocument?.invalidationDescription) {
+                        msg += `\n Description: ${causingDocument.invalidationDescription}`
+                    }
                 }
-                if (causingDocument?.invalidationDescription) {
-                    msg += `\n Description: ${causingDocument.invalidationDescription}`
+                catch (error) {
+                    logger.error(`Could not get invalidation causing document. Telegram account: ${JSON.stringify(telegramAccount)} \nERROR: ${JSON.stringify(error)}`);
+                    await ctx.reply(fatalErrorMsg);
                 }
                 msg += `\n You need to re-register using /register command and submit your corrected bio-data and/or profile picture.`
                 break;
