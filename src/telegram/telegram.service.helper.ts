@@ -227,8 +227,3 @@ export function silentSend(): boolean {
     }
     return silent;
 }
-
-
-export function loggerTest() {
-    logger.log('logger-test');
-}

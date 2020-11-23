@@ -988,7 +988,7 @@ export class ProfileService {
 
 
     async createTelegramAccount(ctx: TelgrafContext): Promise<TelegramAccount | undefined> {
-        logger.log(`createTelegramAccount(${JSON.stringify(ctx)})`);
+        logger.log(`createTelegramAccount(${ctx.chat.id, ctx.from})`);
         const telegramChatId = ctx.chat.id;
         const { id: telegramUserId, first_name, last_name, username } = ctx.from;
         const name = (first_name || '' + ' ' + last_name || '').trim()
@@ -1024,6 +1024,7 @@ export class ProfileService {
 
     // TODO: update
     async getTelegramAccountsForVerification(skip = 0, take = 20): Promise<IList<TelegramAccount> | undefined> {
+        logger.log(`getTelegramAccountsForVerification(${JSON.stringify({ skip, take })})`);
 
         if (take < 1 || take > 100) {
             throw new Error('1 ≤ take ≥ 100');
@@ -1049,6 +1050,7 @@ export class ProfileService {
 
     // TODO: update
     async getTelegramAccountsForUpdation(skip = 0, take = 20): Promise<IList<TelegramAccount> | undefined> {
+        logger.log(`getTelegramAccountsForUpdation(${JSON.stringify({ skip, take })})`);
 
         if (take < 1 || take > 100) {
             throw new Error('1 ≤ take ≥ 100');
@@ -1070,6 +1072,7 @@ export class ProfileService {
 
 
     async getTelegramAccounts(options?: GetTelegramAccountsDto): Promise<IList<TelegramAccount> | undefined> {
+        logger.log(`getTelegramAccounts(${JSON.stringify(options)})`);
 
         const { isNew, isUpdated, getProfile, skip, take } = options;
 
@@ -1203,17 +1206,18 @@ export class ProfileService {
     // }
 
 
-    async getTelegramAccountById(id: string, {
+    async getTelegramAccountById(telegramAccountId: string, {
         throwOnFail = true,
         relations = [],
     }): Promise<TelegramAccount | undefined> {
+        logger.log(`getTelegramAccountById(${telegramAccountId}, ${throwOnFail}, ${relations})`);
 
-        const telegramAccount = await this.telegramRepository.findOne(id, {
+        const telegramAccount = await this.telegramRepository.findOne(telegramAccountId, {
             relations
         });
         if (throwOnFail && !telegramAccount) {
-            logger.log(`Telegram account with id: ${id} not found!`);
-            throw new NotFoundException(`Telegram account with id: ${id} not found!`);
+            logger.log(`Telegram account with id: ${telegramAccountId} not found!`);
+            throw new NotFoundException(`Telegram account with id: ${telegramAccountId} not found!`);
         }
         return telegramAccount;
     }
@@ -1223,6 +1227,8 @@ export class ProfileService {
         throwOnFail = true,
         relations = []
     }): Promise<TelegramAccount | undefined> {
+        logger.log(`getTelegramAccountByTelegramUserId(${telegramUserId})`);
+
         const telegramAccount = await this.telegramRepository.findOne({
             where: { userId: telegramUserId },
             relations
@@ -1249,11 +1255,13 @@ export class ProfileService {
     // }
 
 
-    async savePhoneNumberForTelegramUser(id: string, phone: string): Promise<TelegramAccount | undefined> {
+    async savePhoneNumberForTelegramUser(telegramAccountId: string, phone: string): Promise<TelegramAccount | undefined> {
+        logger.log(`savePhoneNumberForTelegramUser(${JSON.stringify({ telegramAccountId, phone })})`);
+
         if (!phone) {
             throw new Error("Phone number cannot be empty!");
         }
-        let telegramAccount = await this.getTelegramAccountById(id, { throwOnFail: true });
+        let telegramAccount = await this.getTelegramAccountById(telegramAccountId, { throwOnFail: true });
         telegramAccount.phone = phone;
         telegramAccount.status = UserStatus.PHONE_VERIFIED;
         return this.telegramRepository.save(telegramAccount);
@@ -1288,6 +1296,8 @@ export class ProfileService {
         throwOnFail = true,
         relations = [],
     }): Promise<Document | undefined> {
+        logger.log(`getDocumentById(${JSON.stringify({ id, throwOnFail, relations })})`);
+
         const document = await this.documentRepository.findOne(id, {
             relations
         });
@@ -1305,6 +1315,8 @@ export class ProfileService {
         valid = true,
         throwOnFail = false
     }): Promise<Document | undefined> {
+        logger.log(`getDocument(${JSON.stringify({ telegramAccountId, typeOfDocument, active, valid, throwOnFail })})`);
+
         const where = {
             telegramAccountId,
             typeOfDocument,
@@ -1332,6 +1344,8 @@ export class ProfileService {
     // TODO: test
     @Transactional()
     async uploadDocument(telegramUserId: number, fileName: string, dir: string, contentType: string, typeOfDocument: TypeOfDocument, telegramFileId: string, typeOfIdProof?: TypeOfIdProof): Promise<Document | undefined> {
+        logger.log(`uploadDocument(${JSON.stringify({ telegramUserId, fileName, dir, contentType, typeOfDocument, telegramFileId, typeOfIdProof })})`);
+
         let relation: any;
         switch (typeOfDocument) {
             case TypeOfDocument.BIO_DATA:

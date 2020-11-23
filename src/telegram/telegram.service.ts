@@ -41,15 +41,16 @@ import { Profile } from 'src/profile/entities/profile.entity';
 import { TelegramAccount } from 'src/profile/entities/telegram-account.entity';
 import { ProfileService } from 'src/profile/profile.service';
 import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, inactiveUserMsg, registrationCancelled, supportMsg, deletionSuccessMsg, acknowledgeDeletionRequest, unsupportedBioFormat } from './telegram.constants';
-import { getBioDataFileName, getPictureFileName, processBioDataFile, processPictureFile, validateBioDataFileSize, validatePhotoFileSize, silentSend, loggerTest } from './telegram.service.helper';
+import { getBioDataFileName, getPictureFileName, processBioDataFile, processPictureFile, validateBioDataFileSize, validatePhotoFileSize, silentSend } from './telegram.service.helper';
 import { Document } from 'src/profile/entities/document.entity';
 import { supportResolutionMaxLength, supportResolutionMinLength } from 'src/common/field-length';
 import telegrafThrottler from 'telegraf-throttler';
 import { html as format } from 'telegram-format';
-import { Logger } from "nestjs-pino";
+// import { Logger } from "nestjs-pino";
+import { Logger as defaultLogger } from '@nestjs/common';
 
 
-// const logger = new Logger('TelegramService');
+const logger = new defaultLogger('TelegramService');
 
 const DIR = '/tmp/'; // dir to use for file downloads and processing
 const applyWatermark = true;
@@ -59,7 +60,7 @@ const processToPdf = true;
 export class TelegramService {
 
     constructor(
-        private readonly logger: Logger,
+        // private readonly logger: Logger,
 
         // @InjectQueue('scheduler-queue') private schedulerQueue: Queue,
         @InjectBot() private bot: TelegrafProvider,
@@ -87,8 +88,8 @@ export class TelegramService {
 
         // TODO: test
         this.bot.catch((err, ctx) => {
-            this.logger.error('ERROR!')
-            this.logger.error(`updateType: ${ctx.updateType}, Error:\n${JSON.stringify(err)}`);
+            logger.error('ERROR!')
+            logger.error(`updateType: ${ctx.updateType}, Error:\n${JSON.stringify(err)}`);
             ctx.reply(fatalErrorMsg);
         })
 
@@ -119,12 +120,12 @@ export class TelegramService {
             telegramAccount = await this.profileService.getTelegramAccountByTelegramUserId(ctx.from.id, { throwOnFail: false });
         }
         catch (error) {
-            this.logger.error(`Could not get telegram account. Context: ${JSON.stringify(ctx)} \nERROR: ${JSON.stringify(error)}`);
+            logger.error(`Could not get telegram account. Context: ${ctx.from.id} \nERROR: ${JSON.stringify(error)}`);
             await ctx.reply(fatalErrorMsg);
             throw error;
         }
 
-        this.logger.log(`getTelegramAccount(): ${JSON.stringify(telegramAccount)}`);
+        logger.log(`getTelegramAccount(): ${JSON.stringify(telegramAccount)}`);
         return telegramAccount;
     }
 
@@ -133,7 +134,7 @@ export class TelegramService {
 
         const createTelegramAccount = async (ctx: Context, payload: string): Promise<TelegramAccount> => {
             if (ctx.from.is_bot) {
-                this.logger.warn(`A bot interacted with us. ctx: ${JSON.stringify(ctx)}`);
+                logger.warn(`A bot interacted with us. ctx: ${JSON.stringify(ctx.from)}`);
                 // await ctx.reply('Bot interaction not implemented.');
                 await ctx.reply('!');
             }
@@ -144,7 +145,7 @@ export class TelegramService {
                 // const referee = await this.profileService.getProfileById(payload, { throwOnFail: false });
                 // if (referee) {
                 //     // TODO: mark as referee
-                //     this.logger.log(`referee: [${referee[0]}, ${referee[1]}]`);
+                //     logger.log(`referee: [${referee[0]}, ${referee[1]}]`);
                 // }
             }
 
@@ -166,7 +167,7 @@ export class TelegramService {
             return this.profileService.getRegistrationAction(telegramAccount.id);
         }
         catch (error) {
-            this.logger.error(`Could not get required registration action for telegram account: ${JSON.stringify(telegramAccount)} \nERROR: ${JSON.stringify(error)}`);
+            logger.error(`Could not get required registration action for telegram account: ${JSON.stringify(telegramAccount)} \nERROR: ${JSON.stringify(error)}`);
             await ctx.reply(fatalErrorMsg);
             throw error;
         }
@@ -181,7 +182,7 @@ export class TelegramService {
 
             // Step-1 :: Ask for Phone number.
             async (ctx: Context) => {
-                this.logger.log(`Step-1`);
+                logger.log(`Step-1`);
                 ctx.wizard.state.data = {};
 
                 await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
@@ -191,7 +192,7 @@ export class TelegramService {
 
                 const status: RegistrationActionRequired = await this.getRegistrationAction(ctx, telegramAccount);
 
-                this.logger.log(`status: ${JSON.stringify(status)}`);
+                logger.log(`status: ${JSON.stringify(status)}`);
                 ctx.wizard.state.data.status = status;
 
                 if (ctx.wizard.state.data.status === RegistrationActionRequired.NONE) {
@@ -199,7 +200,7 @@ export class TelegramService {
                     return ctx.scene.leave();
 
                 } else if (ctx.wizard.state.data.status > RegistrationActionRequired.VERIFY_PHONE) {
-                    this.logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-1`);
+                    logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-1`);
                     ctx.wizard.state.data.next_without_user_input = true;
 
                     // problem - wizard.next() does not work without user input
@@ -226,17 +227,17 @@ export class TelegramService {
                         }
                     });
                 }
-                this.logger.log('calling step-2')
+                logger.log('calling step-2')
                 return ctx.wizard.next();
 
             },
 
             // Step-2 :: Read Phone number, update into telegram account
             async (ctx: Context) => {
-                this.logger.log(`Step-2:: status-${ctx.wizard.state.data.status}`);
+                logger.log(`Step-2:: status-${ctx.wizard.state.data.status}`);
 
                 if (ctx.wizard.state.data.status > RegistrationActionRequired.VERIFY_PHONE) {
-                    this.logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-2`);
+                    logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-2`);
                     ctx.wizard.state.data.next_without_user_input = true;
                 } else {
 
@@ -253,17 +254,17 @@ export class TelegramService {
                             // re-enter the scene
                             return;
                         } else {
-                            this.logger.log(`Contact shared: First name: ${contact.first_name}, contact: ${contact.phone_number}, chat-id: ${msg.chat.id}, user-id: ${ctx.from.id}`);
+                            logger.log(`Contact shared: First name: ${contact.first_name}, contact: ${contact.phone_number}, chat-id: ${msg.chat.id}, user-id: ${ctx.from.id}`);
 
                             try {
                                 const telegramAccountId: string = ctx.wizard.state.data.telegramAccountId
 
                                 const telegramAccount = await this.profileService.savePhoneNumberForTelegramUser(telegramAccountId, msg.contact.phone_number);
 
-                                this.logger.log(`Saved Phone number for Telegram account with  id: ${telegramAccount.id}`);
+                                logger.log(`Saved Phone number for Telegram account with  id: ${telegramAccount.id}`);
                             }
                             catch (error) {
-                                this.logger.error(`Could not save phone number for Telegram account. \nERROR: ${JSON.stringify(error)}`);
+                                logger.error(`Could not save phone number for Telegram account. \nERROR: ${JSON.stringify(error)}`);
                                 await ctx.reply(fatalErrorMsg);
                                 return ctx.scene.leave();
                             }
@@ -285,17 +286,17 @@ export class TelegramService {
                         return;
                     }
                 }
-                this.logger.log('calling step-3');
+                logger.log('calling step-3');
                 ctx.wizard.next();
                 return ctx.wizard.steps[ctx.wizard.cursor](ctx);
             },
 
             // Step-3: Ask for Bio
             async (ctx: Context) => {
-                this.logger.log(`Step-3:: status-${ctx.wizard.state.data.status}`);
+                logger.log(`Step-3:: status-${ctx.wizard.state.data.status}`);
 
                 if (ctx.wizard.state.data.status > RegistrationActionRequired.UPLOAD_BIO_AND_PICTURE) {
-                    this.logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-3, calling step-4`);
+                    logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-3, calling step-4`);
                     ctx.wizard.state.data.next_without_user_input = true;
 
                     ctx.wizard.next();
@@ -306,16 +307,16 @@ export class TelegramService {
                 }
 
 
-                this.logger.log('calling step-4');
+                logger.log('calling step-4');
                 return ctx.wizard.next();
             },
 
             // Step-4 :: download bio, upload to aws.
             async (ctx: Context) => {
-                this.logger.log(`Step-4:: status-${ctx.wizard.state.data.status}`);
+                logger.log(`Step-4:: status-${ctx.wizard.state.data.status}`);
 
                 if (ctx.wizard.state.data.status > RegistrationActionRequired.UPLOAD_BIO_AND_PICTURE) {
-                    this.logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-4, calling step-5`);
+                    logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-4, calling step-5`);
                     ctx.wizard.state.data.next_without_user_input = true;
                     ctx.wizard.next();
                     return ctx.wizard.steps[ctx.wizard.cursor](ctx);
@@ -352,7 +353,7 @@ export class TelegramService {
                                 await ctx.reply(bioCreateSuccessMsg);
 
                             } catch (error) {
-                                this.logger.error(`Could not download/upload the bio-data.  \nERROR: ${JSON.stringify(error)}`);
+                                logger.error(`Could not download/upload the bio-data.  \nERROR: ${JSON.stringify(error)}`);
                                 await ctx.reply(fatalErrorMsg);
                                 return ctx.scene.leave();
                             }
@@ -382,17 +383,17 @@ export class TelegramService {
                         return;
                     }
                 }
-                this.logger.log('calling step-5');
+                logger.log('calling step-5');
                 ctx.wizard.next();
                 return ctx.wizard.steps[ctx.wizard.cursor](ctx);
             },
 
             // Step-5 :: Ask for picture.
             async (ctx: Context) => {
-                this.logger.log(`Step-5:: status-${ctx.wizard.state.data.status}`);
+                logger.log(`Step-5:: status-${ctx.wizard.state.data.status}`);
 
                 if (ctx.wizard.state.data.status > RegistrationActionRequired.UPLOAD_PICTURE) {
-                    this.logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-5`);
+                    logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-5`);
                     ctx.wizard.state.data.next_without_user_input = true;
                     ctx.wizard.next();
                     return ctx.wizard.steps[ctx.wizard.cursor](ctx);
@@ -401,23 +402,23 @@ export class TelegramService {
                     await ctx.reply(`Upload your profile picture (in PNG/JPG/JPEG format only) or use /cancel to quit.`);
                 }
 
-                this.logger.log('calling step-6');
+                logger.log('calling step-6');
                 return ctx.wizard.next();
                 // return ctx.wizard.steps[ctx.wizard.cursor](ctx);
             },
 
             // Step-6 :: download picture, upload to aws, and finish.
             async (ctx: Context) => {
-                this.logger.log(`Step-6:: status-${ctx.wizard.state.data.status}`);
+                logger.log(`Step-6:: status-${ctx.wizard.state.data.status}`);
 
                 if (ctx.wizard.state.data.status > RegistrationActionRequired.UPLOAD_PICTURE) {
-                    this.logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-6, leaving wizard!`);
+                    logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-6, leaving wizard!`);
 
                 } else {
 
                     await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
-                    this.logger.log(`picture registration - ${JSON.stringify(ctx.update.message)}`);
+                    logger.log(`picture registration - ${JSON.stringify(ctx.update.message)}`);
                     const photos = ctx.update.message.photo;
                     const document = ctx.message.document;
                     const photo = (photos && photos[0]) ? photos[0] : null;
@@ -454,7 +455,7 @@ export class TelegramService {
                                 await ctx.reply(pictureCreateSuccessMsg);
 
                             } catch (error) {
-                                this.logger.error(`Could not download/upload the picture.  \nERROR: ${JSON.stringify(error)}`);
+                                logger.error(`Could not download/upload the picture.  \nERROR: ${JSON.stringify(error)}`);
                                 await ctx.reply(fatalErrorMsg);
                                 return ctx.scene.leave();
                             }
@@ -501,7 +502,7 @@ export class TelegramService {
             // Step -1
             async (ctx: Context) => {
                 ctx.wizard.state.data = {};
-                this.logger.log(`createUploadBioWizard():: step-1`);
+                logger.log(`createUploadBioWizard():: step-1`);
 
                 await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
@@ -515,13 +516,13 @@ export class TelegramService {
                     await ctx.reply(inactiveUserMsg);
                     return ctx.scene.leave();
                 } else {
-                    this.logger.log(`Telegram Account: ${JSON.stringify(telegramAccount)}`);
+                    logger.log(`Telegram Account: ${JSON.stringify(telegramAccount)}`);
                     ctx.wizard.state.data.telegramAccountId = telegramAccount.id;
                 }
 
                 await ctx.reply(askForBioUploadMsg);
 
-                this.logger.log('calling step-2');
+                logger.log('calling step-2');
                 return ctx.wizard.next();
 
             },
@@ -529,7 +530,7 @@ export class TelegramService {
             // step-2: download bio, watermark, upload to aws, delete from tmp
             async (ctx: Context) => {
                 await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-                this.logger.log(`createUploadBioWizard():: step-2`);
+                logger.log(`createUploadBioWizard():: step-2`);
 
                 const document = ctx.message.document;
                 if (document) {
@@ -556,7 +557,7 @@ export class TelegramService {
                             return ctx.scene.leave();
 
                         } catch (error) {
-                            this.logger.error(`Could not download/upload the bio-data.  \nERROR: ${JSON.stringify(error)}`);
+                            logger.error(`Could not download/upload the bio-data.  \nERROR: ${JSON.stringify(error)}`);
                             await ctx.reply(fatalErrorMsg);
                             return ctx.scene.leave();
                         }
@@ -599,7 +600,7 @@ export class TelegramService {
             // Step -1
             async (ctx: Context) => {
                 ctx.wizard.state.data = {};
-                this.logger.log('createUploadPictureWizard():: step-1');
+                logger.log('createUploadPictureWizard():: step-1');
 
                 await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
@@ -613,13 +614,13 @@ export class TelegramService {
                     await ctx.reply(inactiveUserMsg);
                     return ctx.scene.leave();
                 } else {
-                    this.logger.log(`Telegram Account: ${JSON.stringify(telegramAccount)}`);
+                    logger.log(`Telegram Account: ${JSON.stringify(telegramAccount)}`);
                     ctx.wizard.state.data.telegramAccountId = telegramAccount.id;
                 }
 
                 await ctx.reply(`Upload your Profile picture or use /cancel to quit.`);
 
-                this.logger.log('calling step-2');
+                logger.log('calling step-2');
                 return ctx.wizard.next();
             },
 
@@ -661,7 +662,7 @@ export class TelegramService {
                             return ctx.scene.leave();
 
                         } catch (error) {
-                            this.logger.error(`Could not download/upload the picture.  \nERROR: ${JSON.stringify(error)}`);
+                            logger.error(`Could not download/upload the picture.  \nERROR: ${JSON.stringify(error)}`);
                             await ctx.reply(fatalErrorMsg);
                             return ctx.scene.leave();
                         }
@@ -703,20 +704,20 @@ export class TelegramService {
                 await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
                 ctx.wizard.state.data = {};
-                this.logger.log(`createSupportWizard():: step-1`);
+                logger.log(`createSupportWizard():: step-1`);
 
                 let telegramAccount = await this.getOrCreateTelegramAccount(ctx);
                 ctx.wizard.state.data.telegramAccountId = telegramAccount.id;
 
                 await ctx.reply(supportMsg);
 
-                this.logger.log('calling step-2');
+                logger.log('calling step-2');
                 return ctx.wizard.next();
             },
 
             // step-2: read query/feedback, upload to table
             async (ctx: Context) => {
-                this.logger.log(`createSupportWizard():: step-2`);
+                logger.log(`createSupportWizard():: step-2`);
                 await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
                 if (ctx.message.text) {
@@ -736,7 +737,7 @@ export class TelegramService {
                         const ticket = await this.profileService.createSupportTicket(ctx.wizard.state.data.telegramAccountId, msg.toLocaleLowerCase());
                         await ctx.reply(`Your query/feedback has been saved. We will get back to you in a few days.`);
                     } catch (error) {
-                        this.logger.log(`Could not open new support ticket. \nERROR: ${JSON.stringify(error)}`);
+                        logger.log(`Could not open new support ticket. \nERROR: ${JSON.stringify(error)}`);
 
                         // TODO: Confirm that this is actually a conflict error
                         await ctx.reply('You have already opened one support ticket. Cannot open another until that is resolved or closed from your end.');
@@ -772,7 +773,7 @@ export class TelegramService {
         const msgList = msg.text.split(' ');
         if (msgList.length === 2) {
             payload = msgList[1];
-            this.logger.log('payload:', payload)
+            logger.log('payload:', payload)
         }
         await this.getOrCreateTelegramAccount(ctx, payload);
     }
@@ -821,7 +822,7 @@ export class TelegramService {
     @Action(/delete-(10|[0-9])/)
     async delete_callback(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        this.logger.log(`delete_callback data: ${ctx.callbackQuery.data}`);
+        logger.log(`delete_callback data: ${ctx.callbackQuery.data}`);
         await ctx.deleteMessage();
 
         const callbackData = parseInt(ctx.callbackQuery.data.split('-')[1]);
@@ -833,7 +834,7 @@ export class TelegramService {
             try {
                 await this.profileService.markProfileForDeletion(ctx.from.id, callbackData);
             } catch (error) {
-                this.logger.error(`Could not mark profile for deletion. Context: ${JSON.stringify(ctx)} \nERROR: ${JSON.stringify(error)}`);
+                logger.error(`Could not mark profile for deletion. Context: ${JSON.stringify(ctx.from)} \nERROR: ${JSON.stringify(error)}`);
                 await ctx.reply(fatalErrorMsg);
                 return;
             }
@@ -870,7 +871,7 @@ export class TelegramService {
     @Action(/recover-(confirm|cancel)/)
     async recover_callback(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        this.logger.log(`recover callback data: ${ctx.callbackQuery.data}`);
+        logger.log(`recover callback data: ${ctx.callbackQuery.data}`);
 
         if (ctx.callbackQuery.data === 'recover-confirm') {
             try {
@@ -878,7 +879,7 @@ export class TelegramService {
                 await ctx.reply('Your profile deletion has been canceled.');
             }
             catch (error) {
-                this.logger.error(`Could not recover profile. Context: ${JSON.stringify(ctx)} \nERROR: ${JSON.stringify(error)}`);
+                logger.error(`Could not recover profile. Context: ${JSON.stringify(ctx.from)} \nERROR: ${JSON.stringify(error)}`);
                 await ctx.reply(fatalErrorMsg);
                 return;
             }
@@ -918,7 +919,7 @@ export class TelegramService {
     @Action(/deactivate-[0-4]/)
     async deactivation_callback(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        this.logger.log(`deactivate data: ${ctx.callbackQuery.data}`);
+        logger.log(`deactivate data: ${ctx.callbackQuery.data}`);
         await ctx.deleteMessage();
 
         const duration = parseInt(ctx.callbackQuery.data.split('-')[1]);
@@ -933,7 +934,7 @@ export class TelegramService {
                 await ctx.reply(`Alright! Deactivated your profile for ${durationString.toLocaleLowerCase().replace(/_/g, ' ')}. Use /reactivate command to reactivate your profile anytime.`);
             }
             catch (error) {
-                this.logger.error(`Could not deactivate profile. Context: ${JSON.stringify(ctx)} \nERROR: ${JSON.stringify(error)}`);
+                logger.error(`Could not deactivate profile. Context: ${JSON.stringify(ctx.from)} \nERROR: ${JSON.stringify(error)}`);
                 await ctx.reply(fatalErrorMsg);
                 return;
             }
@@ -951,7 +952,7 @@ export class TelegramService {
                 await ctx.reply('Welcome back! Your profile has been reactivated successfully.');
             }
             catch (error) {
-                this.logger.error(`Could not get reactivateProfile profile. Telegram account: ${JSON.stringify(telegramAccount)} \nERROR: ${JSON.stringify(error)}`);
+                logger.error(`Could not get reactivateProfile profile. Telegram account: ${JSON.stringify(telegramAccount)} \nERROR: ${JSON.stringify(error)}`);
                 await ctx.reply(fatalErrorMsg);
                 return;
             }
@@ -966,8 +967,7 @@ export class TelegramService {
     async status(ctx: Context) {
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         const telegramAccount = await this.getOrCreateTelegramAccount(ctx);
-        this.logger.log(`status:, ${telegramAccount.status}`);
-        loggerTest();
+        logger.log(`telegram account status:, ${telegramAccount.status}`);
 
         let msg = '';
 
@@ -995,7 +995,7 @@ export class TelegramService {
                     }
                 }
                 catch (error) {
-                    this.logger.error(`Could not get invalidation causing document. Telegram account: ${JSON.stringify(telegramAccount)} \nERROR: ${JSON.stringify(error)}`);
+                    logger.error(`Could not get invalidation causing document. Telegram account: ${JSON.stringify(telegramAccount)} \nERROR: ${JSON.stringify(error)}`);
                     await ctx.reply(fatalErrorMsg);
                 }
                 msg += `\n You need to re-register using /register command and submit your corrected bio-data and/or profile picture.`
@@ -1027,7 +1027,7 @@ export class TelegramService {
 
             default:
                 msg = fatalErrorMsg;
-                this.logger.error(`Could not determine status for Telegram account with id: ${telegramAccount.id}, Telegram Account:\n${JSON.stringify(telegramAccount)}`);
+                logger.error(`Could not determine status for Telegram account with id: ${telegramAccount.id}, Telegram Account:\n${JSON.stringify(telegramAccount)}`);
         }
 
         await ctx.reply(msg);
@@ -1067,7 +1067,7 @@ export class TelegramService {
                 { disable_notification: silentSend() });
         }
         catch (error) {
-            this.logger.error(`Could not notify user. Telegram account id: ${JSON.stringify(telegramAccount.id)}, message: ${message}, name: ${name}, ERROR:\n${JSON.stringify(error)}`);
+            logger.error(`Could not notify user. Telegram account id: ${JSON.stringify(telegramAccount.id)}, message: ${message}, name: ${name}, ERROR:\n${JSON.stringify(error)}`);
         }
     }
 

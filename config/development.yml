@@ -4,7 +4,7 @@ db:
   password: 'dbonfire'
   database: 'telegram'
   synchronize: true
-  dropSchema: true
+  dropSchema: false
   logging: true
 
 jwt:
