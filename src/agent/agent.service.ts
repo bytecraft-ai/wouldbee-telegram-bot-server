@@ -41,7 +41,7 @@ export class AgentService {
 
 
     async registerAgent(registrationDto: AgentRegistrationDto): Promise<WbAgent> {
-        console.log('registrationDto:', registrationDto);
+        // console.log('registrationDto:', registrationDto);
         let agent = await this.agentRepository.findOne({
             where: [
                 { email: registrationDto.email.toLowerCase().trim() },

@@ -104,12 +104,10 @@ export class ProfileService {
             relations: ['profile', 'bioData']
         });
 
-        console.log(telegramAccount);
         assert(telegramAccount.status === UserStatus.VERIFIED || telegramAccount.status === UserStatus.ACTIVATED, 'Cannot create/edit profile for telegram accounts in states other than verified/activated');
 
         const approvedBio = telegramAccount.bioData;
         if (!approvedBio) {
-            console.log('throwing conflict');
             throw new ConflictException('No approved bio-data exists for this account.');
         }
 
@@ -289,9 +287,6 @@ export class ProfileService {
         if (!pref) {
             pref = this.prefRepository.create();
         }
-
-        // console.log('preferenceInput:', preferenceInput);
-        // console.log('existing pref:', pref);
 
         minAge = Math.max(profile.gender === Gender.MALE ? 18 : 21, minAge ?? 18)
         maxAge = Math.max(profile.gender === Gender.MALE ? 18 : 21, maxAge ?? 100)
@@ -1211,9 +1206,8 @@ export class ProfileService {
     async getTelegramAccountById(id: string, {
         throwOnFail = true,
         relations = [],
-
     }): Promise<TelegramAccount | undefined> {
-        // console.log('relations:', relations);
+
         const telegramAccount = await this.telegramRepository.findOne(id, {
             relations
         });
@@ -1400,7 +1394,6 @@ export class ProfileService {
             // Now delete old unverified document from aws S3 and document table
             if (unverifiedDocument) {
                 assert(unverifiedDocument.id !== document.id)
-                console.log('unverifiedDocument:', unverifiedDocument);
 
                 const oldFileName = unverifiedDocument.fileName.slice();
 
@@ -1531,8 +1524,8 @@ export class ProfileService {
                         isActive: true
                     }
                 });
+
                 let currentActiveDocumentFileName: string;
-                console.log(currentActiveDocument);
                 if (currentActiveDocument) {
                     currentActiveDocument.isActive = false;
                     currentActiveDocumentFileName = currentActiveDocument.fileName.slice();
@@ -1756,7 +1749,6 @@ export class ProfileService {
         }
         else {
             const documents: Document[] = telegramAccount.documents;
-            console.log('documents:', documents);
 
             if (!documents?.length) {
                 output = RegistrationActionRequired.UPLOAD_BIO_AND_PICTURE;
@@ -1766,7 +1758,6 @@ export class ProfileService {
                     picRequired = true;
 
                 for (let doc of documents) {
-                    console.log(doc);
                     if (doc.typeOfDocument === TypeOfDocument.BIO_DATA
                         && doc.isValid !== false) {
                         bioRequired = false;
@@ -2039,7 +2030,7 @@ export class ProfileService {
         const query = `SELECT DISTINCT c.id 
             FROM country c INNER JOIN state s ON s."countryId" = c.id
             WHERE s.id IN (${stateIds.join(',')});`;
-        console.log('getCountryIdsForStates() query:', query);
+
         const results = await this.stateRepository.query(query);
         return results.map(result => result.id);
     }
@@ -2065,18 +2056,14 @@ export class ProfileService {
             query = query.where("city.name ILIKE :pattern", { pattern: `${pattern}%` });
         }
 
-        // console.log('stateIds, countryIds:', stateIds, countryIds);
-
         if (stateIds?.length) {
             stateIds = deDuplicateArray(stateIds);
             query.andWhere("city.stateId IN (:...stateIds)", { stateIds })
 
             const countryIdsForStates = await this.getCountryIdsForStates(stateIds);
-            // console.log('countryIdsForStates:', countryIdsForStates);
             countryIds = setDifferenceFromArrays(countryIds, countryIdsForStates);
-            // console.log('remaining countryIds:', countryIds);
         }
-        // TODO: test - search restricted to a country probably doesn't yet work.
+
         if (countryIds?.length) {
             query.leftJoin("city.state", "state")
                 .orWhere("state.countryId IN (:...countryIds)", { countryIds })
@@ -2174,7 +2161,6 @@ export class ProfileService {
     async createCities(cities: Object[], stateId: number): Promise<City[] | undefined> {
         const cityEntities: City[] = [];
         for (let city of cities) {
-            // console.log(city['id'], city['name'], city['latitude'], city['longitude'], stateId);
             const cityEntity = this.cityRepository.create({
                 id: city['id'],
                 name: city['name'],

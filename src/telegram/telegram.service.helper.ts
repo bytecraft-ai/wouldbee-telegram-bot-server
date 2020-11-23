@@ -218,7 +218,7 @@ export async function processPictureFile(link: string, fileName: string, waterma
 }
 
 
-export function silent_send(): boolean {
+export function silentSend(): boolean {
     let silent = false;
     const now = new Date();
     // silent notifications before 8 am and after 9:59 pm
@@ -226,4 +226,9 @@ export function silent_send(): boolean {
         silent = true;
     }
     return silent;
+}
+
+
+export function loggerTest() {
+    logger.log('logger-test');
 }

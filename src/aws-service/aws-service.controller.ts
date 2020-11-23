@@ -29,6 +29,7 @@ export class AwsServiceController {
 
     @Get('/upload')
     upload() {
-        return this.awsServiceService.uploadFileToS3("abcdefghijklmopqrtuvwxyzabcdes", "biodatas/abcdefghijklmopqrtuvwxyzabcdes_bio.pdf", "application/pdf", TypeOfDocument.BIO_DATA)
+        // return this.awsServiceService.uploadFileToS3("abcdefghijklmopqrtuvwxyzabcdes", "biodatas/abcdefghijklmopqrtuvwxyzabcdes_bio.pdf", "application/pdf", TypeOfDocument.BIO_DATA)
+        return;
     }
 }

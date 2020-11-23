@@ -9,10 +9,12 @@ import { get } from 'config';
 import { APP_GUARD } from '@nestjs/core';
 import { RolesGuard } from './role.guard';
 import { JwtGuard } from './jwt.guard';
+import { LoggerModule } from "nestjs-pino";
 const jwtConfig = get('jwt');
 
 @Module({
   imports: [
+    LoggerModule.forRoot(),
     JwtModule.register({
       secret: process.env.JWT_SECRET || jwtConfig.secret,
       signOptions: {

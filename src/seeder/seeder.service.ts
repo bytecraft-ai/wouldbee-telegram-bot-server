@@ -5,6 +5,7 @@ import { AgentRegistrationDto } from 'src/agent/dto/agent-register.dto';
 import { Religion, UserRole } from 'src/common/enum';
 import { ProfileService } from 'src/profile/profile.service';
 
+
 const logger = new Logger('SeederService');
 
 const countriesToSeed = ['india', 'australia', 'canada', 'france', 'germany', 'new zealand', 'singapore', 'united states', 'united kingdom'];
@@ -80,8 +81,8 @@ export class SeederService implements OnApplicationBootstrap {
         const existingCountries = (await this.profileService.getCountries())
             .map(country => country.name.toLocaleLowerCase());
 
-        console.log('countriesToSeed:', countriesToSeed);
-        // console.log('existingCountries:', existingCountries);
+        logger.log(`existingCountries: ${JSON.stringify(existingCountries)}`);
+        logger.log(`countriesToSeed: ${JSON.stringify(countriesToSeed)}`);
 
         const countries = data.countries;
         for await (let country of countries) {
@@ -90,7 +91,7 @@ export class SeederService implements OnApplicationBootstrap {
             else if (existingCountries.includes(country['name'].toLocaleLowerCase()))
                 continue
             else {
-                console.log(country["name"].toLocaleLowerCase(), country["phone_code"]);
+                // console.log(country["name"].toLocaleLowerCase(), country["phone_code"]);
                 await this.profileService.createCountry(country);
                 // console.log('country-id:', country["id"]);
                 await this.profileService.createStates(country["states"], country["id"]);

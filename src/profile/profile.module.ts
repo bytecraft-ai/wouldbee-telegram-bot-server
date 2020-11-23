@@ -21,15 +21,16 @@ import { SchedulerQueueConsumer } from './queue-consumers/scheduler-queue-consum
 import { Support } from './entities/support.entity';
 import { DeactivatedProfile } from './entities/deactivated-profile.entity';
 import { ProfileMarkedForDeletion } from './entities/to-delete-profile.entity';
+import { LoggerModule } from "nestjs-pino";
 
 @Module({
-    imports: [AuthModule, AgentModule,
-        TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, TelegramAccount, Document, Match, Support, DeactivatedProfile, ProfileMarkedForDeletion]), AwsServiceModule,
-        PassportModule.register({ defaultStrategy: 'jwt' }),
-        BullModule.registerQueue(
-            { name: 'scheduler-queue' },
-        ),
-        forwardRef(() => TelegramModule)
+    imports: [LoggerModule.forRoot(), AuthModule, AgentModule,
+    TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, TelegramAccount, Document, Match, Support, DeactivatedProfile, ProfileMarkedForDeletion]), AwsServiceModule,
+    PassportModule.register({ defaultStrategy: 'jwt' }),
+    BullModule.registerQueue(
+        { name: 'scheduler-queue' },
+    ),
+    forwardRef(() => TelegramModule)
     ],
     providers: [ProfileService, SchedulerQueueConsumer],
     controllers: [ProfileController, PreferenceController, CommonController, TelegramProfileController],
