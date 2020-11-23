@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { typeOrmConfig } from './config/typeorm-config';
@@ -11,6 +11,7 @@ import { AuthModule } from './auth/auth.module';
 import { BullModule } from '@nestjs/bull';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SeederModule } from './seeder/seeder.module';
+import { LoggerMiddleware } from './common/logger.middleware';
 
 // import { MulterModule } from '@nestjs/platform-express';
 // import { GraphQLModule } from '@nestjs/graphql';
@@ -72,4 +73,12 @@ import { SeederModule } from './seeder/seeder.module';
   ],
   controllers: [AppController]
 })
-export class AppModule { }
+
+
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(LoggerMiddleware)
+      .forRoutes({ path: 'preference', method: RequestMethod.POST });
+  }
+}

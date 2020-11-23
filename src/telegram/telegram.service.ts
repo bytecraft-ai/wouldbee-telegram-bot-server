@@ -1089,6 +1089,11 @@ export class TelegramService {
         ctx.reply(`Hi there. Create your profile and we'll assist you to talk to someone real.`);
     }
 
+    @Hears(['Cancel', 'cancel'])
+    onCancel(ctx: Context) {
+        ctx.reply(``);
+    }
+
     @Hears(/.*/)
     allText(ctx: Context) {
         ctx.reply('This is unsupported. Please use /help command to see what this bot supports.');

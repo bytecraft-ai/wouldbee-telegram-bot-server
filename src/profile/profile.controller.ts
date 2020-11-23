@@ -293,7 +293,7 @@ export class PreferenceController {
         @Req() req,
         @Body() preference: PartnerPreferenceDto
     ) {
-        console.log('set preference to', preference, req);
+        // console.log('set preference to', preference, req);
         return this.profileService.savePartnerPreference(preference);
     }
 }
