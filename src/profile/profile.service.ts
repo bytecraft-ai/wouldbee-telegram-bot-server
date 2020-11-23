@@ -267,59 +267,60 @@ export class ProfileService {
                 const caste = await this.getCaste(casteId, true);
                 castes.push(caste);
             }
-
-            const cities: City[] = [];
-            if (cityIds) {
-                for (let cityId of cityIds) {
-                    const city = await this.getCity(cityId, { throwOnFail: true });
-                    cities.push(city);
-                }
-            }
-
-            const states: State[] = [];
-            if (stateIds) {
-                for (let stateId of stateIds) {
-                    const state = await this.getState(stateId, { throwOnFail: true });
-                    states.push(state);
-                }
-            }
-
-            const countries: Country[] = [];
-            if (countryIds) {
-                for (let countryId of countryIds) {
-                    const country = await this.getCountry(countryId, true);
-                    countries.push(country);
-                }
-            }
-
-            pref.castes = castes;
-            pref.cities = cities;
-            pref.states = states;
-            pref.countries = countries;
-
-            pref.minAge = minAge;
-            pref.maxAge = maxAge;
-            pref.minimumIncome = minimumIncome;
-            pref.maximumIncome = maximumIncome;
-            pref.religions = religions;
-            pref.maritalStatuses = maritalStatuses;
-            pref.profile = profile;
-
-            assert(pref.minimumIncome <= pref.maximumIncome, `minIncome should be <= maxIncome. Pref: ${JSON.stringify(pref)}`);
-            assert(pref.minAge <= pref.maxAge, `minAge should be <= maxAge. Pref: ${JSON.stringify(pref)}`);
-
-            pref = await this.prefRepository.save(pref)
-
-            logger.log(`saved preference for profile with id: ${profile.id}`);
-
-            // add match-finding job to queue for update profile
-            await this.schedulerQueue.add('update-profile',
-                { profileId: profile.id },
-                { delay: 3000 }, // 3 seconds delayed
-            );
-
-            return pref;
         }
+
+        const cities: City[] = [];
+        if (cityIds) {
+            for (let cityId of cityIds) {
+                const city = await this.getCity(cityId, { throwOnFail: true });
+                cities.push(city);
+            }
+        }
+
+        const states: State[] = [];
+        if (stateIds) {
+            for (let stateId of stateIds) {
+                const state = await this.getState(stateId, { throwOnFail: true });
+                states.push(state);
+            }
+        }
+
+        const countries: Country[] = [];
+        if (countryIds) {
+            for (let countryId of countryIds) {
+                const country = await this.getCountry(countryId, true);
+                countries.push(country);
+            }
+        }
+
+        pref.castes = castes;
+        pref.cities = cities;
+        pref.states = states;
+        pref.countries = countries;
+
+        pref.minAge = minAge;
+        pref.maxAge = maxAge;
+        pref.minimumIncome = minimumIncome;
+        pref.maximumIncome = maximumIncome;
+        pref.religions = religions;
+        pref.maritalStatuses = maritalStatuses;
+        pref.profile = profile;
+
+        assert(pref.minimumIncome <= pref.maximumIncome, `minIncome should be <= maxIncome. Pref: ${JSON.stringify(pref)}`);
+        assert(pref.minAge <= pref.maxAge, `minAge should be <= maxAge. Pref: ${JSON.stringify(pref)}`);
+
+        pref = await this.prefRepository.save(pref)
+
+        logger.log(`saved preference for profile with id: ${profile.id}`);
+
+        // add match-finding job to queue for update profile
+        await this.schedulerQueue.add('update-profile',
+            { profileId: profile.id },
+            { delay: 3000 }, // 3 seconds delayed
+        );
+
+        return pref;
+
     }
 
 
@@ -1262,7 +1263,7 @@ export class ProfileService {
     // TODO: test
     @Transactional()
     async uploadDocument(telegramUserId: number, fileName: string, dir: string, contentType: string, typeOfDocument: TypeOfDocument, telegramFileId: string, typeOfIdProof?: TypeOfIdProof): Promise<Document | undefined> {
-        let relation;
+        let relation: any;
         switch (typeOfDocument) {
             case TypeOfDocument.BIO_DATA:
                 relation = 'unverifiedBioData';

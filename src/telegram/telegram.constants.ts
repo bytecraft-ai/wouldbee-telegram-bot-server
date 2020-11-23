@@ -11,13 +11,17 @@ export const welcomeMessage = `Hi, I am Would Bee Matrimony bot (a computer prog
 
 export const helpMessage = `Hi there. I am Would Bee Matrimony bot. As I am not a real person, you can only interact with me through a set of commands. A command starts with the forward slash (/). You can use the following commands to avail my services -
 
+/start - get the welcome message.
+
+/help - get the help message.
+
 /register - registers you for the Would Bee matrimony service. During the registration process, you will be asked for your phone number, bio-data and a profile picture.
+
+/status - show your registration status (pending, complete, verified) and optionally, if any action is required from you. 
 
 /update_bio - upload new/updated bio-data. You can use it to update your bio_data up to five times after registration. Every update will be verified by us.
 
 /update_picture - upload new/updated profile picture. You can use it to update your profile picture up to five times after registration. Every update will be verified by us.
-
-/status - show your registration status (pending, complete, verified) and optionally, if any action is required from you. 
 
 /deactivate - temporarily pause sending you profiles of your matches and your profile to them. Does not delete your profile.
 
@@ -27,7 +31,8 @@ export const helpMessage = `Hi there. I am Would Bee Matrimony bot. As I am not 
 
 /recover - cancel deletion of your Would Bee account. Only works before the account has been deleted.
 
-/support - to get support or give feedback.`;
+/support - get support or give feedback.
+`;
 
 // -- The below features will be released soon
 
@@ -64,7 +69,7 @@ export const pictureCreateSuccessMsg = `Success! Your profile picture has been s
 export const pictureUpdateSuccessMsg = `Success! Your profile picture has been saved!` //You can update it anytime using the /update_picture command. Note that your picture will be manually verified before being sent to your matches.`
 
 
-export const registrationSuccessMsg = `Thank you for registering. Your bio-data and profile picture will now be verified by our verification team which may take a couple of days. Once verified, we will notify you and you will start receiving profiles of your matches.`;
+export const registrationSuccessMsg = `Thank you for registering. Your bio-data and profile picture will now be verified by our team which may take a few days. Once verified, we will notify you and you will start receiving profiles of your matches.`;
 
 
 // Warning Messages

@@ -49,6 +49,7 @@
     "reflect-metadata": "^0.1.13",
     "rimraf": "^3.0.2",
     "rxjs": "^6.5.4",
+    "telegraf-throttler": "^0.2.0",
     "telegram-format": "^2.0.1",
     "typeorm": "0.2.26",
     "typeorm-transactional-cls-hooked": "^0.1.12"

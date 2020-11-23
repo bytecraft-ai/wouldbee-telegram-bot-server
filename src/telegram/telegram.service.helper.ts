@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { assert } from 'console';
 import { Context } from 'nestjs-telegraf';
 import { deleteFile, doc2pdf, downloadFile, mimeTypes, watermarkImage, watermarkPdf } from 'src/common/util';
 import { bioCreateSuccessMsg, fatalErrorMsg, unsupportedBioFormat, unsupportedPictureFormat } from './telegram.constants';
@@ -47,7 +48,9 @@ export async function getBioDataFileName(ctx: Context):
         quitOnError: boolean;
     }> {
     const document = ctx.message.document;
-    const telegramProfileId = ctx.wizard.state.data.telegramProfileId;
+    const telegramAccountId = ctx.wizard.state.data.telegramAccountId;
+
+    assert(telegramAccountId, 'telegramAccountId cannot be null');
 
     let errorMessage: string;
     let link: string;
@@ -62,7 +65,7 @@ export async function getBioDataFileName(ctx: Context):
         link = await ctx.telegram.getFileLink(document.file_id);
         logger.log(`bio download link: ${link}`);
 
-        fileName = telegramProfileId + `_${Date.now().toString()}` + '_bio.'
+        fileName = telegramAccountId + `_${Date.now().toString()}` + '_bio.'
         const nameParts = link.split('.');
         // console.log('nameParts', nameParts);
 
@@ -140,7 +143,9 @@ export async function getPictureFileName(ctx: Context): Promise<{
     // if photo is shared by photo sharing option.
     const photo = (photos && photos[0]) ? photos[0] : null;
     const document = ctx.message.document;
-    const telegramProfileId = ctx.wizard.state.data.telegramProfileId;
+    const telegramAccountId = ctx.wizard.state.data.telegramAccountId;
+
+    assert(telegramAccountId, 'telegramAccountId cannot be null');
 
     let fileName: string;
     let errorMessage: string
@@ -162,7 +167,7 @@ export async function getPictureFileName(ctx: Context): Promise<{
         }
     }
 
-    fileName = telegramProfileId + `_${Date.now().toString()}` + '_picture.'
+    fileName = telegramAccountId + `_${Date.now().toString()}` + '_picture.'
     const nameParts: Array<string> = link.split('.');
     let extension: string;
     let failure = true;

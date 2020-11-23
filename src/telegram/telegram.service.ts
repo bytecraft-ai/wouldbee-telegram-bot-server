@@ -44,6 +44,7 @@ import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, p
 import { getBioDataFileName, getPictureFileName, processBioDataFile, processPictureFile, validateBioDataFileSize, validatePhotoFileSize, silent_send } from './telegram.service.helper';
 import { Document } from 'src/profile/entities/document.entity';
 import { supportResolutionMaxLength, supportResolutionMinLength } from 'src/common/field-length';
+import telegrafThrottler from 'telegraf-throttler';
 import { html as format } from 'telegram-format';
 
 const logger = new Logger('TelegramService');
@@ -62,6 +63,13 @@ export class TelegramService {
         @Inject(forwardRef(() => ProfileService))
         private readonly profileService: ProfileService
     ) {
+
+        /**
+         * Ref - https://github.com/KnightNiwrem/telegraf-throttler#readme
+         * use throttle to prevent flood of incoming messages & to comply with telegram *  api on speed of outgoing messages
+         */
+        const throttler = telegrafThrottler();
+        this.bot.use(throttler);
 
         // set session middleware - required for creating wizard
         this.bot.use(session());
@@ -141,11 +149,11 @@ export class TelegramService {
     }
 
 
-    async doesTelegramAccountExist(ctx: Context) {
-        const telegramAccount = await this.getTelegramAccount(ctx);
-        console.log(telegramAccount, !telegramAccount, !!telegramAccount);
-        return !!telegramAccount;
-    }
+    // async doesTelegramAccountExist(ctx: Context) {
+    //     const telegramAccount = await this.getTelegramAccount(ctx);
+    //     console.log(telegramAccount, !telegramAccount, !!telegramAccount);
+    //     return !!telegramAccount;
+    // }
 
 
     // ref - https://github.com/telegraf/telegraf/issues/810
