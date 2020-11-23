@@ -1,7 +1,7 @@
-import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, UseInterceptors, UploadedFiles, Query, DefaultValuePipe, ParseIntPipe, ParseArrayPipe, ClassSerializerInterceptor, SerializeOptions, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, UseInterceptors, UploadedFiles, Query, DefaultValuePipe, ParseArrayPipe, ParseUUIDPipe, Req } from '@nestjs/common';
 import { CreateCasteDto, CreateProfileDto, FileUploadDto, GetProfileDto, GetTelegramAccountDto, PartnerPreferenceDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
-import { DocumentValidationDto, DocumentTypeDto, GetTelegramAccountsDto, BanProfileDto } from './dto/profile.dto';
+import { DocumentValidationDto, GetTelegramAccountsDto, BanProfileDto } from './dto/profile.dto';
 import { GetCitiesDto, GetCountriesDto, GetStatesDto } from './dto/location.dto';
 import { UserRole, UserStatus } from 'src/common/enum';
 import { TelegramAccount } from './entities/telegram-account.entity';
@@ -9,7 +9,7 @@ import { IList, IUserStats } from 'src/common/interface';
 import { Roles } from 'src/auth/set-role.decorator';
 import { GetAgent } from 'src/auth/get-agent.decorator';
 import { WbAgent } from 'src/agent/entities/agent.entity';
-import { Profile } from './entities/profile.entity';
+// import { Profile } from './entities/profile.entity';
 // import { AwsService } from 'src/aws-service/aws-service.service';
 // import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
 // import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
@@ -289,8 +289,11 @@ export class PreferenceController {
 
     @Post('/')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
-    async setPreference(@Body() preference: PartnerPreferenceDto) {
-        console.log('set preference to', preference);
+    async setPreference(
+        @Req() req,
+        @Body() preference: PartnerPreferenceDto
+    ) {
+        console.log('set preference to', preference, req);
         return this.profileService.savePartnerPreference(preference);
     }
 }

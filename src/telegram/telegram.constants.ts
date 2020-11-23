@@ -1,13 +1,15 @@
-export const welcomeMessage = `Hi, I am Would Bee Matrimony bot! To avail my services, please register your profile by sharing your phone number, bio-data, and profile picture. I will then share with you the profiles of your "Would Bees" (prospective matches) regularly. Similarly, your profile will be shared with them. 
+export const welcomeMessage = `Hi, I am Would Bee Matrimony bot (a computer program, not a real person)! To avail my services, please register your profile by sharing your phone number, bio-data, and profile picture. I will then share with you the profiles of your "Would Bees" (prospective matches) regularly. Similarly, your profile will be shared with them. 
 
  - By using this service, you agree to our terms of use, available on www.wouldbee.com
 
- - To get started, please type or click on /register
+ - To see this message again, use (type or click on) /start command
+
+ - To create your profile with us, use /register command
  
  - To see how to interact with Would Bee bot, use the /help command.`;
 
 
-export const helpMessage = `Hi there. You can use the following commands to avail my services -
+export const helpMessage = `Hi there. I am Would Bee Matrimony bot. As I am not a real person, you can only interact with me through a set of commands. A command starts with the forward slash (/). You can use the following commands to avail my services -
 
 /register - registers you for the Would Bee matrimony service. During the registration process, you will be asked for your phone number, bio-data and a profile picture.
 
@@ -25,15 +27,16 @@ export const helpMessage = `Hi there. You can use the following commands to avai
 
 /recover - cancel deletion of your Would Bee account. Only works before the account has been deleted.
 
-/support - to get support or give feedback.
+/support - to get support or give feedback.`;
 
--- The below features will be released soon
+// -- The below features will be released soon
 
-/preference - set your partner preference to fine-tune the matches you receive.
+// /preference - set your partner preference to fine-tune the matches you receive.
 
-/preview - show how your profile looks when sent to others.
-`;
+// /preview - show how your profile looks when sent to others.
+
 // /get_app - get the download link to our 
+// `;
 
 
 /**
@@ -72,7 +75,10 @@ export const alreadyRegisteredMsg = `You are already registered! If you'd like t
 export const fatalErrorMsg = `Some error occurred. We have notified our engineers and it will be fixed soon. Please try again later!`;
 
 
-export const unregisteredUserMsg = `You are not registered! To upload bio-data or profile picture, you need to register first. To register, please type or click on /register command. To see the list of all available commands, use /help command.`;
+export const unregisteredUserMsg = `You are not registered! This action requires you to register first using /register command. To see the list of all available commands, use /help command.`;
+
+
+export const inactiveUserMsg = `Your profile is not active! This action requires you to first activate your profile. To do that use the /status command and then follow the steps suggested. `;
 
 
 export const unsupportedPictureFormat = `Error: Only 'jpg' and 'png' formats are accepted for profile pictures. 

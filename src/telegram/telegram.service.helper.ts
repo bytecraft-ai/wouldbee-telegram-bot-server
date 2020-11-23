@@ -211,3 +211,14 @@ export async function processPictureFile(link: string, fileName: string, waterma
     }
     return fileName;
 }
+
+
+export function silent_send(): boolean {
+    let silent = false;
+    const now = new Date();
+    // silent notifications before 8 am and after 9:59 pm
+    if (now.getHours() < 8 || now.getHours() > 21) {
+        silent = true;
+    }
+    return silent;
+}
