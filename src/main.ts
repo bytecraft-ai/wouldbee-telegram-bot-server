@@ -14,6 +14,7 @@ import {
   initializeTransactionalContext,
   patchTypeORMRepositoryWithBaseRepository
 } from 'typeorm-transactional-cls-hooked';
+import { readFileSync } from 'fs';
 
 
 async function bootstrap() {
@@ -23,9 +24,19 @@ async function bootstrap() {
   initializeTransactionalContext() // Initialize cls-hooked for typeorm transaction.
   patchTypeORMRepositoryWithBaseRepository() // patch Repository with BaseRepository.
 
-  const app = await NestFactory.create<NestExpressApplication>(
-    AppModule, { logger: false }
-  );
+  const nodeEnv = process.env.NODE_ENV || 'development';
+
+  const httpsOptions = {
+    key: nodeEnv === 'production' ? readFileSync('./secrets/private-key.pem') : '',
+    cert: nodeEnv === 'production' ? readFileSync('./secrets/public-certificate.pem') : '',
+  };
+
+  const app = process.env.NODE_ENV === 'production'
+    ? await NestFactory.create<NestExpressApplication>(
+      AppModule, { logger: false })
+    : await NestFactory.create<NestExpressApplication>(
+      AppModule, { httpsOptions, logger: false });
+
   app.useLogger(app.get(Logger));
 
   app.enableCors();
@@ -36,7 +47,6 @@ async function bootstrap() {
 
   const reflector = app.get(Reflector);
   app.useGlobalInterceptors(new ClassSerializerInterceptor(reflector));
-
 
   await app.listen(process.env.SERVER_PORT || serverConfig.port);
   console.log(`Application listening on port ${process.env.SERVER_PORT || serverConfig.port}`);
