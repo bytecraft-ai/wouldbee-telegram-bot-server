@@ -3,7 +3,7 @@ import { CreateCasteDto, CreateProfileDto, GetCastesDto, GetMatchesDto, GetProfi
 import { ProfileService } from './profile.service';
 import { DocumentValidationDto, GetTelegramAccountsDto, BanProfileDto } from './dto/profile.dto';
 import { GetCitiesDto, GetCountriesDto, GetStatesDto } from './dto/location.dto';
-import { UserRole, UserStatus } from 'src/common/enum';
+import { UserRole } from 'src/common/enum';
 import { TelegramAccount } from './entities/telegram-account.entity';
 import { IList } from 'src/common/interface';
 import { Roles } from 'src/auth/set-role.decorator';
@@ -136,12 +136,12 @@ export class StatsController {
 export class TelegramAccountController {
     constructor(private readonly profileService: ProfileService) { }
 
-    @Get('/test')
-    test() {
-        return {
-            test: 'success'
-        };
-    }
+    // @Get('/test')
+    // test() {
+    //     return {
+    //         test: 'success'
+    //     };
+    // }
 
 
     @Get('/')

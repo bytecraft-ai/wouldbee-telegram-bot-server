@@ -31,16 +31,16 @@ export class SeederController {
         };
     }
 
-    @Get('/agents')
-    async seedAgents() {
-        try {
-            await this.seederService.seedAgents();
-        }
-        catch (error) {
-            logger.error(`Could not seed Agents. Error: ${error}`);
-        }
-        return {
-            "status": "OK"
-        };
-    }
+    // @Get('/agents')
+    // async seedAgents() {
+    //     try {
+    //         await this.seederService.seedAgents();
+    //     }
+    //     catch (error) {
+    //         logger.error(`Could not seed Agents. Error: ${error}`);
+    //     }
+    //     return {
+    //         "status": "OK"
+    //     };
+    // }
 }

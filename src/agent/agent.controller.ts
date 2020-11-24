@@ -3,12 +3,12 @@ import {
     ValidationPipe
 } from '@nestjs/common';
 import { AgentService } from './agent.service';
-import { AgentRegistrationDto, AgentSignInDto } from './dto/agent-register.dto';
-import { WbAgent } from './entities/agent.entity';
-import { GetAgent } from '../auth/get-agent.decorator'
-import { Roles } from '../auth/set-role.decorator';
-import { UserRole } from 'src/common/enum';
 import { RolesGuard } from '../auth/role.guard';
+// import { AgentRegistrationDto, AgentSignInDto } from './dto/agent-register.dto';
+// import { WbAgent } from './entities/agent.entity';
+// import { GetAgent } from '../auth/get-agent.decorator'
+// import { Roles } from '../auth/set-role.decorator';
+// import { UserRole } from 'src/common/enum';
 
 const logger = new Logger('AgentController');
 
@@ -27,21 +27,21 @@ export class AgentController {
     // }
 
 
-    @Get('/')
-    async getAgents(): Promise<WbAgent[]> {
-        return this.agentService.getAgents();
-    }
+    // @Get('/')
+    // @Roles(UserRole.ADMIN)
+    // async getAgents(): Promise<WbAgent[]> {
+    //     return this.agentService.getAgents();
+    // }
 
 
-    @Post('/test')
-    @Roles(UserRole.AGENT, UserRole.ADMIN)
-    test(
-        // @Req() req,
-        @GetAgent() agent: WbAgent
-    ) {
-        // console.log('request:', req);
-        console.log('agent:', agent);
-        return { test: 'success' };
-    }
+    // @Post('/test')
+    // @Roles(UserRole.AGENT, UserRole.ADMIN)
+    // test(
+    //     // @Req() req,
+    //     @GetAgent() agent: WbAgent
+    // ) {
+    //     console.log('agent:', agent);
+    //     return { test: 'success' };
+    // }
 
 }

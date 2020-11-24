@@ -5,6 +5,11 @@ const logger = new Logger('AppController');
 @Controller()
 export class AppController {
 
+  @Get('/')
+  sayHi() {
+    return 'Hi';
+  }
+
   // @Get('/')
   // @Render('index')
   // index() { }
