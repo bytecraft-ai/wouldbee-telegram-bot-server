@@ -5,7 +5,7 @@ import { DocumentValidationDto, GetTelegramAccountsDto, BanProfileDto } from './
 import { GetCitiesDto, GetCountriesDto, GetStatesDto } from './dto/location.dto';
 import { UserRole, UserStatus } from 'src/common/enum';
 import { TelegramAccount } from './entities/telegram-account.entity';
-import { IList, IUserStats } from 'src/common/interface';
+import { IList } from 'src/common/interface';
 import { Roles } from 'src/auth/set-role.decorator';
 import { GetAgent } from 'src/auth/get-agent.decorator';
 import { WbAgent } from 'src/agent/entities/agent.entity';
@@ -124,15 +124,16 @@ export class StatsController {
 
     @Get('/')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
-    async userStats(@Query('userStatus') userStatus: UserStatus): Promise<IUserStats> {
-        return this.profileService.userStats(userStatus);
+    async userStats() {
+        return this.profileService.userStats();
     }
 }
 
 
+// @Controller('telegram-account')
 @Controller('telegram-profile')
 @UsePipes(ValidationPipe)
-export class TelegramProfileController {
+export class TelegramAccountController {
     constructor(private readonly profileService: ProfileService) { }
 
     @Get('/test')

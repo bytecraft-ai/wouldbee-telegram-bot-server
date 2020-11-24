@@ -1,6 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { ProfileService } from './profile.service';
-import { CommonController, PreferenceController, ProfileController, StatsController, TelegramProfileController } from './profile.controller';
+import { CommonController, PreferenceController, ProfileController, StatsController, TelegramAccountController } from './profile.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Caste } from './entities/caste.entity';
 import { City } from './entities/city.entity';
@@ -33,7 +33,7 @@ import { LoggerModule } from "nestjs-pino";
     forwardRef(() => TelegramModule)
     ],
     providers: [ProfileService, SchedulerQueueConsumer],
-    controllers: [ProfileController, PreferenceController, CommonController, TelegramProfileController, StatsController],
+    controllers: [ProfileController, PreferenceController, CommonController, TelegramAccountController, StatsController],
     exports: [ProfileService]
 })
 export class ProfileModule { }

@@ -14,7 +14,7 @@ import { GetCityOptions, GetStateOptions } from './profile.interface';
 import { TelegramAccount } from './entities/telegram-account.entity';
 import { AwsService } from 'src/aws-service/aws-service.service';
 import { Transactional } from 'typeorm-transactional-cls-hooked';
-import { CommonData, IList, IUserStats } from 'src/common/interface';
+import { CommonData, IList } from 'src/common/interface';
 import { Document } from './entities/document.entity';
 import { isUUID } from 'class-validator';
 import { AgentService } from 'src/agent/agent.service';
@@ -31,6 +31,7 @@ import { assert } from 'console';
 import { Support } from './entities/support.entity';
 import { DeactivatedProfile } from './entities/deactivated-profile.entity';
 import { ProfileMarkedForDeletion } from './entities/to-delete-profile.entity';
+import { query } from 'express';
 
 const logger = new Logger('ProfileService');
 
@@ -65,33 +66,70 @@ export class ProfileService {
     ) { }
 
 
-    // TODO: test
-    async userStats(status: UserStatus): Promise<IUserStats> {
-        logger.log(`userStats(${status})`);
-        return {
-            total: await this.telegramRepository.count({
-                where: { status }
-            }),
-            male: await this.telegramRepository.count({
-                join: {
-                    alias: 'telegram_profile',
-                    leftJoinAndSelect: {
-                        profile: 'telegram_profile.profile'
-                    }
-                },
-                where: { gender: Gender.MALE }
-            }),
-            female: await this.telegramRepository.count({
-                join: {
-                    alias: 'telegram_profile',
-                    leftJoinAndSelect: {
-                        profile: 'telegram_profile.profile'
-                    }
-                },
-                where: { gender: Gender.FEMALE }
-            }),
-        };
+    async userStats(): Promise<any> {
+        logger.log(`userStats()`);
+
+        let query = `SELECT status, COUNT(id)  FROM telegram_account GROUP BY status`;
+        const output = await this.telegramRepository.query(query);
+        // console.log('output:', output);
+        // output format: [{ status: 2, count: '1' }, { status: 1, count: '1' }]
+
+        query = `SELECT COUNT(id) FROM telegram_account WHERE
+        "status" >= ${UserStatus.ACTIVATED} AND (
+        "unverifiedBioDataId" IS NOT NULL OR
+        "unverifiedPictureId" IS NOT NULL OR
+        "unverifiedIdProofId" IS NOT NULL )`;
+        const updated = await this.telegramRepository.query(query);
+
+        let result: { [k: string]: number } = {};
+
+        if (output.length) {
+            for (let { status, count } of output) {
+                result[UserStatus[status].toLowerCase()] = parseInt(count);
+            }
+        }
+
+        // console.log('result:', result);
+
+        for (let i = 1; i <= UserStatus.BANNED; i++) {
+            // console.log('i:', i, 'result[i]:', result[i], '!!result[i]:', !!result[i]);
+            if (!result[UserStatus[i].toLowerCase()]) {
+                result[UserStatus[i].toLowerCase()] = 0;
+            }
+        }
+
+        result['updated'] = parseInt(updated[0].count) ?? 0;
+        return result;
     }
+
+
+    // TODO: test
+    // async userStatsOld(status: UserStatus): Promise<IUserStats> {
+    //     logger.log(`userStats(${status})`);
+    //     return {
+    //         total: await this.telegramRepository.count({
+    //             where: { status }
+    //         }),
+    //         male: await this.telegramRepository.count({
+    //             join: {
+    //                 alias: 'telegram_profile',
+    //                 leftJoinAndSelect: {
+    //                     profile: 'telegram_profile.profile'
+    //                 }
+    //             },
+    //             where: { gender: Gender.MALE }
+    //         }),
+    //         female: await this.telegramRepository.count({
+    //             join: {
+    //                 alias: 'telegram_profile',
+    //                 leftJoinAndSelect: {
+    //                     profile: 'telegram_profile.profile'
+    //                 }
+    //             },
+    //             where: { gender: Gender.FEMALE }
+    //         }),
+    //     };
+    // }
 
 
     @Transactional()
