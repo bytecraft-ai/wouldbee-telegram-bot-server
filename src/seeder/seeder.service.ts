@@ -53,6 +53,12 @@ export class SeederService implements OnApplicationBootstrap {
 
 
     async seedCastes() {
+        const existingCastes = await this.profileService.getCastes(Religion.SIKH);
+        if (existingCastes?.length) {
+            logger.log('Castes are already present. Skip seeding...');
+            return;
+        }
+
         const casteData = JSON.parse(
             readFileSync("assets/caste.data.json").toString()
         );

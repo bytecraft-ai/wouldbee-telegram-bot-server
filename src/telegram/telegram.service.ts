@@ -48,13 +48,16 @@ import telegrafThrottler from 'telegraf-throttler';
 import { html as format } from 'telegram-format';
 // import { Logger } from "nestjs-pino";
 import { Logger as defaultLogger } from '@nestjs/common';
-
+require('dotenv').config();
 
 const logger = new defaultLogger('TelegramService');
 
 const DIR = '/tmp/'; // dir to use for file downloads and processing
-const applyWatermark = true;
-const processToPdf = true;
+const processToPdf = process.env.CONVERT_DOC_TO_PDF === 'true';
+const applyWatermark = process.env.APPLY_WATERMARK === 'true';
+
+logger.log(`Convert to PDF is ${processToPdf ? 'ENABLED' : 'DISABLED'}`);
+logger.log(`Apply Watermark is ${applyWatermark ? 'ENABLED' : 'DISABLED'}`);
 
 @Injectable()
 export class TelegramService {
