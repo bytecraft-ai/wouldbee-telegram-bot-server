@@ -143,6 +143,7 @@ export function withinPGRange(what: number, range: string) {
 
 
 export function getAgeInYearsFromDOB(dateOfBirth: Date): number {
+    logger.log(`-> getAgeInYearsFromDOB(${dateOfBirth})`);
     var today = new Date();
     var birthDate = new Date(dateOfBirth);
     var age = today.getFullYear() - birthDate.getFullYear();
@@ -150,11 +151,13 @@ export function getAgeInYearsFromDOB(dateOfBirth: Date): number {
     if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
         age = age - 1;
     }
+    logger.log(`getAgeInYearsFromDOB -> age: (${age})`);
     return age;
 }
 
 
 export function shiftDays(days: number, agoTrueAheadFalse: boolean, setTimeToZero?: boolean): Date {
+    logger.log(`-> shiftDays(${days}, ${agoTrueAheadFalse}, ${setTimeToZero})`);
     var d = new Date();
 
     if (agoTrueAheadFalse)
@@ -165,6 +168,7 @@ export function shiftDays(days: number, agoTrueAheadFalse: boolean, setTimeToZer
     if (setTimeToZero)
         d.setHours(0, 0, 0, 0);
 
+    logger.log(`shiftDays -> d: (${d})`);
     return d;
 }
 
@@ -184,6 +188,7 @@ export function daysAgo(days: number, setTimeToZero = true): Date {
 
 
 export function yearsAgo(years: number): Date {
+    logger.log(`-> yearsAgo(${years})`);
     var d = new Date();
     d.setDate(d.getDate() - years);
     d.setHours(0, 0, 0, 0);
@@ -207,6 +212,7 @@ export function nextWeek(): Date {
 
 
 export function showObjectProperties(object, objectName) {
+    logger.log(`-> showObjectProperties(${objectName})`);
     var result = ``;
     for (var property in object) {
         if (object.hasOwnProperty(property)) {
@@ -222,6 +228,7 @@ const digits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
 
 export function randomSharableIdGenerator(): string {
+    logger.log(`-> randomSharableIdGenerator()`);
     const sharableId: string[] = [];
     for (let i = 1; i <= 8; i++) {
         if (i <= 4) {
@@ -235,6 +242,7 @@ export function randomSharableIdGenerator(): string {
 
 
 export function convertLettersToDigits(letterList: string): string {
+    logger.log(`-> convertLettersToDigits(${letterList})`);
     const letterIndices: string[] = [];
     for (let letter of letterList) {
         let index = letters.findIndex(value => value === letter);
@@ -286,6 +294,7 @@ export function convertLettersToDigits(letterList: string): string {
 
 // ref - https://stackoverflow.com/questions/38435450/get-current-function-name-in-strict-mode
 export function getCallerFunctionName(): string {
+    logger.log(`-> getCallerFunctionName()`);
     let stack = new Error().stack
     let caller = stack.split('\n')[2].trim();
     // console.log(caller + ":" + message);
@@ -295,11 +304,13 @@ export function getCallerFunctionName(): string {
 
 // ref - http://www.howtocreate.co.uk/xor.html
 export function myXOR(x: any, y: any): boolean {
+    logger.log(`-> myXOR(${x}, ${y})`);
     return !x != !y
 }
 
 
 export function setDifference<T>(setA: Set<T>, setB: Set<T>): Set<T> {
+    logger.log(`-> setDifference(${setA}, ${setB})`);
     let _difference = new Set(setA)
     for (let elem of setB) {
         _difference.delete(elem)
@@ -309,6 +320,7 @@ export function setDifference<T>(setA: Set<T>, setB: Set<T>): Set<T> {
 
 
 export function setDifferenceFromArrays<T>(arrayA: Array<T>, arrayB: Array<T>): Array<T> {
+    logger.log(`-> setDifferenceFromArrays(${arrayA}, ${arrayB})`);
     let setA = new Set(arrayA), setB = new Set(arrayB);
     const _difference = setDifference(setA, setB);
     return Array.from(_difference);
@@ -316,16 +328,18 @@ export function setDifferenceFromArrays<T>(arrayA: Array<T>, arrayB: Array<T>): 
 
 
 export function deDuplicateArray<T>(array: Array<T>): Array<T> {
+    logger.log(`-> deDuplicateArray(${array})`);
     let _set = new Set<T>(array);
     return Array.from(_set);
 }
 
 
 export async function downloadFile(file_url: string, fileName: string,
-    DOWNLOAD_DIR = '/tmp/') {
+    DIR = '/tmp/') {
+    logger.log(`-> downloadFile(${file_url}, ${fileName}, ${DIR})`);
 
     /* Create an empty file where we can save data */
-    let file = createWriteStream(join(DOWNLOAD_DIR, fileName));
+    let file = createWriteStream(join(DIR, fileName));
 
     /* Using Promises so that we can use the ASYNC AWAIT syntax */
     await new Promise((resolve, reject) => {
@@ -359,8 +373,9 @@ export async function downloadFile(file_url: string, fileName: string,
 }
 
 
-export function download_file_http_get(file_url: string, file_name: string,
-    DOWNLOAD_DIR = '/tmp/') {
+export function download_file_http_get(file_url: string, fileName: string,
+    DIR = '/tmp/') {
+    logger.log(`-> download_file_http_get(${file_url}, ${fileName}, ${DIR})`);
 
     const options = {
         host: url.parse(file_url).host,
@@ -369,20 +384,21 @@ export function download_file_http_get(file_url: string, file_name: string,
     };
 
     // var file_name = url.parse(file_url).pathname.split('/').pop();
-    const file = createWriteStream(join(DOWNLOAD_DIR, file_name));
+    const file = createWriteStream(join(DIR, fileName));
 
     http.get(options, function (res) {
         res.on('data', function (data) {
             file.write(data);
         }).on('end', function () {
             file.end();
-            logger.log(file_name + ' downloaded to ' + DOWNLOAD_DIR);
+            logger.log(fileName + ' downloaded to ' + DIR);
         });
     });
 };
 
 
 export async function deleteFile(fileName: string, DIR = '/tmp/') {
+    logger.log(`-> deleteFile(${fileName}, ${DIR})`);
     try {
         await fs.unlink(join(DIR, fileName));
     } catch (err) {
@@ -393,6 +409,7 @@ export async function deleteFile(fileName: string, DIR = '/tmp/') {
 
 // TODO: use something else for PDF files as it produces bad quality PDF.
 export function watermarkImage(fileName: string, DIR = '/tmp/'): Promise<string | undefined> {
+    logger.log(`-> watermarkImage(${fileName}, ${DIR})`);
     return new Promise((resolve, reject) => {
         watermark.embedWatermarkWithCb(
             join(DIR, fileName), watermarkOptions, function (err) {
@@ -450,6 +467,7 @@ export const mimeTypes = {
 
 // requires libre-office
 export async function doc2pdf(fileName: string, DIR = '/tmp/'): Promise<string | null> {
+    logger.log(`-> doc2pdf(${fileName}, ${DIR})`);
     let pdfFileName: string;
     try {
         const nameSplit = fileName.split('.');
@@ -479,6 +497,7 @@ export async function doc2pdf(fileName: string, DIR = '/tmp/'): Promise<string |
 
 
 export async function watermarkPdf(fileName: string, DIR = '/tmp/'): Promise<string | null> {
+    logger.log(`-> watermarkPdf(${fileName}, ${DIR})`);
     // const url = 'https://pdf-lib.js.org/assets/with_update_sections.pdf'
     // const existingPdfBytes = await fetch(url).then(res => res.arrayBuffer())
 
@@ -529,5 +548,6 @@ export async function watermarkPdf(fileName: string, DIR = '/tmp/'): Promise<str
 
 
 export function getEnumValues(enumType: Object): number[] {
+    logger.log(`-> getEnumValues(${JSON.stringify(enumType)}`);
     return Object.values(enumType).filter(value => typeof value === 'number');
 }

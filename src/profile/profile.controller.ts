@@ -1,5 +1,5 @@
 import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, Query, DefaultValuePipe, ParseArrayPipe, ParseUUIDPipe, Req } from '@nestjs/common';
-import { CreateCasteDto, CreateProfileDto, GetMatchesDto, GetProfileDto, GetTelegramAccountDto, PaginationDto, PartnerPreferenceDto } from './dto/profile.dto';
+import { CreateCasteDto, CreateProfileDto, GetCastesDto, GetMatchesDto, GetProfileDto, GetTelegramAccountDto, PaginationDto, PartnerPreferenceDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
 import { DocumentValidationDto, GetTelegramAccountsDto, BanProfileDto } from './dto/profile.dto';
 import { GetCitiesDto, GetCountriesDto, GetStatesDto } from './dto/location.dto';
@@ -36,8 +36,8 @@ export class CommonController {
 
     @Get('/caste')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
-    async getCastes(@Query() options: GetCitiesDto,) {
-        return this.profileService.getCastesLike(options?.like, options?.skip, options?.take);
+    async getCastes(@Query() options: GetCastesDto,) {
+        return this.profileService.getCastesLike(options?.like, options?.religion, options?.skip, options?.take);
     }
 
 

@@ -25,7 +25,7 @@ export class SeederController {
     @Get('/caste')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async seedCastes() {
-        await this.seederService.seedCaste();
+        await this.seederService.seedCastes();
         return {
             "status": "OK"
         };

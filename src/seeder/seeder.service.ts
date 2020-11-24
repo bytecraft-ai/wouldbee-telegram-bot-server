@@ -8,9 +8,9 @@ import { ProfileService } from 'src/profile/profile.service';
 
 const logger = new Logger('SeederService');
 
-const countriesToSeed = ['india', 'australia', 'canada', 'france', 'germany', 'new zealand', 'singapore', 'united states', 'united kingdom'];
-// ['india', 'canada', 'united states', 'argentina', 'chile', 'australia', 'new zealand', 'finland', 'sweden', 'denmark', 'norway', 'united kingdom', 'portugal', 'spain', 'france', 'germany', 'netherlands the', 'switzerland', 'austria', 'belgium', 'czech republic', 'ireland', 'poland', 'russia', 'brunei', 'oman', 'qatar', 'saudi arabia', 'south africa', 'united arab emirates', 'china', 'nepal', 'japan', 'korea south', 'singapore'];
+const countriesToSeed = ['india', 'canada', 'united states', 'argentina', 'chile', 'australia', 'new zealand', 'finland', 'sweden', 'denmark', 'norway', 'united kingdom', 'portugal', 'spain', 'france', 'germany', 'netherlands the', 'switzerland', 'austria', 'belgium', 'czech republic', 'ireland', 'poland', 'russia', 'brunei', 'oman', 'qatar', 'saudi arabia', 'south africa', 'united arab emirates', 'china', 'nepal', 'japan', 'korea south', 'singapore'];
 
+// ['india', 'australia', 'canada', 'france', 'germany', 'new zealand', 'singapore', 'united states', 'united kingdom'];
 
 @Injectable()
 export class SeederService implements OnApplicationBootstrap {
@@ -25,7 +25,7 @@ export class SeederService implements OnApplicationBootstrap {
             await this.seedAgents();
 
             logger.log('seeding castes ...');
-            await this.seedCaste();
+            await this.seedCastes();
 
             logger.log('seeding locations ...');
             await this.seedLocation();
@@ -52,13 +52,11 @@ export class SeederService implements OnApplicationBootstrap {
     }
 
 
-    async seedCaste() {
+    async seedCastes() {
         const casteData = JSON.parse(
             readFileSync("assets/caste.data.json").toString()
         );
         const data = casteData.data;
-
-        const existingCastes = this.profileService.getCastesLike('', 0, 100);
 
         for (let i = 0; i < data.length; i++) {
             if (data[i].religion.startsWith('_')) {

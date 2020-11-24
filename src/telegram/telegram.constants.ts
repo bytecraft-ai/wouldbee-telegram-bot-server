@@ -83,7 +83,10 @@ export const fatalErrorMsg = `Some error occurred. We have notified our engineer
 export const unregisteredUserMsg = `You are not registered! This action requires you to register first using /register command. To see the list of all available commands, use /help command.`;
 
 
-export const inactiveUserMsg = `Your profile is not active! This action requires you to first activate your profile. To do that use the /status command and then follow the steps suggested. `;
+export const unverifiedProfileMsg = `Your profile is pending verification! This action is only allowed for verified profiles.`;
+
+
+export const deactivatedProfileMsg = `Your profile is not active! This action requires you to first activate your profile. To do that use the /status command and then follow the steps suggested. `;
 
 
 export const unsupportedPictureFormat = `Error: Only 'jpg' and 'png' formats are accepted for profile pictures. 

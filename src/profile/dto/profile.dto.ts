@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Transform, Type } from 'class-transformer';
 import { IsNotEmpty, IsString, IsNumberString, Length, IsEmail, IsInt, IsOptional, Min, Max, IsPositive, IsUUID, IsNumber, IsIn, IsBoolean, MaxLength } from 'class-validator';
 import { AnnualIncome, EducationDegree, EmployedIn, Gender, MaritalStatus, Occupation, Religion, SupportTicketCategory, Language, ReasonForProfileBan, DocRejectionReason, ProfileSharedWith } from 'src/common/enum';
-import { nameMaxLength, nameMinLength, supportResolutionMinLength, supportResolutionMaxLength, docRejectionReasonMaxLength } from 'src/common/field-length';
+import { nameMaxLength, nameMinLength, supportResolutionMinLength, supportResolutionMaxLength, docRejectionReasonMaxLength, casteMinLength, casteMaxLength } from 'src/common/field-length';
 import { getEnumValues } from 'src/common/util';
 
 
@@ -19,6 +19,22 @@ export class PaginationDto {
     @IsInt()
     @Transform(value => Number(value))
     take?: number = 20;
+}
+
+
+export class PatternDto {
+    @IsOptional()
+    @Length(3, 100)
+    @IsString()
+    like?: string;
+}
+
+
+export class PatternPaginationDto extends PaginationDto {
+    @IsOptional()
+    @Length(3, 100)
+    @IsString()
+    like?: string;
 }
 
 
@@ -415,6 +431,19 @@ export class CreateCasteDto {
     @IsIn(Object.values(Religion).filter(value => typeof value === 'number'))
     @Transform(value => Number(value))
     religion: Religion;
+}
+
+
+export class GetCastesDto extends PaginationDto {
+    @IsOptional()
+    @Length(casteMinLength, casteMaxLength)
+    @IsString()
+    like?: string = '';
+
+    @IsOptional()
+    @IsIn(Object.values(Religion).filter(value => typeof value === 'number'))
+    @Transform(value => Number(value))
+    religion?: Religion;
 }
 
 

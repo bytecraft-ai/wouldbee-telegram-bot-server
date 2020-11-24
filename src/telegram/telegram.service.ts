@@ -40,7 +40,7 @@ import { deleteFile, mimeTypes } from 'src/common/util';
 import { Profile } from 'src/profile/entities/profile.entity';
 import { TelegramAccount } from 'src/profile/entities/telegram-account.entity';
 import { ProfileService } from 'src/profile/profile.service';
-import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, inactiveUserMsg, registrationCancelled, supportMsg, deletionSuccessMsg, acknowledgeDeletionRequest, unsupportedBioFormat } from './telegram.constants';
+import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, deactivatedProfileMsg, registrationCancelled, supportMsg, deletionSuccessMsg, acknowledgeDeletionRequest, unsupportedBioFormat, unverifiedProfileMsg } from './telegram.constants';
 import { getBioDataFileName, getPictureFileName, processBioDataFile, processPictureFile, validateBioDataFileSize, validatePhotoFileSize, silentSend } from './telegram.service.helper';
 import { Document } from 'src/profile/entities/document.entity';
 import { supportResolutionMaxLength, supportResolutionMinLength } from 'src/common/field-length';
@@ -80,8 +80,8 @@ export class TelegramService {
         this.bot.use(session());
 
         this.createRegistrationWizard();
-        this.createUploadBioWizard();
-        this.createUploadPictureWizard();
+        this.createUpdateBioWizard();
+        this.createUpdatePictureWizard();
 
         // TODO - will enable once admin panel has support for this
         // this.createSupportWizard();
@@ -115,6 +115,7 @@ export class TelegramService {
 
 
     async getTelegramAccount(ctx: Context) {
+        logger.log(`-> getTelegramAccount(${ctx.from.id})`);
         let telegramAccount: TelegramAccount;
         try {
             telegramAccount = await this.profileService.getTelegramAccountByTelegramUserId(ctx.from.id, { throwOnFail: false });
@@ -124,14 +125,12 @@ export class TelegramService {
             await ctx.reply(fatalErrorMsg);
             throw error;
         }
-
-        logger.log(`getTelegramAccount(): ${JSON.stringify(telegramAccount)}`);
         return telegramAccount;
     }
 
 
     async getOrCreateTelegramAccount(ctx: Context, payload?: string) {
-
+        logger.log(`-> getOrCreateTelegramAccount(${ctx.from.id}, ${payload})`);
         const createTelegramAccount = async (ctx: Context, payload: string): Promise<TelegramAccount> => {
             if (ctx.from.is_bot) {
                 logger.warn(`A bot interacted with us. ctx: ${JSON.stringify(ctx.from)}`);
@@ -158,16 +157,18 @@ export class TelegramService {
         if (!telegramAccount) {
             telegramAccount = await createTelegramAccount(ctx, payload);
         }
+        logger.log(`getOrCreateTelegramAccount() -> ${JSON.stringify(telegramAccount)}`);
         return telegramAccount;
     }
 
 
     async getRegistrationAction(ctx: Context, telegramAccount: TelegramAccount): Promise<RegistrationActionRequired | undefined> {
+        logger.log(`-> getRegistrationAction(${ctx.from.id})`);
         try {
             return this.profileService.getRegistrationAction(telegramAccount.id);
         }
         catch (error) {
-            logger.error(`Could not get required registration action for telegram account: ${JSON.stringify(telegramAccount)} \nERROR: ${JSON.stringify(error)}`);
+            logger.error(`Could not get required registration action!`);
             await ctx.reply(fatalErrorMsg);
             throw error;
         }
@@ -177,6 +178,7 @@ export class TelegramService {
     // ref - https://github.com/telegraf/telegraf/issues/810
     // ref - https://github.com/telegraf/telegraf/issues/705
     createRegistrationWizard() {
+        logger.log(`-> createRegistrationWizard()`);
         const registrationWizard = new WizardScene(
             'registration-wizard',
 
@@ -495,30 +497,34 @@ export class TelegramService {
     }
 
 
-    createUploadBioWizard() {
+    createUpdateBioWizard() {
+        logger.log(`-> createUpdateBioWizard()`);
         const bioWizard = new WizardScene(
             'bio-wizard',
 
             // Step -1
             async (ctx: Context) => {
                 ctx.wizard.state.data = {};
-                logger.log(`createUploadBioWizard():: step-1`);
+                logger.log(`createUpdateBioWizard:: step-1`);
 
                 await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-
-                // check if the user has already been registered.
                 const telegramAccount = await this.getOrCreateTelegramAccount(ctx);
 
-                if (telegramAccount?.status < UserStatus.ACTIVATED) {
+                if (telegramAccount.status < UserStatus.UNVERIFIED) {
                     await ctx.reply(unregisteredUserMsg);
                     return ctx.scene.leave();
-                } else if (telegramAccount?.status > UserStatus.ACTIVATED) {
-                    await ctx.reply(inactiveUserMsg);
+                } else if (telegramAccount.status === UserStatus.UNVERIFIED) {
+                    await ctx.reply(unverifiedProfileMsg);
+                    return ctx.scene.leave();
+                } else if (telegramAccount.status > UserStatus.ACTIVATED) {
+                    await ctx.reply(deactivatedProfileMsg);
                     return ctx.scene.leave();
                 } else {
-                    logger.log(`Telegram Account: ${JSON.stringify(telegramAccount)}`);
-                    ctx.wizard.state.data.telegramAccountId = telegramAccount.id;
+                    assert(telegramAccount.status > UserStatus.UNVERIFIED,
+                        ctx.wizard.state.data.telegramAccountId = telegramAccount.id);
                 }
+
+
 
                 await ctx.reply(askForBioUploadMsg);
 
@@ -530,7 +536,7 @@ export class TelegramService {
             // step-2: download bio, watermark, upload to aws, delete from tmp
             async (ctx: Context) => {
                 await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-                logger.log(`createUploadBioWizard():: step-2`);
+                logger.log(`createUpdateBioWizard:: step-2`);
 
                 const document = ctx.message.document;
                 if (document) {
@@ -593,28 +599,32 @@ export class TelegramService {
     }
 
 
-    createUploadPictureWizard() {
+    createUpdatePictureWizard() {
+        logger.log(`-> createUpdatePictureWizard()`);
         const pictureWizard = new WizardScene(
             'picture-wizard',
 
             // Step -1
             async (ctx: Context) => {
                 ctx.wizard.state.data = {};
-                logger.log('createUploadPictureWizard():: step-1');
+                logger.log('createUpdatePictureWizard():: step-1');
 
                 await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
                 // check if the user has already been registered.
                 const telegramAccount = await this.getOrCreateTelegramAccount(ctx);
 
-                if (!telegramAccount || telegramAccount.status < UserStatus.ACTIVATED) {
+                if (telegramAccount.status < UserStatus.UNVERIFIED) {
                     await ctx.reply(unregisteredUserMsg);
                     return ctx.scene.leave();
+                } else if (telegramAccount.status === UserStatus.UNVERIFIED) {
+                    await ctx.reply(unverifiedProfileMsg);
+                    return ctx.scene.leave();
                 } else if (telegramAccount.status > UserStatus.ACTIVATED) {
-                    await ctx.reply(inactiveUserMsg);
+                    await ctx.reply(deactivatedProfileMsg);
                     return ctx.scene.leave();
                 } else {
-                    logger.log(`Telegram Account: ${JSON.stringify(telegramAccount)}`);
+                    assert(telegramAccount.status > UserStatus.UNVERIFIED, telegramAccount.status < UserStatus.DEACTIVATED);
                     ctx.wizard.state.data.telegramAccountId = telegramAccount.id;
                 }
 
@@ -626,6 +636,7 @@ export class TelegramService {
 
             // step-2
             async (ctx: Context) => {
+                logger.log('createUpdatePictureWizard():: step-2');
                 await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
                 const photos = ctx.update.message.photo;
@@ -696,6 +707,8 @@ export class TelegramService {
 
 
     createSupportWizard() {
+        logger.log(`-> createSupportWizard()`);
+
         const supportWizard = new WizardScene(
             'support-wizard',
 
@@ -763,6 +776,8 @@ export class TelegramService {
 
     @Start()
     async start(ctx: Context) {
+        logger.log(`-> start(${ctx.from.id})`);
+
         const msg = ctx.message;
 
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
@@ -781,6 +796,7 @@ export class TelegramService {
 
     @Help()
     async help(ctx: Context) {
+        logger.log(`-> help(${ctx.from.id})`);
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         await ctx.reply(helpMessage);
     }
@@ -788,6 +804,8 @@ export class TelegramService {
 
     @Command('delete')
     async delete(ctx: Context) {
+        logger.log(`-> delete(${ctx.from.id})`);
+
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         const telegramAccount = await this.getOrCreateTelegramAccount(ctx);
 
@@ -821,8 +839,9 @@ export class TelegramService {
     // delete callback function
     @Action(/delete-(10|[0-9])/)
     async delete_callback(ctx: Context) {
+        logger.log(`-> delete_callback(${ctx.from.id}) \n callback-data: ${ctx.callbackQuery.data}`);
+
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        logger.log(`delete_callback data: ${ctx.callbackQuery.data}`);
         await ctx.deleteMessage();
 
         const callbackData = parseInt(ctx.callbackQuery.data.split('-')[1]);
@@ -847,6 +866,7 @@ export class TelegramService {
 
     @Command('recover')
     async recover(ctx: Context) {
+        logger.log(`-> recover(${ctx.from.id})`);
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         const telegramAccount = await this.getTelegramAccount(ctx);
 
@@ -870,8 +890,9 @@ export class TelegramService {
 
     @Action(/recover-(confirm|cancel)/)
     async recover_callback(ctx: Context) {
+        logger.log(`-> recover_callback(${ctx.from.id}) \n callback-data: ${ctx.callbackQuery.data}`);
+
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        logger.log(`recover callback data: ${ctx.callbackQuery.data}`);
 
         if (ctx.callbackQuery.data === 'recover-confirm') {
             try {
@@ -891,6 +912,7 @@ export class TelegramService {
 
     @Command('deactivate')
     async deactivate(ctx: Context) {
+        logger.log(`-> deactivate(${ctx.from.id})`);
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         const telegramAccount = await this.getOrCreateTelegramAccount(ctx);
         if (telegramAccount.status === UserStatus.ACTIVATED) {
@@ -918,8 +940,8 @@ export class TelegramService {
     // deactivate callback handler
     @Action(/deactivate-[0-4]/)
     async deactivation_callback(ctx: Context) {
+        logger.log(`-> deactivation_callback(${ctx.from.id}) \n callback-data: ${ctx.callbackQuery.data}`);
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        logger.log(`deactivate data: ${ctx.callbackQuery.data}`);
         await ctx.deleteMessage();
 
         const duration = parseInt(ctx.callbackQuery.data.split('-')[1]);
@@ -944,6 +966,7 @@ export class TelegramService {
 
     @Command('reactivate')
     async reactivate(ctx: Context) {
+        logger.log(`-> reactivate(${ctx.from.id})`);
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         const telegramAccount = await this.getOrCreateTelegramAccount(ctx);
         if (telegramAccount.status === UserStatus.DEACTIVATED) {
@@ -952,7 +975,7 @@ export class TelegramService {
                 await ctx.reply('Welcome back! Your profile has been reactivated successfully.');
             }
             catch (error) {
-                logger.error(`Could not get reactivateProfile profile. Telegram account: ${JSON.stringify(telegramAccount)} \nERROR: ${JSON.stringify(error)}`);
+                logger.error(`Could not get reactivateProfile profile.`);
                 await ctx.reply(fatalErrorMsg);
                 return;
             }
@@ -964,13 +987,12 @@ export class TelegramService {
 
     // TODO: test
     @Command('status')
-    async status(ctx: Context) {
+    async accountStatus(ctx: Context) {
+        logger.log(`-> accountStatus(${ctx.from.id})`);
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         const telegramAccount = await this.getOrCreateTelegramAccount(ctx);
-        logger.log(`telegram account status:, ${telegramAccount.status}`);
 
         let msg = '';
-
         switch (telegramAccount.status) {
             case UserStatus.UNREGISTERED:
             case UserStatus.PHONE_VERIFIED:
@@ -995,7 +1017,7 @@ export class TelegramService {
                     }
                 }
                 catch (error) {
-                    logger.error(`Could not get invalidation causing document. Telegram account: ${JSON.stringify(telegramAccount)} \nERROR: ${JSON.stringify(error)}`);
+                    logger.error(`Could not get invalidation causing document.`);
                     await ctx.reply(fatalErrorMsg);
                 }
                 msg += `\n You need to re-register using /register command and submit your corrected bio-data and/or profile picture.`
@@ -1027,7 +1049,7 @@ export class TelegramService {
 
             default:
                 msg = fatalErrorMsg;
-                logger.error(`Could not determine status for Telegram account with id: ${telegramAccount.id}, Telegram Account:\n${JSON.stringify(telegramAccount)}`);
+                logger.error(`Could not determine status for Telegram account.`);
         }
 
         await ctx.reply(msg);
@@ -1036,6 +1058,7 @@ export class TelegramService {
 
     @Command('support')
     async support(ctx: Context) {
+        logger.log(`-> support(${ctx.from.id})`);
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         await ctx.reply(`Please email your issue to us on "support@wouldbee.com" and we will try our best to help you out.`)
     }
@@ -1043,6 +1066,7 @@ export class TelegramService {
 
     @Command('preference')
     async preference(ctx: Context) {
+        logger.log(`-> preference(${ctx.from.id})`);
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         await ctx.reply('This feature will be released soon.')
     }
@@ -1050,6 +1074,7 @@ export class TelegramService {
 
     @Command('preview')
     async preview(ctx: Context) {
+        logger.log(`-> preview(${ctx.from.id})`);
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
         await ctx.reply('This feature will be released soon.')
     }
@@ -1057,6 +1082,7 @@ export class TelegramService {
 
     // fails silently
     async notifyUser(telegramAccount: TelegramAccount, message: string, sendHi = true) {
+        logger.log(`-> notifyUser(${telegramAccount.id}, ${message}, ${sendHi})`);
         try {
             const chatId = telegramAccount.chatId;
             if (sendHi) {
@@ -1073,6 +1099,8 @@ export class TelegramService {
 
 
     async notifyUserOfVerification(telegramAccount: TelegramAccount, doc: Document, result: boolean, invalidationReason?: DocRejectionReason, invalidationDescription?: string) {
+        logger.log(`-> notifyUserOfVerification(${telegramAccount.id}, ${doc.id}, ${invalidationReason}, ${invalidationDescription})`);
+
         const chatId = telegramAccount.chatId;
         const docType: string = TypeOfDocument[doc.typeOfDocument].toLowerCase();
         const reason: string = !!invalidationReason ? DocRejectionReason[invalidationReason].replace(/_/g, ' ') : null;
@@ -1109,6 +1137,8 @@ export class TelegramService {
 
 
     async sendProfile(sendToTelegramAccount: TelegramAccount, profileToSend: Profile, TelegramAccountToSend: TelegramAccount,) {
+        logger.log(`-> sendProfile(${sendToTelegramAccount.id}, ${profileToSend.id}, ${TelegramAccountToSend.id})`);
+
         const chatId = sendToTelegramAccount.chatId;
         const photoFileId = TelegramAccountToSend.picture.telegramFileId;
         const bioFileId = TelegramAccountToSend.bioData.telegramFileId;
@@ -1131,22 +1161,26 @@ export class TelegramService {
 
     @On(['voice', 'audio', 'document', 'photo', 'sticker', 'animation', 'video'])
     onUnsupportedCommand(ctx: Context) {
+        logger.log(`-> onUnsupportedCommand(), type: ${ctx.updateType}, subType: ${ctx.updateSubTypes}`);
         ctx.reply('This is unsupported. Please use /help command to see what this bot supports.');
     }
 
 
     @Hears(['Hi', 'hi', 'Hey', 'hey', 'Hello', 'hello', 'Hola', 'hola', 'Namaskar', 'namaskar', 'Namaste', 'namaste'])
     onHey(ctx: Context) {
+        logger.log(`-> onHey()`);
         ctx.reply(`Hi there. Create your profile and we'll assist you to talk to someone real.`);
     }
 
     @Hears(['Cancel', 'cancel'])
     onCancel(ctx: Context) {
+        logger.log(`-> onCancel()`);
         ctx.reply(``);
     }
 
     @Hears(/.*/)
     allText(ctx: Context) {
+        logger.log(`-> allText()`);
         ctx.reply('This is unsupported. Please use /help command to see what this bot supports.');
     }
 

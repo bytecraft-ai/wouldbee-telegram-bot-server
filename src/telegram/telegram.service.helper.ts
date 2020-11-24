@@ -15,6 +15,7 @@ const fileSizeLimit = 2202009.6
 const ONE_MB = 1048576; // 1024*1024
 
 export function validateBioDataFileSize(ctx: Context) {
+    logger.log(`-> validateBioDataFileSize(${ctx.message.document})`);
     const document = ctx.message.document;
     let errorMessage: string;
 
@@ -27,6 +28,7 @@ export function validateBioDataFileSize(ctx: Context) {
 
 
 export function validatePhotoFileSize(ctx: Context) {
+    logger.log(`-> validatePhotoFileSize(${ctx.message.document}, ${ctx.message.photo})`);
     const document = ctx.message.document;
     const photo = ctx.message.photo?.length > 0 ? ctx.message.photo[0] : undefined;
     const file_size = photo ? photo.file_size : document.file_size;
@@ -47,6 +49,8 @@ export async function getBioDataFileName(ctx: Context):
         errorMessage: string;
         quitOnError: boolean;
     }> {
+    logger.log(`-> getBioDataFileName(${ctx.message.document}, ${ctx.wizard.state.data.telegramAccountId})`);
+
     const document = ctx.message.document;
     const telegramAccountId = ctx.wizard.state.data.telegramAccountId;
 
@@ -113,6 +117,8 @@ export async function getBioDataFileName(ctx: Context):
 
 export async function processBioDataFile(link: string, fileName: string, DIR: string, convertToPdf = false, watermark = false): Promise<string | undefined> {
 
+    logger.log(`-> processBioDataFile(${link}, ${fileName}, ${DIR}, ${convertToPdf}, ${watermark})`);
+
     await downloadFile(link, fileName, DIR);
     if (convertToPdf && !fileName.endsWith('.pdf')) {
 
@@ -139,6 +145,8 @@ export async function getPictureFileName(ctx: Context): Promise<{
     errorMessage: string;
     quitOnError: boolean;
 }> {
+    logger.log(`-> getPictureFileName(${ctx.message.document}, ${ctx.update.message.photo}, ${ctx.wizard.state.data.telegramAccountId})`);
+
     const photos = ctx.update.message.photo;
     // if photo is shared by photo sharing option.
     const photo = (photos && photos[0]) ? photos[0] : null;
@@ -209,6 +217,8 @@ export async function getPictureFileName(ctx: Context): Promise<{
 
 
 export async function processPictureFile(link: string, fileName: string, watermark = false, DIR: string): Promise<string | undefined> {
+    logger.log(`-> processPictureFile(${link}, ${fileName}, ${watermark}, ${DIR})`);
+
     await downloadFile(link, fileName, DIR);
     if (watermark) {
         await watermarkImage(fileName, DIR);
@@ -219,11 +229,13 @@ export async function processPictureFile(link: string, fileName: string, waterma
 
 
 export function silentSend(): boolean {
+    logger.log(`-> silentSend()`);
     let silent = false;
     const now = new Date();
     // silent notifications before 8 am and after 9:59 pm
     if (now.getHours() < 8 || now.getHours() > 21) {
         silent = true;
     }
+    logger.log(`now: ${now}, silent: ${silent}`);
     return silent;
 }

@@ -97,6 +97,7 @@ export class ProfileService {
     @Transactional()
     async saveProfile(profileDto: CreateProfileDto): Promise<Profile | undefined> {
         logger.log(`saveProfile(${JSON.stringify(profileDto)})`);
+
         const { telegramAccountId, name, gender, dob, religion, casteId, annualIncome, cityId, highestDegree, employedIn, occupation, motherTongue, maritalStatus } = profileDto;
 
         const telegramAccount = await this.getTelegramAccountById(telegramAccountId, {
@@ -124,8 +125,11 @@ export class ProfileService {
             throw new NotAcceptableException('Cannot edit gender!');
         }
 
-        const caste = await this.getCaste(casteId, true);
         const city = await this.getCity(cityId, { throwOnFail: true });
+        const caste = await this.getCaste(casteId, true);
+        if (religion !== caste.religion) {
+            throw new ConflictException(`religion !== caste.religion`);
+        }
 
         profile.id = telegramAccountId;
         profile.name = name;
@@ -154,7 +158,7 @@ export class ProfileService {
             throw error;
         }
 
-        if (createTrueEditFalse) {
+        if (createTrueEditFalse === true) {
             this.telegramService.notifyUser(telegramAccount, 'Congratulations! Your profile has been activated. From now on, matching profiles will be forwarded to you!');
         }
 
@@ -752,6 +756,8 @@ export class ProfileService {
     async findMatches(profileId: string, skip = 0, take = 20): Promise<IList<Profile>> {
         logger.log(`findMatches(${profileId})`);
 
+        this.validatePagination(take);
+
         const profile = await this.profileRepository.findOne(profileId, {
             relations: ["partnerPreference", "caste", "city"]
         });
@@ -1026,9 +1032,7 @@ export class ProfileService {
     async getTelegramAccountsForVerification(skip = 0, take = 20): Promise<IList<TelegramAccount> | undefined> {
         logger.log(`getTelegramAccountsForVerification(${JSON.stringify({ skip, take })})`);
 
-        if (take < 1 || take > 100) {
-            throw new Error('1 ≤ take ≥ 100');
-        }
+        this.validatePagination(take);
 
         const query = this.telegramRepository.createQueryBuilder('tel_profile');
 
@@ -1052,10 +1056,7 @@ export class ProfileService {
     async getTelegramAccountsForUpdation(skip = 0, take = 20): Promise<IList<TelegramAccount> | undefined> {
         logger.log(`getTelegramAccountsForUpdation(${JSON.stringify({ skip, take })})`);
 
-        if (take < 1 || take > 100) {
-            throw new Error('1 ≤ take ≥ 100');
-        }
-
+        this.validatePagination(take);
 
         const query = this.telegramRepository.createQueryBuilder('tel_profile');
         query.leftJoin('tel_profile.documents', 'document')
@@ -1076,9 +1077,7 @@ export class ProfileService {
 
         const { isNew, isUpdated, getProfile, skip, take } = options;
 
-        if (take < 1 || take > 100) {
-            throw new Error('1 ≤ take ≥ 100');
-        }
+        this.validatePagination(take);
 
         const query = this.telegramRepository.createQueryBuilder('tel_profile');
 
@@ -1119,9 +1118,7 @@ export class ProfileService {
 
     // async getTelegramAccounts(options?: GetTelegramAccountsOption, skip = 0, take = 20): Promise<IList<TelegramAccount> | undefined> {
 
-    //     if (take < 1 || take > 100) {
-    //         throw new Error('1 ≤ take ≥ 100');
-    //     }
+    //     this.validatePagination(take);
 
     //     const { isValid, withPhone, withBio, withPhoto, withIdProof } = options;
     //     const query = this.telegramRepository.createQueryBuilder('tel_profile');
@@ -1270,6 +1267,7 @@ export class ProfileService {
 
     // TODO: update
     // async getAllDocuments(options?: GetAllDocumentsOption, skip = 0, take = 20): Promise<IList<Document> | undefined> {
+    //     this.validatePagination(take);
     //     const { telegramAccountId, typeOfDocument } = options;
     //     const [values, count] = await this.documentRepository.findAndCount({
     //         where: { telegramAccountId },
@@ -1662,14 +1660,16 @@ export class ProfileService {
     // }
 
 
-    async getCastesLike(like: string, skip = 0, take = 20): Promise<Caste[]> {
-        if (take > 100) {
-            throw new Error('Maximum value allowed for take is 100');
-        }
+    async getCastesLike(like: string, religion?: Religion, skip = 0, take = 20): Promise<Caste[]> {
+        this.validatePagination(take);
 
-        let query = this.casteRepository.createQueryBuilder("caste");
+        let query = this.casteRepository.createQueryBuilder("caste")
+
+        if (religion) {
+            query = query.andWhere('caste.religion = :religion', { religion });
+        }
         if (like) {
-            query = query.where("caste.name ILIKE :like", { like: `${like}%` });
+            query = query.andWhere("caste.name ILIKE :like", { like: `${like}%` });
         }
         return query.skip(skip).take(take).getMany();
     }
@@ -1720,6 +1720,16 @@ export class ProfileService {
             throw new NotFoundException(`Caste with id: ${casteId} not found!`);
         }
         return caste;
+    }
+
+
+    async getCastes(religion?: Religion): Promise<Caste[] | undefined> {
+        if (religion)
+            return this.casteRepository.find({
+                where: { religion }
+            });
+        else
+            return this.casteRepository.find();
     }
 
 
@@ -1943,9 +1953,7 @@ export class ProfileService {
 
     async getStatesLike(pattern: string, countryIds: number[], skip = 0, take = 20): Promise<IList<State>> {
 
-        if (take > 100) {
-            throw new Error('Maximum value allowed for take is 100');
-        }
+        this.validatePagination(take);
 
         const query = this.stateRepository.createQueryBuilder("state");
 
@@ -1989,13 +1997,24 @@ export class ProfileService {
     }
 
 
-    async getCountries(skip = 0, take = 100): Promise<Country[]> {
+    async getCountries(skip = 0, take = 300): Promise<Country[]> {
+
+        // allow taking all countries in one go (as only 248 countries exist).
+        if (take < 1 || take > 300) {
+            throw new Error('1 ≤ take ≥ 300');
+        }
+
         return this.countryRepository.find({ skip, take });
     }
 
 
     async getCountriesLike(pattern: string, skip = 0,
-        take = 20): Promise<Country[]> {
+        take = 300): Promise<Country[]> {
+
+        // allow taking all countries in one go (as only 248 countries exist).
+        if (take < 1 || take > 300) {
+            throw new Error('1 ≤ take ≥ 300');
+        }
 
         const query = this.countryRepository.createQueryBuilder("country");
 
@@ -2021,6 +2040,9 @@ export class ProfileService {
 
 
     async getCitiesOfState(stateId: number, skip = 0, take = 100, getState = false, getCountry = false): Promise<City[]> {
+
+        this.validatePagination(take);
+
         const relations = [];
         if (getState)
             relations.push('state');
@@ -2060,9 +2082,7 @@ export class ProfileService {
             take = 20,
         }): Promise<IList<City>> {
 
-        if (take > 100) {
-            throw new Error('Maximum value allowed for take is 100');
-        }
+        this.validatePagination(take);
 
         let query = this.cityRepository.createQueryBuilder("city");
 
@@ -2121,6 +2141,8 @@ export class ProfileService {
 
 
     async getCities(skip = 0, take = 100, getState = false, getCountry = false): Promise<City[]> {
+        this.validatePagination(take);
+
         const relations = [];
         if (getState)
             relations.push('state');
@@ -2193,6 +2215,13 @@ export class ProfileService {
         return {
             maleAgeList: maleAgeList,
             femaleAgeList: femaleAgeList,
+        }
+    }
+
+
+    validatePagination(take: number) {
+        if (take < 1 || take > 100) {
+            throw new Error('1 ≤ take ≥ 100');
         }
     }
 
