@@ -1,7 +1,8 @@
 import {
     Entity,
     Column,
-    PrimaryGeneratedColumn
+    PrimaryGeneratedColumn,
+    Unique
 } from 'typeorm';
 import {
     Religion,
@@ -13,6 +14,7 @@ import { casteMaxLength, casteMinLength } from 'src/common/field-length';
 // TODO: implement table indexing on important columns
 
 @Entity()
+@Unique(["name", "religion"])
 export class Caste {
     @PrimaryGeneratedColumn()
     id: number;

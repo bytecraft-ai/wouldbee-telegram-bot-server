@@ -1,7 +1,9 @@
 import { Logger } from '@nestjs/common';
 import { assert } from 'console';
 import { Context } from 'nestjs-telegraf';
-import { deleteFile, doc2pdf, downloadFile, mimeTypes, watermarkImage, watermarkPdf } from 'src/common/util';
+import { AnnualIncome, annualIncomeString, EducationDegree, Religion } from 'src/common/enum';
+import { deleteFile, doc2pdf, downloadFile, getHumanReadableDate, mimeTypes, toTitleCase, watermarkImage, watermarkPdf } from 'src/common/util';
+import { Profile } from 'src/profile/entities/profile.entity';
 import { bioCreateSuccessMsg, fatalErrorMsg, unsupportedBioFormat, unsupportedPictureFormat } from './telegram.constants';
 
 const logger = new Logger('TelegramServiceHelper');
@@ -238,4 +240,30 @@ export function silentSend(): boolean {
     }
     logger.log(`now: ${now}, silent: ${silent}`);
     return silent;
+}
+
+
+export function createProfileCard(profile: Profile): string {
+    logger.log(`-> createProfileCard(${JSON.stringify(profile)})`);
+
+    if (!profile?.city?.state?.country) {
+        throw new Error('No state & country information found in profile city');
+    }
+
+    assert(profile.religion === profile.caste.religion);
+
+    const religion = toTitleCase(Religion[profile.religion]);
+    const education = toTitleCase(EducationDegree[profile.highestDegree]);
+    const annualIncome = annualIncomeString[AnnualIncome[profile.annualIncome]];
+
+    // DoB: ${ getHumanReadableDate(profile.dob) }
+    const card = `${profile.name}\n` +
+        `DoB: ${profile.dob.toString()}\n` +
+        `Caste: ${profile.caste.name}, ${religion}\n` +
+        `City: ${profile.city.name}, ${profile.city.state.name}, ${profile.city.state.country.iso3}\n` +
+        `Education: ${education} \n` +
+        `Income: ${annualIncome} per annum`;
+
+    return card;
+
 }

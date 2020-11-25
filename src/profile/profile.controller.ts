@@ -1,5 +1,5 @@
-import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, Query, DefaultValuePipe, ParseArrayPipe, ParseUUIDPipe, Req } from '@nestjs/common';
-import { CreateCasteDto, CreateProfileDto, GetCastesDto, GetMatchesDto, GetProfileDto, GetTelegramAccountDto, PaginationDto, PartnerPreferenceDto } from './dto/profile.dto';
+import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, Query, DefaultValuePipe, ParseArrayPipe, ParseUUIDPipe, Req, ParseBoolPipe } from '@nestjs/common';
+import { CreateCasteDto, CreateProfileDto, GetCastesDto, GetMatchesDto, GetProfileDto, GetTelegramAccountDto, GetProfilesDto, PartnerPreferenceDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
 import { DocumentValidationDto, GetTelegramAccountsDto, BanProfileDto } from './dto/profile.dto';
 import { GetCitiesDto, GetCountriesDto, GetStatesDto } from './dto/location.dto';
@@ -10,6 +10,8 @@ import { Roles } from 'src/auth/set-role.decorator';
 import { GetAgent } from 'src/auth/get-agent.decorator';
 import { WbAgent } from 'src/agent/entities/agent.entity';
 import { Profile } from './entities/profile.entity';
+import { TelegramService } from 'src/telegram/telegram.service';
+import { Match } from './entities/match.entity';
 // import { Profile } from './entities/profile.entity';
 // import { AwsService } from 'src/aws-service/aws-service.service';
 // import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
@@ -23,7 +25,7 @@ const logger = new Logger('ProfileController');
 @Controller('common')
 export class CommonController {
     constructor(
-        private readonly profileService: ProfileService,
+        private readonly profileService: ProfileService
     ) { }
 
 
@@ -120,13 +122,34 @@ export class CommonController {
 @Controller('stats')
 @UsePipes(ValidationPipe)
 export class StatsController {
-    constructor(private readonly profileService: ProfileService) { }
+    constructor(
+        private readonly profileService: ProfileService,
+        private readonly telegramService: TelegramService,
+    ) { }
+
+
+    @Get('/turn-on-notifications')
+    // @Roles(UserRole.ADMIN)
+    async turnAdminNotificationsOn() {
+        this.telegramService.setAdminNotifications(true);
+        return { notifications: 'on' };
+    }
+
+
+    @Get('/turn-off-notifications')
+    // @Roles(UserRole.ADMIN)
+    async turnAdminNotificationsOff() {
+        this.telegramService.setAdminNotifications(false);
+        return { notifications: 'off' };
+    }
+
 
     @Get('/')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async userStats() {
         return this.profileService.userStats();
     }
+
 }
 
 
@@ -217,9 +240,8 @@ export class ProfileController {
 
     @Get('/')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
-    async getProfiles() {
-        console.log('get all profiles');
-        return this.profileService.getProfiles();
+    async getProfiles(@Query() options: GetProfilesDto): Promise<IList<Profile> | undefined> {
+        return this.profileService.getProfiles(options);
     }
 
 
@@ -228,8 +250,8 @@ export class ProfileController {
     async getProfile(
         @Param('uuid', new ParseUUIDPipe()) uuid: string,
         @Query() options: GetProfileDto
-    ) {
-        const relations = [];
+    ): Promise<Profile | undefined> {
+        const relations = ['city', 'caste'];
         if (options.getPreference)
             relations.push('partnerPreference')
 
@@ -245,13 +267,21 @@ export class ProfileController {
 
     @Post('/')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
-    async createProfile(@Body() createProfileDto: CreateProfileDto) {
+    async createProfile(@Body() createProfileDto: CreateProfileDto): Promise<Profile | undefined> {
         console.log('create profile with', createProfileDto);
         return this.profileService.saveProfile(createProfileDto);
     }
 
+}
 
-    @Get('/matches/find/:uuid')
+
+@Controller('matches')
+@UsePipes(ValidationPipe)
+export class MatchController {
+
+    constructor(private readonly profileService: ProfileService) { }
+
+    @Get('/find/:uuid')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async findMatches(
         @Param('uuid', new ParseUUIDPipe()) uuid: string,
@@ -262,14 +292,33 @@ export class ProfileController {
     }
 
 
-    @Get('/matches/:uuid')
+    @Get('/send')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
+    async sendMatches() {
+        logger.log(`-> sendMatches()`);
+        await this.profileService.sendMatches();
+        return { status: "OK" };
+    }
+
+
+    @Get('/')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
+    async getAllMatches(
+        @Query() options: GetMatchesDto
+    ): Promise<IList<Match>> {
+        logger.log(`getAllMatches(${JSON.stringify(options)})`);
+        return this.profileService.getAllMatches(options);
+    }
+
+
+    @Get('/:uuid')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getMatches(
         @Param('uuid', new ParseUUIDPipe()) uuid: string,
-        @Query() options: PaginationDto
-    ): Promise<IList<Profile>> {
-        logger.log(`getMatches(${uuid}, ${options?.skip}, ${options?.take})`);
-        return this.profileService.findMatches(uuid, options?.skip, options?.take);
+        @Query() options: GetMatchesDto
+    ): Promise<IList<Match>> {
+        logger.log(`getMatches(${uuid}, ${JSON.stringify(options)})`);
+        return this.profileService.getMatches(uuid, options);
     }
 }
 

@@ -8,7 +8,8 @@ import {
     JoinTable,
     DeleteDateColumn,
     PrimaryGeneratedColumn,
-    PrimaryColumn
+    PrimaryColumn,
+    Check
 } from 'typeorm';
 import { IsOptional, IsString, Length, MaxLength } from 'class-validator';
 import { City } from './city.entity';
@@ -23,6 +24,8 @@ import { Exclude } from 'class-transformer';
 // TODO: implement table indexing on important columns
 
 @Entity()
+@Check(`"minAge" >= 18`)
+@Check(`"maxAge" >= 18`)
 export class PartnerPreference {
     @PrimaryGeneratedColumn("uuid")
     id: string;

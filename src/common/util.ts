@@ -10,6 +10,7 @@ const request = require("request"); // does not work with import syntax.
 const watermark = require('image-watermark');  // does not work with import syntax.
 import { convert } from 'libreoffice-convert';
 import { degrees, PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { months } from './enum';
 
 // pdftk.configure({
 //     // bin: '/your/path/to/pdftk/bin',
@@ -21,7 +22,8 @@ import { degrees, PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 const watermarkOptions = {
     'text': 'wouldbee.com',
     'override-image': true,
-    'align': 'ltr'
+    'align': 'ltr',
+    'position': 'South'
 };
 
 const lib_convert = promisify(convert)
@@ -550,4 +552,42 @@ export async function watermarkPdf(fileName: string, DIR = '/tmp/'): Promise<str
 export function getEnumValues(enumType: Object): number[] {
     logger.log(`-> getEnumValues(${JSON.stringify(enumType)}`);
     return Object.values(enumType).filter(value => typeof value === 'number');
+}
+
+
+export function getHumanReadableDate(date?: Date): string {
+    if (!date) date = new Date();
+    return date.getDate() + "-" + months[date.getMonth()] + "-" + date.getFullYear();
+
+}
+
+
+export function toTitleCase(input: string) {
+    let str = input.replace(/_/g, ' ');
+
+    str = input.replace(/DASH/g, '-');
+    str = input.replace(/SLASH/g, '/');
+    str = input.replace(/OR/g, '/');
+
+    str = input.replace(/([^\W_]+[^\s-]*) */g, function (txt) {
+        return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+    });
+
+    // Certain minor words should be left lowercase unless 
+    // they are the first or last words in the string
+    let lowers = ['A', 'An', 'The', 'And', 'But', 'Or', 'For', 'Nor', 'As', 'At',
+        'By', 'For', 'From', 'In', 'Into', 'Near', 'Of', 'On', 'Onto', 'To', 'With'];
+    for (let i = 0, j = lowers.length; i < j; i++)
+        str = str.replace(new RegExp('\\s' + lowers[i] + '\\s', 'g'),
+            function (txt) {
+                return txt.toLowerCase();
+            });
+
+    // Certain words such as initialisms or acronyms should be left uppercase
+    let uppers = ['Id', 'Tv', 'IT', 'ITES', 'BPO', 'IAS', 'IPS', 'IFS', 'IRS', 'CEO', 'CTO', 'CXO'];
+    for (let i = 0, j = uppers.length; i < j; i++)
+        str = str.replace(new RegExp('\\b' + uppers[i] + '\\b', 'g'),
+            uppers[i].toUpperCase());
+
+    return str;
 }

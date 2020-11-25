@@ -24,18 +24,11 @@ async function bootstrap() {
   initializeTransactionalContext() // Initialize cls-hooked for typeorm transaction.
   patchTypeORMRepositoryWithBaseRepository() // patch Repository with BaseRepository.
 
-  const nodeEnv = process.env.NODE_ENV || 'development';
+  const nodeEnv = process.env.NODE_ENV;
+  console.log('nodeEnv:', nodeEnv);
 
-  const httpsOptions = {
-    key: nodeEnv === 'production' ? readFileSync('./secrets/private-key.pem') : '',
-    cert: nodeEnv === 'production' ? readFileSync('./secrets/public-certificate.pem') : '',
-  };
-
-  const app = process.env.NODE_ENV === 'production'
-    ? await NestFactory.create<NestExpressApplication>(
-      AppModule, { logger: false })
-    : await NestFactory.create<NestExpressApplication>(
-      AppModule, { httpsOptions, logger: false });
+  const app = await NestFactory.create<NestExpressApplication>(
+    AppModule, { logger: false });
 
   app.useLogger(app.get(Logger));
 

@@ -2,8 +2,8 @@ import { Injectable, Logger, BadRequestException, NotFoundException, ConflictExc
 import { InjectRepository } from '@nestjs/typeorm';
 import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, MaritalStatus, ProfileSharedWith, S3Option, RegistrationActionRequired, ProfileDeactivationDuration, ProfileDeletionReason, UserStatus, DocRejectionReason, AnnualIncome } from 'src/common/enum';
 import { daysAhead, deDuplicateArray, getAgeInYearsFromDOB, nextWeek, setDifferenceFromArrays } from 'src/common/util';
-import { LessThanOrEqual, Repository } from 'typeorm';
-import { PartnerPreferenceDto, CreateProfileDto, CreateCasteDto, SupportResolutionDto, GetTelegramAccountsDto, GetMatchesDto } from './dto/profile.dto';
+import { LessThanOrEqual, Like, Repository } from 'typeorm';
+import { PartnerPreferenceDto, CreateProfileDto, CreateCasteDto, SupportResolutionDto, GetTelegramAccountsDto, GetMatchesDto, GetProfilesDto } from './dto/profile.dto';
 import { Caste } from './entities/caste.entity';
 import { City } from './entities/city.entity';
 import { Country } from './entities/country.entity';
@@ -64,6 +64,14 @@ export class ProfileService {
         @InjectRepository(State) private stateRepository: Repository<State>,
         @InjectRepository(Country) private countryRepository: Repository<Country>,
     ) { }
+
+
+    async validateId(id: string | number) {
+        if (!id) {
+            logger.error('id is falsy');
+            throw new Error('id is falsy');
+        }
+    }
 
 
     async userStats(): Promise<any> {
@@ -137,6 +145,8 @@ export class ProfileService {
         logger.log(`saveProfile(${JSON.stringify(profileDto)})`);
 
         const { telegramAccountId, name, gender, dob, religion, casteId, annualIncome, cityId, highestDegree, employedIn, occupation, motherTongue, maritalStatus } = profileDto;
+
+        this.validateId(telegramAccountId);
 
         const telegramAccount = await this.getTelegramAccountById(telegramAccountId, {
             throwOnFail: true,
@@ -212,17 +222,39 @@ export class ProfileService {
     }
 
 
-    async getProfiles(): Promise<Profile[] | undefined> {
-        logger.log(`getProfiles()`);
-        return this.profileRepository.find();
+    async getProfiles(options?: GetProfilesDto): Promise<IList<Profile> | undefined> {
+        logger.log(`getProfiles(${JSON.stringify(options)})`);
+        const skip = options?.skip ?? 0,
+            take = options?.take ?? 20;
+        this.validatePagination(take);
+
+        const query = this.profileRepository.createQueryBuilder('profile');
+
+        if (options?.gender) {
+            query.where('profile.gender = :gender', { gender: options.gender });
+        }
+
+        const [profiles, count] = await query
+            .skip(skip).take(take)
+            .getManyAndCount();
+
+        return {
+            count,
+            values: profiles
+        };
     }
 
 
-    async getProfileById(id: string, {
-        throwOnFail = true,
-        relations = []
+    async getProfileById(id: string, options?: {
+        throwOnFail?: boolean;
+        relations?: string[];
     }): Promise<Profile | undefined> {
-        logger.log(`getProfileById(${id}, ${throwOnFail}, ${relations})`);
+        logger.log(`getProfileById(${id}, ${JSON.stringify(options)})`);
+        this.validateId(id);
+
+        const throwOnFail = options?.throwOnFail ?? true;
+        const relations = options?.relations ?? [];
+
         const profile = await this.profileRepository.findOne(id, {
             relations
         });
@@ -235,6 +267,8 @@ export class ProfileService {
 
     async getPreferenceById(id: string, { throwOnFail = true }): Promise<PartnerPreference | undefined> {
         logger.log(`getProfileById(${id}, ${throwOnFail})`);
+        this.validateId(id);
+
         const preference = await this.prefRepository.findOne(id);
         if (throwOnFail && !preference) {
             throw new NotFoundException(`Preference with id: ${id} not found`);
@@ -251,6 +285,7 @@ export class ProfileService {
 
     async setDefaultPartnerPreference(profile: Profile): Promise<PartnerPreference | undefined> {
         logger.log(`setDefaultPartnerPreference(${JSON.stringify(profile)})`);
+        this.validateId(profile?.id);
 
         let pref = await this.getPreferenceById(profile.id, { throwOnFail: false });
         if (pref) {
@@ -310,6 +345,8 @@ export class ProfileService {
         logger.log(`savePartnerPreference(${JSON.stringify(preferenceInput)})`);
 
         let { id, minAge, maxAge, minimumIncome, maximumIncome, religions, maritalStatuses, casteIds, cityIds, stateIds, countryIds } = preferenceInput;
+
+        this.validateId(id);
 
         if (minimumIncome && maximumIncome) {
             if (maximumIncome < minimumIncome) {
@@ -403,6 +440,8 @@ export class ProfileService {
     @Transactional()
     async softDeleteProfile(telegramUserId: number, reason: ProfileDeletionReason) {
         logger.log(`softDeleteProfile(${telegramUserId})`);
+        this.validateId(telegramUserId);
+
         const telegramAccount = await this.telegramRepository.findOne({
             where: { userId: telegramUserId },
             relations: ['profile']
@@ -458,6 +497,8 @@ export class ProfileService {
     @Transactional()
     async markProfileForDeletion(telegramUserId: number, reason: ProfileDeletionReason) {
         logger.log(`markProfileForDeletion(${telegramUserId})`);
+        this.validateId(telegramUserId);
+
         const telegramAccount: TelegramAccount = await this.telegramRepository.findOne({
             where: { userId: telegramUserId },
             relations: ['profile']
@@ -507,6 +548,8 @@ export class ProfileService {
     @Transactional()
     async cancelProfileForDeletion(telegramUserId: number) {
         logger.log(`cancelProfileForDeletion(${telegramUserId})`);
+        this.validateId(telegramUserId);
+
         const telegramAccount: TelegramAccount = await
             this.getTelegramAccountByTelegramUserId(telegramUserId, {
                 throwOnFail: true,
@@ -548,6 +591,8 @@ export class ProfileService {
     @Transactional()
     async deactivateProfile(telegramUserId: number, deactivateFor: ProfileDeactivationDuration): Promise<Profile | undefined> {
         logger.log(`deactivateProfile(${telegramUserId})`);
+
+        this.validateId(telegramUserId);
 
         const telegramAccount = await this.getTelegramAccountByTelegramUserId(telegramUserId, { throwOnFail: true, relations: ['profile'] });
 
@@ -610,6 +655,8 @@ export class ProfileService {
     @Transactional()
     async reactivateProfile(telegramUserId: number): Promise<Profile | undefined> {
         logger.log(`reactivateProfile(${telegramUserId})`);
+        this.validateId(telegramUserId);
+
         const telegramAccount = await this.getTelegramAccountByTelegramUserId(telegramUserId, { throwOnFail: true, relations: ['profile'] });
 
         let profile = telegramAccount.profile;
@@ -770,6 +817,8 @@ export class ProfileService {
     @Transactional()
     async banProfile(telegramAccountId: string, banInput: BanProfileDto, agent: WbAgent) {
         logger.log(`banProfile(${telegramAccountId}, ${JSON.stringify(banInput)})`);
+        this.validateId(telegramAccountId);
+
         const telegramAccount = await this.getTelegramAccountById(telegramAccountId, { throwOnFail: true });
         try {
             telegramAccount.status = UserStatus.BANNED;
@@ -793,6 +842,7 @@ export class ProfileService {
     // TODO: Use newly added maximum-income field of partner-preference.
     async findMatches(profileId: string, skip = 0, take = 20): Promise<IList<Profile>> {
         logger.log(`findMatches(${profileId})`);
+        this.validateId(profileId);
 
         this.validatePagination(take);
 
@@ -878,7 +928,10 @@ export class ProfileService {
     // TODO: test
     async saveMatches(profileId: string, matches: Profile[]): Promise<Match[]> {
         logger.log(`saveMatches(${profileId}, ${matches.length})`);
+        this.validateId(profileId);
+
         const profile = await this.getProfileById(profileId, { throwOnFail: true });
+        console.log('profile:', profile)
         const toSave: Match[] = [];
         if (profile.gender === Gender.MALE) {
             for (const match of matches) {
@@ -901,8 +954,30 @@ export class ProfileService {
     }
 
 
-    async getMatches(profileId: string, options: GetMatchesDto): Promise<IList<Match>> {
+    async getAllMatches(options?: GetMatchesDto): Promise<IList<Match>> {
+        logger.log(`getAllMatches(${JSON.stringify(options)})`);
+        const skip = options?.skip ?? 0,
+            take = options?.take ?? 20;
+        this.validatePagination(take);
+
+        const [matches, count] = await this.matchRepository.findAndCount({
+            skip, take
+        });
+
+        return {
+            count,
+            values: matches
+        };
+    }
+
+
+    async getMatches(profileId: string, options?: GetMatchesDto): Promise<IList<Match>> {
         logger.log(`getMatches(${profileId}, ${JSON.stringify(options)})`);
+        this.validateId(profileId);
+
+        const skip = options?.skip ?? 0,
+            take = options?.take ?? 20;
+        this.validatePagination(take);
 
         const profile = await this.getProfileById(profileId, { throwOnFail: true });
 
@@ -921,7 +996,9 @@ export class ProfileService {
             });
         }
 
-        const [matches, count] = await matchQuery.skip(options.skip ?? 0).take(options.take ?? 20).getManyAndCount();
+        const [matches, count] = await matchQuery
+            .skip(skip).take(take)
+            .getManyAndCount();
 
         return {
             count,
@@ -933,6 +1010,7 @@ export class ProfileService {
     @Transactional()
     async updateMatches(profileId: string, matches: Profile[]): Promise<Match[]> {
         logger.log(`getMatches(${profileId}, ${JSON.stringify(matches.length)})`);
+
         const profile = await this.getProfileById(profileId, { throwOnFail: true });
 
         // remove existing matches which have not been shared.
@@ -1066,48 +1144,48 @@ export class ProfileService {
     }
 
 
-    // TODO: update
-    async getTelegramAccountsForVerification(skip = 0, take = 20): Promise<IList<TelegramAccount> | undefined> {
-        logger.log(`getTelegramAccountsForVerification(${JSON.stringify({ skip, take })})`);
+    // // TODO: update
+    // async getTelegramAccountsForVerification(skip = 0, take = 20): Promise<IList<TelegramAccount> | undefined> {
+    //     logger.log(`getTelegramAccountsForVerification(${JSON.stringify({ skip, take })})`);
 
-        this.validatePagination(take);
+    //     this.validatePagination(take);
 
-        const query = this.telegramRepository.createQueryBuilder('tel_profile');
+    //     const query = this.telegramRepository.createQueryBuilder('tel_profile');
 
-        // query.leftJoin('tel_profile.profile', 'profile')
-        // .where('profile.createdOn IS NULL')
+    //     // query.leftJoin('tel_profile.profile', 'profile')
+    //     // .where('profile.createdOn IS NULL')
 
-        query.where('tel_profile.unverifiedBioDataId IS NOT NULL')
-            .orWhere('tel_profile.unverifiedPictureId IS NOT NULL')
-            .orWhere('tel_profile.unverifiedIdProofId IS NOT NULL');
+    //     query.where('tel_profile.unverifiedBioDataId IS NOT NULL')
+    //         .orWhere('tel_profile.unverifiedPictureId IS NOT NULL')
+    //         .orWhere('tel_profile.unverifiedIdProofId IS NOT NULL');
 
-        const [telegramAccounts, count] = await query.skip(skip).take(take).getManyAndCount();
+    //     const [telegramAccounts, count] = await query.skip(skip).take(take).getManyAndCount();
 
-        return {
-            count,
-            values: telegramAccounts
-        };
-    }
+    //     return {
+    //         count,
+    //         values: telegramAccounts
+    //     };
+    // }
 
 
-    // TODO: update
-    async getTelegramAccountsForUpdation(skip = 0, take = 20): Promise<IList<TelegramAccount> | undefined> {
-        logger.log(`getTelegramAccountsForUpdation(${JSON.stringify({ skip, take })})`);
+    // // TODO: update
+    // async getTelegramAccountsForUpdation(skip = 0, take = 20): Promise<IList<TelegramAccount> | undefined> {
+    //     logger.log(`getTelegramAccountsForUpdation(${JSON.stringify({ skip, take })})`);
 
-        this.validatePagination(take);
+    //     this.validatePagination(take);
 
-        const query = this.telegramRepository.createQueryBuilder('tel_profile');
-        query.leftJoin('tel_profile.documents', 'document')
-            .where('document.isValid IS NULL')
-            .andWhere('document.isActive IS NULL')
+    //     const query = this.telegramRepository.createQueryBuilder('tel_profile');
+    //     query.leftJoin('tel_profile.documents', 'document')
+    //         .where('document.isValid IS NULL')
+    //         .andWhere('document.isActive IS NULL')
 
-        const [telegramAccounts, count] = await query.skip(skip).take(take).getManyAndCount();
+    //     const [telegramAccounts, count] = await query.skip(skip).take(take).getManyAndCount();
 
-        return {
-            count,
-            values: telegramAccounts
-        };
-    }
+    //     return {
+    //         count,
+    //         values: telegramAccounts
+    //     };
+    // }
 
 
     async getTelegramAccounts(options?: GetTelegramAccountsDto): Promise<IList<TelegramAccount> | undefined> {
@@ -1241,11 +1319,21 @@ export class ProfileService {
     // }
 
 
+    async getAdminTelegramAccount() {
+        logger.log(`-> getAdminTelegramAccount()`);
+        return this.telegramRepository.findOne({
+            where: { phone: Like('%9611121073') }
+        });
+    }
+
+
     async getTelegramAccountById(telegramAccountId: string, {
         throwOnFail = true,
         relations = [],
     }): Promise<TelegramAccount | undefined> {
-        logger.log(`getTelegramAccountById(${telegramAccountId}, ${throwOnFail}, ${relations})`);
+        logger.log(`-> getTelegramAccountById(${telegramAccountId}, ${throwOnFail}, ${relations})`);
+
+        this.validateId(telegramAccountId);
 
         const telegramAccount = await this.telegramRepository.findOne(telegramAccountId, {
             relations
@@ -1258,11 +1346,14 @@ export class ProfileService {
     }
 
 
-    async getTelegramAccountByTelegramUserId(telegramUserId: number, {
-        throwOnFail = true,
-        relations = []
+    async getTelegramAccountByTelegramUserId(telegramUserId: number, options?: {
+        throwOnFail?: boolean;
+        relations?: string[];
     }): Promise<TelegramAccount | undefined> {
         logger.log(`getTelegramAccountByTelegramUserId(${telegramUserId})`);
+        this.validateId(telegramUserId);
+
+        const relations = options?.relations ?? [], throwOnFail = options?.throwOnFail ?? true;
 
         const telegramAccount = await this.telegramRepository.findOne({
             where: { userId: telegramUserId },
@@ -1333,6 +1424,7 @@ export class ProfileService {
         relations = [],
     }): Promise<Document | undefined> {
         logger.log(`getDocumentById(${JSON.stringify({ id, throwOnFail, relations })})`);
+        this.validateId(id);
 
         const document = await this.documentRepository.findOne(id, {
             relations
@@ -1353,10 +1445,11 @@ export class ProfileService {
     }): Promise<Document | undefined> {
         logger.log(`getDocument(${JSON.stringify({ telegramAccountId, typeOfDocument, active, valid, throwOnFail })})`);
 
+        this.validateId(telegramAccountId);
+
         const where = {
             telegramAccountId,
             typeOfDocument,
-
         };
         if (!isNil(active)) {
             where['active'] = active;
@@ -1377,10 +1470,18 @@ export class ProfileService {
     }
 
 
+    async updateDocumentWithWatermarkedFileId(document: Document, fileId: string): Promise<Document | undefined> {
+        logger.log(`-> updateDocumentWithWatermarkedFileId(${document.id}, ${document.telegramAccountId}, ${fileId})`);
+
+        document.watermarkedTelegramFileId = fileId;
+        return this.documentRepository.save(document);
+    }
+
+
     // TODO: test
     @Transactional()
     async uploadDocument(telegramUserId: number, fileName: string, dir: string, contentType: string, typeOfDocument: TypeOfDocument, telegramFileId: string, typeOfIdProof?: TypeOfIdProof): Promise<Document | undefined> {
-        logger.log(`uploadDocument(${JSON.stringify({ telegramUserId, fileName, dir, contentType, typeOfDocument, telegramFileId, typeOfIdProof })})`);
+        logger.log(`-> uploadDocument(${JSON.stringify({ telegramUserId, fileName, dir, contentType, typeOfDocument, telegramFileId, typeOfIdProof })})`);
 
         let relation: any;
         switch (typeOfDocument) {
@@ -1467,11 +1568,8 @@ export class ProfileService {
     }
 
 
-    async downloadDocument(documentId: string, typeOfDocument: TypeOfDocument, dir: string): Promise<string | undefined> {
-
-        // const telegramAccount = await this.getTelegramAccountByTelegramUserId(telegramUserId, { throwOnFail: true });
-
-        // const document = await this.getDocument(telegramAccount.id, typeOfDocument, { throwOnFail: true, active: null, valid: null });
+    async downloadDocument(documentId: string, dir: string): Promise<string | undefined> {
+        logger.log(`-> downloadDocument(${documentId}, ${dir})`);
 
         const document = await this.getDocumentById(documentId, {
             throwOnFail: true,
@@ -1480,12 +1578,14 @@ export class ProfileService {
         if (!document.fileName)
             throw new Error('This document does not exist on AWS!');
 
-        return this.awsService.downloadFileFromS3(document.fileName, typeOfDocument, dir);
+        return this.awsService.downloadFileFromS3(document.fileName, document.typeOfDocument, dir);
     }
 
 
     async getInvalidatedDocumentCausingProfileInvalidation(telegramAccountId: string, typeOfDocument = TypeOfDocument.BIO_DATA): Promise<Document | undefined> {
         logger.log(`getInvalidatedDocumentCausingProfileInvalidation(${telegramAccountId}, ${typeOfDocument})`);
+
+        this.validateId(telegramAccountId);
 
         const document = await this.documentRepository.findOne({
             where: { telegramAccountId: telegramAccountId, typeOfDocument, isValid: false },
@@ -1507,6 +1607,8 @@ export class ProfileService {
         logger.log(`validateDocument(). Input: ${JSON.stringify(validationInput)}`);
 
         const { documentId, valid, rejectionReason, rejectionDescription } = validationInput;
+
+        this.validateId(documentId);
 
         if (valid && (rejectionReason || rejectionDescription)) {
             throw new BadRequestException('Rejection reason and description should only be provided for invalid documents.');
@@ -1753,6 +1855,7 @@ export class ProfileService {
 
 
     async getCaste(casteId: number, throwOnFail = true): Promise<Caste | undefined> {
+        this.validateId(casteId);
         const caste = await this.casteRepository.findOne(casteId);
         if (throwOnFail && !caste) {
             throw new NotFoundException(`Caste with id: ${casteId} not found!`);
@@ -1799,6 +1902,7 @@ export class ProfileService {
 
     async getRegistrationAction(telegramAccountId: string): Promise<RegistrationActionRequired | undefined> {
         logger.log(`start getRegistrationAction(${telegramAccountId})`);
+
         const telegramAccount = await
             this.getTelegramAccountById(telegramAccountId, {
                 throwOnFail: true,
@@ -1847,6 +1951,7 @@ export class ProfileService {
 
     async getActiveSupportTicket(telegramAccountId: string): Promise<Support | undefined> {
         logger.log(`getActiveSupportTicket(${telegramAccountId})`);
+        this.validateId(telegramAccountId);
         return this.supportRepository.findOne({
             where: { telegramAccountId, resolved: false }
         });
@@ -1884,6 +1989,8 @@ export class ProfileService {
 
     async resolveSupportTicket(ticketId: number, supportResolutionDto: SupportResolutionDto, agent: WbAgent): Promise<Support | undefined> {
         logger.log(`resolveSupportTicket(${ticketId}, ${JSON.stringify(supportResolutionDto)})`);
+        this.validateId(ticketId);
+
         const supportTicket = await this.supportRepository.findOne(ticketId);
         if (!supportTicket) {
             throw new NotFoundException(`No support ticket was found for ticket id: ${ticketId}`);
@@ -1905,12 +2012,15 @@ export class ProfileService {
 
     async getOrCreateState(stateName: string, countryName: string): Promise<State | undefined> {
         logger.log(`getOrCreateState(${stateName}, ${countryName})`);
-        if (!stateName) throw new BadRequestException("Empty or null stateName")
-        let state = await this.getStateByName(stateName, countryName);
+
+        this.validateId(stateName);
+        this.validateId(countryName);
+
+        let state = await this.getStateByName(stateName.trim(), countryName.trim());
         if (!state) {
-            const country = await this.getOrCreateCountry(countryName);
+            const country = await this.getOrCreateCountry(countryName.trim());
             state = this.stateRepository.create({
-                name: stateName,
+                name: stateName.trim(),
                 country: country
             });
             state = await this.stateRepository.save(state);
@@ -1921,8 +2031,9 @@ export class ProfileService {
 
     async getOrCreateCountry(countryName: string): Promise<Country | undefined> {
         logger.log(`getOrCreateCountry(${countryName})`);
-        if (!countryName) throw new BadRequestException("Empty or null countryName")
-        let country = await this.getCountryByName(countryName);
+        this.validateId(countryName);
+
+        let country = await this.getCountryByName(countryName.trim());
         if (!country) {
             country = this.countryRepository.create({
                 name: countryName,
@@ -1934,11 +2045,14 @@ export class ProfileService {
 
 
     async getOrCreateCity(cityName: string, stateName: string, countryName: string): Promise<City> {
+        this.validateId(cityName);
+        this.validateId(stateName);
+        this.validateId(countryName);
+
         cityName = cityName.trim();
         stateName = stateName.trim();
         countryName = countryName.trim();
 
-        if (!cityName) throw new BadRequestException("Empty or null city name")
         let city = await this.getCityByName(cityName, stateName, countryName);
         if (!city) {
             const state = await this.getStateByName(stateName, countryName);
@@ -1957,7 +2071,7 @@ export class ProfileService {
 
 
     async getStateByName(stateName: string, countryName: string): Promise<State> {
-        if (!stateName) throw new BadRequestException("Empty or null stateName")
+        this.validateId(stateName);
         return this.stateRepository.createQueryBuilder("state")
             .innerJoinAndSelect("state.country", "country", "country.name ILIKE :countryName",
                 { countryName: countryName })
@@ -1969,7 +2083,7 @@ export class ProfileService {
 
     async getState(stateId: number, options?: GetStateOptions): Promise<State> {
         const { getCountry, throwOnFail } = options;
-        if (stateId === null) throw new BadRequestException("stateId is empty")
+        this.validateId(stateId);
 
         let state: State;
 
@@ -2013,8 +2127,8 @@ export class ProfileService {
 
 
     async getCountryByName(countryName: string, throwOnFail = true): Promise<Country | undefined> {
-        if (!countryName) throw new BadRequestException("Empty or null countryName")
-        // return this.countryRepository.findOne({ name: countryName });
+        this.validateId(countryName);
+
         const country = this.countryRepository.createQueryBuilder("country")
             .where("country.name ILIKE :countryName", { countryName: countryName })
             .getOne();
@@ -2026,7 +2140,8 @@ export class ProfileService {
 
 
     async getCountry(countryId: number, throwOnFail = true): Promise<Country | undefined> {
-        if (countryId === null) throw new BadRequestException("countryId is null")
+        this.validateId(countryId);
+
         const country = await this.countryRepository.findOne({ id: countryId });
         if (throwOnFail && !country) {
             throw new NotFoundException(`Country with id: ${countryId} not found`);
@@ -2065,7 +2180,10 @@ export class ProfileService {
 
 
     async getCityByName(cityName: string, stateName: string, countryName: string): Promise<City> {
-        if (!cityName) throw new BadRequestException("Empty or null cityName")
+        this.validateId(cityName);
+        this.validateId(stateName);
+        this.validateId(countryName);
+
         return this.cityRepository.createQueryBuilder("city")
             .innerJoinAndSelect("city.state", "state", "state.name ILIKE :stateName",
                 { stateName: stateName })
@@ -2078,6 +2196,8 @@ export class ProfileService {
 
 
     async getCitiesOfState(stateId: number, skip = 0, take = 100, getState = false, getCountry = false): Promise<City[]> {
+
+        this.validateId(stateId);
 
         this.validatePagination(take);
 
@@ -2152,7 +2272,7 @@ export class ProfileService {
 
     async getCity(cityId: number, options?: GetCityOptions): Promise<City> {
         const { getState, getCountry, throwOnFail } = options;
-        if (cityId === null) throw new BadRequestException("cityId is empty")
+        this.validateId(cityId);
 
         let city: City;
 
@@ -2218,6 +2338,8 @@ export class ProfileService {
 
 
     async createStates(states: Object[], countryId: number): Promise<State[] | undefined> {
+        this.validateId(countryId);
+
         const stateEntities: State[] = [];
         for (let state of states) {
             const stateEntity = this.stateRepository.create({
@@ -2233,6 +2355,7 @@ export class ProfileService {
 
 
     async createCities(cities: Object[], stateId: number): Promise<City[] | undefined> {
+        this.validateId(stateId);
         const cityEntities: City[] = [];
         for (let city of cities) {
             const cityEntity = this.cityRepository.create({

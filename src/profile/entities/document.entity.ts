@@ -54,10 +54,19 @@ export class Document extends Verifiable {
     @Column("smallint", { nullable: true })
     typeOfIdProof?: TypeOfIdProof;
 
+    // original
     @Exclude()
+    @MaxLength(urlMaxLength)
     @IsString()
     @Column("varchar", { length: urlMaxLength })
     telegramFileId: string;
+
+    // watermarked
+    @IsOptional()
+    @MaxLength(urlMaxLength)
+    @IsString()
+    @Column("varchar", { length: urlMaxLength, nullable: true })
+    watermarkedTelegramFileId?: string;
 
     // null - unverified, false - invalid/old and not in use, true - currently in use 
     @IsOptional()

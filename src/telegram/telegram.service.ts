@@ -36,18 +36,22 @@ import {
     // Use,
 } from 'nestjs-telegraf';
 import { RegistrationActionRequired, TypeOfDocument, DocRejectionReason, UserStatus, ProfileDeactivationDuration, ProfileDeletionReason } from 'src/common/enum';
-import { deleteFile, mimeTypes } from 'src/common/util';
+import { deleteFile, mimeTypes, toTitleCase } from 'src/common/util';
 import { Profile } from 'src/profile/entities/profile.entity';
 import { TelegramAccount } from 'src/profile/entities/telegram-account.entity';
 import { ProfileService } from 'src/profile/profile.service';
 import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, deactivatedProfileMsg, registrationCancelled, supportMsg, deletionSuccessMsg, acknowledgeDeletionRequest, unsupportedBioFormat, unverifiedProfileMsg } from './telegram.constants';
-import { getBioDataFileName, getPictureFileName, processBioDataFile, processPictureFile, validateBioDataFileSize, validatePhotoFileSize, silentSend } from './telegram.service.helper';
+import { getBioDataFileName, getPictureFileName, processBioDataFile, processPictureFile, validateBioDataFileSize, validatePhotoFileSize, silentSend, createProfileCard } from './telegram.service.helper';
 import { Document } from 'src/profile/entities/document.entity';
 import { supportResolutionMaxLength, supportResolutionMinLength } from 'src/common/field-length';
 import telegrafThrottler from 'telegraf-throttler';
 import { html as format } from 'telegram-format';
 // import { Logger } from "nestjs-pino";
 import { Logger as defaultLogger } from '@nestjs/common';
+import { join } from 'path';
+import { createReadStream } from 'fs';
+import { existsSync } from 'fs';
+import { ReadStream } from 'fs';
 require('dotenv').config();
 
 const logger = new defaultLogger('TelegramService');
@@ -61,6 +65,8 @@ logger.log(`Apply Watermark is ${applyWatermark ? 'ENABLED' : 'DISABLED'}`);
 
 @Injectable()
 export class TelegramService {
+
+    private enableAdminNotification = process.env.ADMIN_NOTIFICATIONS === 'true';
 
     constructor(
         // private readonly logger: Logger,
@@ -100,6 +106,12 @@ export class TelegramService {
     }
 
 
+    async setAdminNotifications(value: boolean) {
+        logger.log(`-> setAdminNotifications(${value})`);
+        this.enableAdminNotification = value;
+    }
+
+
     async setCommands() {
         await this.bot.telegram.setMyCommands([
             { command: 'start', description: 'See the welcome message' },
@@ -108,6 +120,7 @@ export class TelegramService {
             { command: 'status', description: 'See your Wouldbee account status' },
             { command: 'update_bio', description: 'Update bio-data up to 5 times.' },
             { command: 'update_picture', description: 'Update profile picture up to 5 times.' },
+            { command: 'preview', description: 'Preview your profile. (only for active profiles)' },
             { command: 'deactivate', description: 'Temporarily Deactivate Profile' },
             { command: 'reactivate', description: 'Reactivate profile' },
             { command: 'delete', description: 'Delete profile' },
@@ -117,11 +130,19 @@ export class TelegramService {
     }
 
 
-    async getTelegramAccount(ctx: Context) {
+    async getTelegramAccount(ctx: Context, options?: {
+        getBio?: boolean;
+        getPic?: boolean;
+    }) {
         logger.log(`-> getTelegramAccount(${ctx.from.id})`);
         let telegramAccount: TelegramAccount;
+
+        const relations: string[] = [];
+        if (options?.getBio) relations.push('bioData');
+        if (options?.getPic) relations.push('picture');
+
         try {
-            telegramAccount = await this.profileService.getTelegramAccountByTelegramUserId(ctx.from.id, { throwOnFail: false });
+            telegramAccount = await this.profileService.getTelegramAccountByTelegramUserId(ctx.from.id, { throwOnFail: false, relations });
         }
         catch (error) {
             logger.error(`Could not get telegram account. Context: ${ctx.from.id} \nERROR: ${JSON.stringify(error)}`);
@@ -132,8 +153,12 @@ export class TelegramService {
     }
 
 
-    async getOrCreateTelegramAccount(ctx: Context, payload?: string) {
-        logger.log(`-> getOrCreateTelegramAccount(${ctx.from.id}, ${payload})`);
+    async getOrCreateTelegramAccount(ctx: Context, options?: {
+        payload?: string;
+        getBio?: boolean;
+        getPic?: boolean;
+    }) {
+        logger.log(`-> getOrCreateTelegramAccount(${ctx.from.id}, ${JSON.stringify(options)})`);
         const createTelegramAccount = async (ctx: Context, payload: string): Promise<TelegramAccount> => {
             if (ctx.from.is_bot) {
                 logger.warn(`A bot interacted with us. ctx: ${JSON.stringify(ctx.from)}`);
@@ -156,9 +181,9 @@ export class TelegramService {
             return telegramAccount;
         }
 
-        let telegramAccount = await this.getTelegramAccount(ctx);
+        let telegramAccount = await this.getTelegramAccount(ctx, options);
         if (!telegramAccount) {
-            telegramAccount = await createTelegramAccount(ctx, payload);
+            telegramAccount = await createTelegramAccount(ctx, options?.payload);
         }
         logger.log(`getOrCreateTelegramAccount() -> ${JSON.stringify(telegramAccount)}`);
         return telegramAccount;
@@ -215,13 +240,13 @@ export class TelegramService {
 
                 } else {
                     ctx.wizard.state.data.next_without_user_input = false;
-                    await ctx.telegram.sendMessage(ctx.chat.id, 'Share your phone number by clicking the button below.', {
+                    await ctx.telegram.sendMessage(ctx.chat.id, 'Click the button below to confirm your phone number.', {
                         parse_mode: "Markdown",
                         reply_markup: {
                             one_time_keyboard: true,
                             keyboard: [
                                 [{
-                                    text: "Share Phone Number",
+                                    text: "Click to Confirm Phone Number",
                                     request_contact: true
                                 },
                                 {
@@ -245,7 +270,8 @@ export class TelegramService {
                     logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-2`);
                     ctx.wizard.state.data.next_without_user_input = true;
                 } else {
-
+                    logger.log(`HERE-1`);
+                    console.log(ctx.message.text);
                     await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
                     // console.log(ctx.update.message.contact, ctx.update);
@@ -253,9 +279,11 @@ export class TelegramService {
                     const contact = ctx.update.message.contact;
 
                     if (contact) {
+                        logger.log(`Got contact`);
                         // Check that contact is not an attached contact!
                         if (contact["vcard"]) {
-                            await ctx.reply('Please share your phone number by clicking the button below. Do not type or attach a contact.')
+                            logger.log(`Got vcard`);
+                            await ctx.reply('Please click the button below to confirm your phone number. Do not type or attach a contact.')
                             // re-enter the scene
                             return;
                         } else {
@@ -277,16 +305,21 @@ export class TelegramService {
                             await ctx.reply(`Thank you ${msg.contact.first_name} for sharing your phone number: ${msg.contact.phone_number}`);
                         }
                     }
-                    else if (ctx.message.text?.toLocaleLowerCase() === 'cancel') {
+                    else if (ctx.message.text?.toLocaleLowerCase() === 'cancel'
+                        || ctx.message.text?.toLocaleLowerCase() === '/cancel') {
+                        logger.log(`Got cancel`);
                         await ctx.reply(registrationCancelled);
                         return ctx.scene.leave();
                     }
                     else {
-                        if (ctx.wizard.state.data?.skipped) {
-                            await ctx.reply(`Click the "Share Phone Number" button or the "Cancel" button!`);
+                        logger.log(`Got else`);
+                        if (ctx.wizard.state.data?.next_without_user_input) {
+                            logger.log(`else - 1`);
+                            ctx.wizard.state.data.next_without_user_input = false
                         }
                         else {
-                            ctx.wizard.state.data.skipped = false;
+                            logger.log(`else - 2`);
+                            await ctx.reply(`Please click the button below to confirm your phone number or click the Cancel button to cancel the registration process.`);
                         }
                         return;
                     }
@@ -310,7 +343,6 @@ export class TelegramService {
                     await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
                     await ctx.reply(askForBioUploadMsg);
                 }
-
 
                 logger.log('calling step-4');
                 return ctx.wizard.next();
@@ -352,10 +384,12 @@ export class TelegramService {
                                 const fileToUpload
                                     = await processBioDataFile(link, fileName, DIR, processToPdf, applyWatermark);
 
-                                await this.profileService.uploadDocument(ctx.from.id, fileToUpload, DIR, mime_type, TypeOfDocument.BIO_DATA, document.file_id);
+                                const bioData = await this.profileService.uploadDocument(ctx.from.id, fileToUpload, DIR, mime_type, TypeOfDocument.BIO_DATA, document.file_id);
 
-                                await deleteFile(fileToUpload, DIR);
                                 await ctx.reply(bioCreateSuccessMsg);
+
+                                await this.notifyAdmin(ctx, bioData);
+                                await deleteFile(fileToUpload, DIR);
 
                             } catch (error) {
                                 logger.error(`Could not download/upload the bio-data.  \nERROR: ${JSON.stringify(error)}`);
@@ -454,10 +488,12 @@ export class TelegramService {
                                 const fileToUpload
                                     = await processPictureFile(link, fileName, applyWatermark, DIR);
 
-                                await this.profileService.uploadDocument(ctx.from.id, fileToUpload, DIR, mime_type, TypeOfDocument.PICTURE, file_id);
+                                const profilePic = await this.profileService.uploadDocument(ctx.from.id, fileToUpload, DIR, mime_type, TypeOfDocument.PICTURE, file_id);
 
-                                await deleteFile(fileToUpload, DIR);
                                 await ctx.reply(pictureCreateSuccessMsg);
+
+                                await this.notifyAdmin(ctx, profilePic);
+                                await deleteFile(fileToUpload, DIR);
 
                             } catch (error) {
                                 logger.error(`Could not download/upload the picture.  \nERROR: ${JSON.stringify(error)}`);
@@ -480,7 +516,7 @@ export class TelegramService {
                         return ctx.scene.leave();
                     }
                     else {
-                        if (ctx.wizard.state.data.next_without_user_input) {
+                        if (ctx.wizard.state.data?.next_without_user_input) {
                             ctx.wizard.state.data.next_without_user_input = false;
                         } else {
                             await ctx.reply(`Send profile picture or use /cancel to quit the registration process! Note that only accepted formats are PNG, JPG, and JPEG.`);
@@ -527,13 +563,10 @@ export class TelegramService {
                         ctx.wizard.state.data.telegramAccountId = telegramAccount.id);
                 }
 
-
-
                 await ctx.reply(askForBioUploadMsg);
 
                 logger.log('calling step-2');
                 return ctx.wizard.next();
-
             },
 
             // step-2: download bio, watermark, upload to aws, delete from tmp
@@ -553,16 +586,21 @@ export class TelegramService {
                         getBioDataFileName(ctx);
 
                     if (fileName) {
+                        await ctx.reply('Please wait ...');
+                        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+
                         const mime_type = processToPdf
                             ? mimeTypes['.pdf'] : document.mime_type
                         try {
                             const fileToUpload
                                 = await processBioDataFile(link, fileName, DIR, processToPdf, applyWatermark);
 
-                            await this.profileService.uploadDocument(ctx.from.id, fileToUpload, DIR, mime_type, TypeOfDocument.BIO_DATA, document.file_id);
+                            const bioData = await this.profileService.uploadDocument(ctx.from.id, fileToUpload, DIR, mime_type, TypeOfDocument.BIO_DATA, document.file_id);
 
-                            await deleteFile(fileToUpload, DIR);
                             await ctx.reply(bioCreateSuccessMsg);
+
+                            await this.notifyAdmin(ctx, bioData);
+                            await deleteFile(fileToUpload, DIR);
                             return ctx.scene.leave();
 
                         } catch (error) {
@@ -659,6 +697,10 @@ export class TelegramService {
                         getPictureFileName(ctx);
 
                     if (fileName) {
+
+                        await ctx.reply('Please wait ...');
+                        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+
                         const file_id = photo ? photo.file_id : document.file_id
 
                         const extension = fileName.split('.').pop();
@@ -669,10 +711,13 @@ export class TelegramService {
                             const fileToUpload
                                 = await processPictureFile(link, fileName, applyWatermark, DIR);
 
-                            await this.profileService.uploadDocument(ctx.from.id, fileToUpload, DIR, mime_type, TypeOfDocument.PICTURE, file_id);
+                            const profilePic = await this.profileService.uploadDocument(ctx.from.id, fileToUpload, DIR, mime_type, TypeOfDocument.PICTURE, file_id);
 
-                            await deleteFile(fileToUpload, DIR);
                             await ctx.reply(pictureCreateSuccessMsg);
+
+                            await this.notifyAdmin(ctx, profilePic);
+                            await deleteFile(fileToUpload, DIR);
+
                             return ctx.scene.leave();
 
                         } catch (error) {
@@ -793,7 +838,7 @@ export class TelegramService {
             payload = msgList[1];
             logger.log('payload:', payload)
         }
-        await this.getOrCreateTelegramAccount(ctx, payload);
+        await this.getOrCreateTelegramAccount(ctx, { payload });
     }
 
 
@@ -1079,7 +1124,21 @@ export class TelegramService {
     async preview(ctx: Context) {
         logger.log(`-> preview(${ctx.from.id})`);
         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-        await ctx.reply('This feature will be released soon.')
+
+        const telegramAccount = await this.getOrCreateTelegramAccount(ctx, { getBio: true, getPic: true });
+        const profile = await this.profileService.getProfileById(telegramAccount.id, { throwOnFail: false, relations: ['caste', 'city', 'city.state', 'city.state.country'] });
+
+        console.log('profile:', profile);
+
+        logger.log(`${profile?.id}, ${telegramAccount.status}`);
+
+        if (profile && telegramAccount.status >= UserStatus.VERIFIED &&
+            telegramAccount.status < UserStatus.PENDING_DELETION) {
+            await this.sendProfile(telegramAccount, profile, telegramAccount, `Sure, this is how your profile looks to others...`);
+        } else {
+            await ctx.reply('Preview is available only for Active profiles. Check your profile status with /status command');
+        }
+
     }
 
 
@@ -1139,25 +1198,175 @@ export class TelegramService {
     }
 
 
-    async sendProfile(sendToTelegramAccount: TelegramAccount, profileToSend: Profile, TelegramAccountToSend: TelegramAccount,) {
-        logger.log(`-> sendProfile(${sendToTelegramAccount.id}, ${profileToSend.id}, ${TelegramAccountToSend.id})`);
+    async notifyAdmin(ctx: Context, document: Document): Promise<string> {
+        logger.log(`-> notifyAdmin(${ctx.from.id}, ${document?.fileName}, ${document?.typeOfDocument})`);
+
+        if (!this.enableAdminNotification) return;
+
+        const fileName: string = document.fileName,
+            typeOfDocument: TypeOfDocument = document.typeOfDocument;
+
+        const adminTelegramAccount = await this.profileService.getAdminTelegramAccount()
+        if (!adminTelegramAccount) {
+            logger.error(`Could not get admin account`);
+            return;
+        }
+
+        const chatId = adminTelegramAccount.chatId;
+        const name = ctx.from?.first_name ?? ctx.from?.username ?? ctx.from?.id
+        await this.bot.telegram.sendMessage(chatId, `Hello admin, ${name} uploaded a ${toTitleCase(TypeOfDocument[typeOfDocument])}`);
+
+        let watermarkedFileId: string;
+        const filename = `${name}-wouldbee.${document.fileName.split('.')[1]}`;
+
+        if (typeOfDocument === TypeOfDocument.PICTURE) {
+            if (existsSync(join(DIR, fileName))) {
+                const stream = createReadStream(join(DIR, fileName));
+                const sentPhoto = await this.bot.telegram.sendPhoto(chatId, {
+                    source: stream,
+                    filename
+                });
+                stream.close();
+                console.log('sentPhoto:', sentPhoto);
+                watermarkedFileId = sentPhoto.photo[0].file_id;
+            } else {
+                const sentPhoto = await this.bot.telegram.sendPhoto(chatId, {
+                    url: (await this.profileService.getSignedDownloadUrl(document.id)).url,
+                    filename
+                });
+                console.log('sentPhoto:', sentPhoto);
+                watermarkedFileId = sentPhoto.photo[0].file_id;
+            }
+
+        } else if (typeOfDocument === TypeOfDocument.BIO_DATA) {
+            if (existsSync(join(DIR, fileName))) {
+                const stream = createReadStream(join(DIR, fileName));
+                const sentBio = await this.bot.telegram.sendDocument(chatId, {
+                    source: stream,
+                    filename: fileName
+                });
+                stream.close();
+                watermarkedFileId = sentBio.document.file_id;
+            } else {
+                const sentBio = await this.bot.telegram.sendDocument(chatId, {
+                    url: (await this.profileService.getSignedDownloadUrl(document.id)).url,
+                    filename
+                });
+                watermarkedFileId = sentBio.photo[0].file_id;
+            }
+        } else {
+            logger.error(`Unsupported type of document: ${TypeOfDocument[typeOfDocument]}`)
+        }
+
+        this.profileService.updateDocumentWithWatermarkedFileId(document, watermarkedFileId);
+    }
+
+
+    // async getDocumentFileReadStream(document: Document, dir: string): Promise<ReadStream | undefined> {
+    //     logger.log(`-> getDocumentFile(${document.id}, ${document?.fileName})`);
+    //     assert(document.fileName);
+    //     try {
+    //         if (existsSync(join(dir, document.fileName))) {
+    //             logger.log(`File found - ${join(dir, document.fileName)}`);
+    //             return createReadStream(join(dir, document.fileName));
+    //         }
+
+    //         const fileName = await this.profileService.downloadDocument(document.id, dir);
+    //         logger.log(`Downloaded file - ${join(dir, fileName)}`);
+
+    //         return createReadStream(join(dir, fileName));
+    //     }
+    //     catch (error) {
+    //         logger.error('Could not get document file!');
+    //         throw error;
+    //     }
+    // }
+
+
+    async sendPhoto(chatId: number | string, picture: Document, name: string, disable_notification: boolean) {
+        logger.log(`-> sendPhoto(${picture.id}, ${chatId})`);
+        assert(picture.typeOfDocument === TypeOfDocument.PICTURE);
+
+        const options = { disable_notification, caption: name };
+        const filename = `${name}-WouldBee.${picture.fileName.split('.')[1]}`;
+
+        if (picture?.watermarkedTelegramFileId) {
+            await this.bot.telegram.sendPhoto(chatId, picture.watermarkedTelegramFileId, options);
+        }
+        else {
+            let sentPhoto: any;
+            if (existsSync(join(DIR, picture.fileName))) {
+                logger.log(`File found - ${join(DIR, picture.fileName)}`);
+                const fileStream = createReadStream(join(DIR, picture.fileName));
+                sentPhoto = await this.bot.telegram.sendPhoto(chatId, {
+                    source: fileStream,
+                    filename
+                }, options);
+                fileStream.close();
+            }
+            else {
+                sentPhoto = await this.bot.telegram.sendPhoto(chatId, {
+                    url: (await this.profileService.getSignedDownloadUrl(picture.id)).url,
+                    filename
+                }, options);
+            }
+            await this.profileService.updateDocumentWithWatermarkedFileId(picture, sentPhoto.photo[0].file_id);
+        }
+    }
+
+
+    async sendBio(chatId: number | string, bio: Document, name: string, disable_notification: boolean) {
+        logger.log(`-> sendPhoto(${bio.id}, ${chatId})`);
+        assert(bio.typeOfDocument === TypeOfDocument.BIO_DATA);
+
+        const options = { disable_notification, caption: name };
+        const filename = `${name}-WouldBee-bio.${bio.fileName.split('.')[1]}`;
+
+        if (bio?.watermarkedTelegramFileId) {
+            await this.bot.telegram.sendDocument(chatId, bio.watermarkedTelegramFileId, options);
+        }
+
+        else {
+            let sentBio: any;
+            if (existsSync(join(DIR, bio.fileName))) {
+                const fileStream = createReadStream(join(DIR, bio.fileName));
+                sentBio = await this.bot.telegram.sendDocument(chatId, {
+                    source: fileStream,
+                    filename: bio.fileName
+                }, options);
+                fileStream.close()
+            }
+            else {
+                sentBio = await this.bot.telegram.sendDocument(chatId, {
+                    url: (await this.profileService.getSignedDownloadUrl(bio.id)).url,
+                    filename
+                }, options);
+            }
+            await this.profileService.updateDocumentWithWatermarkedFileId(bio, sentBio.document.file_id);
+        }
+    }
+
+
+    async sendProfile(sendToTelegramAccount: TelegramAccount, profileToSend: Profile, telegramAccountToSend: TelegramAccount, openingMessage = `Hi. We found a new match for you.`) {
+        logger.log(`-> sendProfile(${sendToTelegramAccount.id}, ${profileToSend.id}, ${telegramAccountToSend.id})`);
+
+        assert(telegramAccountToSend.bioData.isActive && telegramAccountToSend.bioData.fileName);
 
         const chatId = sendToTelegramAccount.chatId;
-        const photoFileId = TelegramAccountToSend.picture.telegramFileId;
-        const bioFileId = TelegramAccountToSend.bioData.telegramFileId;
+        const disable_notification = silentSend();
+        const name = profileToSend.name;
 
-        await this.bot.telegram.sendMessage(chatId, `Hi.Here's a new match for you.\nName: ${profileToSend.name}\nDoB: ${profileToSend.dob}`,
-            { disable_notification: silentSend() });
+        await this.bot.telegram.sendMessage(chatId, openingMessage,
+            { disable_notification });
 
-        await this.bot.telegram.sendPhoto(chatId, photoFileId, {
-            caption: profileToSend.name,
-            disable_notification: silentSend()
-        });
+        if (telegramAccountToSend.picture?.isActive && telegramAccountToSend.picture?.fileName) {
+            await this.sendPhoto(chatId, telegramAccountToSend.picture, name, disable_notification);
+        }
 
-        await this.bot.telegram.sendDocument(chatId, bioFileId, {
-            caption: profileToSend.name,
-            disable_notification: silentSend()
-        });
+        await this.sendBio(chatId, telegramAccountToSend.bioData, name, disable_notification);
+
+        await this.bot.telegram.sendMessage(chatId, createProfileCard(profileToSend),
+            { disable_notification });
     }
 
 
@@ -1178,7 +1387,7 @@ export class TelegramService {
     @Hears(['Cancel', 'cancel'])
     onCancel(ctx: Context) {
         logger.log(`-> onCancel()`);
-        ctx.reply(``);
+        return;
     }
 
     @Hears(/.*/)

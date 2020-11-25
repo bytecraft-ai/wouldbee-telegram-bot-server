@@ -1,12 +1,12 @@
-export const welcomeMessage = `Hi, I am Would Bee Matrimony bot (a computer program, not a real person)! To avail my services, please register your profile by sharing your phone number, bio-data, and profile picture. I will then share with you the profiles of your "Would Bees" (prospective matches) regularly. Similarly, your profile will be shared with them. 
+export const welcomeMessage = `Welcome to Would Bee Matrimony Service. I am Would Bee bot (a computer program, not a real person). To start, please register your profile by sharing your phone number, bio-data, and profile picture with me. I will then share with you the profiles of your "Would Bees" (prospective matches) regularly. Similarly, your profile will be shared with them. 
 
  - By using this service, you agree to our terms of use, available on www.wouldbee.com
 
- - To see this message again, use (type or click on) /start command
-
- - To create your profile with us, use /register command
+ - Use (type or click) /register command, to create your profile, 
  
- - To see how to interact with Would Bee bot, use the /help command.`;
+ - Use /help command to see how to interact with Would Bee bot.`;
+
+// - To see this message again, use (type or click on) / start command
 
 
 export const helpMessage = `Hi there. I am Would Bee Matrimony bot. As I am not a real person, you can only interact with me through a set of commands. A command starts with the forward slash (/). You can use the following commands to avail my services -

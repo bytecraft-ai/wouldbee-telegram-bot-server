@@ -412,3 +412,22 @@ export const maleAgeList = [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 
 export const femaleAgeList = [18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70,
     100, // 70 or more
 ];
+
+
+export const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+export const annualIncomeString = {
+    ZERO: 'No Income',
+    FIFTY_K_OR_MORE: '50 Thousand to 1 Lakh Rs.',
+    ONE_L_OR_MORE: '1 to 2 Lakh Rs.',
+    TWO_L_OR_MORE: '2 to 5 Lakh Rs.',
+    FIVE_L_OR_MORE: '5 to 10 Lakh Rs.',
+    TEN_L_OR_MORE: '10 to 20 Lakh Rs.',
+    TWENTY_L_OR_MORE: '20 to 35 Lakh Rs.',
+    THIRTY_FIVE_L_OR_MORE: '35 to 50 Lakh Rs.',
+    FIFTY_L_OR_MORE: '50 to 75 Lakh Rs.',
+    SEVENTY_FIVE_L_OR_MORE: '75 Lakh to 1 Crore Rs.',
+    ONE_CR_OR_MORE: '1 Crore to 5 Crore Rs.',
+    FIVE_CR_OR_MORE: '5 Crore to 10 Crore Rs.',
+    TEN_CR_OR_MORE: 'More than 10 Crore Rs.'
+}

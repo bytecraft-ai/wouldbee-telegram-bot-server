@@ -38,6 +38,15 @@ export class PatternPaginationDto extends PaginationDto {
 }
 
 
+export class GetProfilesDto extends PaginationDto {
+    @IsOptional()
+    @IsIn(getEnumValues(Gender))
+    @IsInt()
+    @Transform(value => Number(value))
+    gender?: Gender;
+}
+
+
 export class GetProfileDto {
     @IsOptional()
     @IsBoolean()
@@ -436,7 +445,7 @@ export class CreateCasteDto {
 
 export class GetCastesDto extends PaginationDto {
     @IsOptional()
-    @Length(casteMinLength, casteMaxLength)
+    @Length(0, casteMaxLength)
     @IsString()
     like?: string = '';
 

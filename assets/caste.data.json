@@ -7,35 +7,35 @@
         },
         {
             "religion": "sikh",
-            "castes": ["GurSikh", "Kesadhari", "Khashap Rajpoot", "Labana", "Mazhbi", "Nai", "Sikh: Arora", "Sikh: Bhatia", "Sikh: Jat", "Sikh: Kamboj", "Sikh: Khatri", "Sikh: Others", "Sikh: Prajapati", "Sikh: Rajput", "Sikh: Ramdasia", "Sikh: Ramgarhia", "Sikh: Saini", "Sikh: Tonk Kshatriya"]
+            "castes": ["GurSikh", "Kesadhari", "Khashap Rajpoot", "Labana", "Mazhbi", "Nai", "Arora", "Bhatia", "Jat", "Kamboj", "Khatri", "Others", "Prajapati", "Rajput", "Ramdasia", "Ramgarhia", "Saini", "Tonk Kshatriya"]
         },
         {
             "religion": "jain:shwetamber",
-            "castes": ["Jain - Agrawal", "Jain - Asati", "Jain - Ayodhyavasi", "Jain - Baniya", "Jain - Barhiya", "Jain - Dhakada", "Jain - Veerwa"]
+            "castes": ["Agrawal", "Asati", "Ayodhyavasi", "Baniya", "Barhiya", "Dhakada", "Veerwa"]
         },
         {
             "religion": "jain:digamber",
-            "castes": ["Jain - Agrawal", "Jain - Asati", "Jain - Ayodhyavasi", "Jain - Baniya", "Jain - Barhiya", "Jain - Dhakada", "Jain - Veerwa"]
+            "castes": ["Agrawal", "Asati", "Ayodhyavasi", "Baniya", "Barhiya", "Dhakada", "Veerwa"]
         },
         {
             "religion": "_jain",
-            "castes": ["Jain - Shwetamber", "Jain - Digamber"]
+            "castes": ["Shwetamber", "Digamber"]
         },
         {
             "religion": "muslim:sunni",
-            "castes": ["Muslim - Ansari", "Muslim - Arain", "Muslim - Awan", "Muslim - Bohra", "Muslim - Dekkani", "Muslim - Jat", "Muslim - Malik", "Muslim - Memon", "Muslim - Mughal", "Muslim - Pathan"]
+            "castes": ["Ansari", "Arain", "Awan", "Bohra", "Dekkani", "Jat", "Malik", "Memon", "Mughal", "Pathan"]
         },
         {
             "religion": "muslim:shia",
-            "castes": ["Muslim - Ansari", "Muslim - Arain", "Muslim - Awan", "Muslim - Bohra", "Muslim - Dekkani", "Muslim - Jat", "Muslim - Malik", "Muslim - Memon", "Muslim - Mughal", "Muslim - Pathan"]
+            "castes": ["Ansari", "Arain", "Awan", "Bohra", "Dekkani", "Jat", "Malik", "Memon", "Mughal", "Pathan"]
         },
         {
             "religion": "_muslim",
-            "castes": ["Muslim - Shia", "Muslim - Sunni", "Muslim - Others"]
+            "castes": ["Shia", "Sunni", "Others"]
         },
         {
             "religion": "christian",
-            "castes": ["Anglo Indian", "Born Again", "Brethren", "CMS", "CSI", "Catholic", "Catholic: Knanaya", "Catholic: Latin", "Catholic: Malankara", "Catholic: Roman", "Catholic: Syrian", "Chaldean", "Christian", "Christian: Nadar", "Christian: Others", "Evangelical", "Indian Orthodox", "Jacobite", "Jacobite: Knanaya", "Jacobite: Syrian", "Mangalorean", "Manglorean", "Marthomite", "Pentecost", "Protestant", "Syrian", "Syrian: Malabar", "Syrian: Orthodox", "Syro: Malabar"]
+            "castes": ["Anglo Indian", "Born Again", "Brethren", "CMS", "CSI", "Catholic", "Catholic: Knanaya", "Catholic: Latin", "Catholic: Malankara", "Catholic: Roman", "Catholic: Syrian", "Chaldean", "Christian", "Nadar", "Others", "Evangelical", "Indian Orthodox", "Jacobite", "Jacobite: Knanaya", "Jacobite: Syrian", "Mangalorean", "Manglorean", "Marthomite", "Pentecost", "Protestant", "Syrian", "Syrian: Malabar", "Syrian: Orthodox", "Syro: Malabar"]
         }
     ]
 }

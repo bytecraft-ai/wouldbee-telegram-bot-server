@@ -231,6 +231,8 @@ export class AwsService {
 
     // TODO: test
     async downloadFileFromS3(fileName: string, typeOfDocument: TypeOfDocument, dir = '/tmp/'): Promise<string> {
+        logger.log(`-> downloadFileFromS3(${fileName}, ${typeOfDocument}, ${dir})`);
+
         const S3_BUCKET = this.getS3Bucket(typeOfDocument);
         var params = {
             Bucket: S3_BUCKET,

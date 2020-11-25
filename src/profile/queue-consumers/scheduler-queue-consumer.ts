@@ -17,6 +17,7 @@ export class SchedulerQueueConsumer {
     async sendMatches(job: Job<unknown>) {
         logger.log(`processing send-profiles task ${JSON.stringify(job.data)}`);
         logger.log(`Starting ${job.data['task']} at ${new Date()}`);
+
         await this.profileService.sendMatches();
         return {};
     }
@@ -41,8 +42,10 @@ export class SchedulerQueueConsumer {
     @Process('create-profile')
     async findMatchesAndSave(job: Job<unknown>) {
         logger.log(`Running find matches and save. ${job.data}`);
-        const matches = await this.profileService.findMatches(job.data['profileId']);
-        await this.profileService.saveMatches(job['profileId'], matches.values);
+
+        const profileId = job.data['profileId'];
+        const matches = await this.profileService.findMatches(profileId);
+        await this.profileService.saveMatches(profileId, matches.values);
         return {};
     }
 
@@ -50,8 +53,10 @@ export class SchedulerQueueConsumer {
     @Process('update-profile')
     async updateMatchesAndSave(job: Job<unknown>) {
         logger.log(`Running update matches and save. ${job.data}`);
-        const matches = await this.profileService.findMatches(job.data['profileId']);
-        await this.profileService.updateMatches(job['profileId'], matches.values);
+
+        const profileId = job.data['profileId'];
+        const matches = await this.profileService.findMatches(profileId);
+        await this.profileService.updateMatches(profileId, matches.values);
         return {};
     }
 
