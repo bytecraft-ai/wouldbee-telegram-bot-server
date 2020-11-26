@@ -38,7 +38,7 @@ export class City {
     @Column()
     stateId?: number;
 
-    @ManyToOne(type => State, state => state.cities, { eager: false })
+    @ManyToOne(type => State, state => state.cities, { eager: true })
     @JoinColumn()
     state: State;
 }

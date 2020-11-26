@@ -90,7 +90,7 @@ export class Profile {
     casteId: number;
 
     // @Field()
-    @ManyToOne(type => Caste)
+    @ManyToOne(type => Caste, { eager: true })
     @JoinColumn()
     caste: Caste;
 
@@ -99,7 +99,7 @@ export class Profile {
 
     // TODO: also target village dwellers?
     // @Field()
-    @ManyToOne(type => City)
+    @ManyToOne(type => City, { eager: true })
     @JoinColumn()
     city: City;
 

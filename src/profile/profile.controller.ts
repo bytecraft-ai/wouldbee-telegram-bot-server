@@ -276,7 +276,7 @@ export class ProfileController {
         @Param('uuid', new ParseUUIDPipe()) uuid: string,
         @Query() options: GetProfileDto
     ): Promise<Profile | undefined> {
-        const relations = ['city', 'caste'];
+        const relations = [];
         if (options.getPreference)
             relations.push('partnerPreference')
 

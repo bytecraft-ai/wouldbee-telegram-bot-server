@@ -227,7 +227,11 @@ export class ProfileService {
             take = options?.take ?? 20;
         this.validatePagination(take);
 
-        const query = this.profileRepository.createQueryBuilder('profile');
+        const query = this.profileRepository.createQueryBuilder('profile')
+            .leftJoinAndSelect('profile.caste', 'caste')
+            .leftJoinAndSelect('profile.city', 'city')
+            .leftJoinAndSelect('city.state', 'state')
+            .leftJoinAndSelect('state.country', 'country');
 
         if (options?.gender) {
             query.where('profile.gender = :gender', { gender: options.gender });
@@ -2445,11 +2449,11 @@ export class ProfileService {
             city = await this.cityRepository.findOne(cityId);
         }
 
-        const relations = [];
-        if (getState)
-            relations.push('state');
-        if (getCountry)
-            relations.push('state.country');
+        const relations = ['state', 'state.country'];
+        // if (getState)
+        //     relations.push('state');
+        // if (getCountry)
+        //     relations.push('state.country');
 
         city = await this.cityRepository.findOne(cityId, {
             relations

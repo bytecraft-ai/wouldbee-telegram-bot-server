@@ -32,7 +32,7 @@ export class State {
     @Column()
     countryId: number
 
-    @ManyToOne(type => Country, country => country.states, { eager: false })
+    @ManyToOne(type => Country, country => country.states, { eager: true })
     @JoinColumn()
     country: Country
 
