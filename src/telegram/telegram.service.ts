@@ -107,7 +107,7 @@ export class TelegramService {
 
 
     async setAdminNotifications(value: boolean) {
-        logger.log(`-> setAdminNotifications(${value})`);
+        logger.log(`-> setAdminNotifications(${value}), old: ${this.enableAdminNotification}`);
         this.enableAdminNotification = value;
     }
 
@@ -364,9 +364,6 @@ export class TelegramService {
                     const document = ctx.message.document;
                     if (document) {
 
-                        await ctx.reply('Please wait ...');
-                        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-
                         // size check
                         const sizeErrorMessage = validateBioDataFileSize(ctx);
                         if (sizeErrorMessage) {
@@ -376,6 +373,9 @@ export class TelegramService {
 
                         const { fileName, link, errorMessage, quitOnError } = await
                             getBioDataFileName(ctx);
+
+                        await ctx.reply('Please wait ...');
+                        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
                         if (fileName) {
                             const mime_type = processToPdf
@@ -464,9 +464,6 @@ export class TelegramService {
 
                     if (document || photo) {
 
-                        await ctx.reply('Please wait ...');
-                        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-
                         // size check
                         const sizeErrorMessage = validatePhotoFileSize(ctx);
                         if (sizeErrorMessage) {
@@ -478,6 +475,9 @@ export class TelegramService {
 
                         const { fileName, link, errorMessage, quitOnError } = await
                             getPictureFileName(ctx);
+
+                        await ctx.reply('Please wait ...');
+                        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
                         if (fileName) {
                             const extension = fileName.split('.').pop();
@@ -1201,6 +1201,7 @@ export class TelegramService {
     async notifyAdmin(ctx: Context, document: Document): Promise<string> {
         logger.log(`-> notifyAdmin(${ctx.from.id}, ${document?.fileName}, ${document?.typeOfDocument})`);
 
+        logger.log(`this.enableAdminNotification: ${this.enableAdminNotification}`);
         if (!this.enableAdminNotification) return;
 
         const fileName: string = document.fileName,
@@ -1260,27 +1261,6 @@ export class TelegramService {
 
         this.profileService.updateDocumentWithWatermarkedFileId(document, watermarkedFileId);
     }
-
-
-    // async getDocumentFileReadStream(document: Document, dir: string): Promise<ReadStream | undefined> {
-    //     logger.log(`-> getDocumentFile(${document.id}, ${document?.fileName})`);
-    //     assert(document.fileName);
-    //     try {
-    //         if (existsSync(join(dir, document.fileName))) {
-    //             logger.log(`File found - ${join(dir, document.fileName)}`);
-    //             return createReadStream(join(dir, document.fileName));
-    //         }
-
-    //         const fileName = await this.profileService.downloadDocument(document.id, dir);
-    //         logger.log(`Downloaded file - ${join(dir, fileName)}`);
-
-    //         return createReadStream(join(dir, fileName));
-    //     }
-    //     catch (error) {
-    //         logger.error('Could not get document file!');
-    //         throw error;
-    //     }
-    // }
 
 
     async sendPhoto(chatId: number | string, picture: Document, name: string, disable_notification: boolean) {

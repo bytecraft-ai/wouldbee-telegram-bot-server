@@ -41,7 +41,7 @@ export class SeederService implements OnApplicationBootstrap {
     private getReligionEnum(religion: string): Religion | undefined {
         switch (religion) {
             case 'hindu': return Religion.HINDU;
-            case 'jain:digamber': return Religion.JAIN_DASH_SHWETAMBER;
+            case 'jain:digamber': return Religion.JAIN_DASH_DIGAMBER;
             case 'jain:shwetamber': return Religion.JAIN_DASH_SHWETAMBER;
             case 'sikh': return Religion.SIKH;
             case 'christian': return Religion.CHRISTIAN;

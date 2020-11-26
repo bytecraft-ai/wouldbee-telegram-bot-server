@@ -1,4 +1,3 @@
-import { ProfileSharedWith } from 'src/common/enum';
 import {
     Entity,
     Column,
@@ -40,6 +39,12 @@ export class Match {
     @JoinColumn({ name: "femaleProfileId" })
     femaleProfile: Profile;
 
-    @Column("smallint", { default: ProfileSharedWith.NONE })
-    profileSharedWith: ProfileSharedWith;
+    // @Column("smallint", { default: ProfileSharedWith.NONE })
+    // profileSharedWith: ProfileSharedWith;
+
+    @Column({ nullable: true })
+    sharedWithMaleOn?: Date;
+
+    @Column({ nullable: true })
+    sharedWithFemaleOn?: Date;
 }

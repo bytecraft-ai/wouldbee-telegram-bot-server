@@ -1,5 +1,5 @@
 import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, Query, DefaultValuePipe, ParseArrayPipe, ParseUUIDPipe, Req, ParseBoolPipe } from '@nestjs/common';
-import { CreateCasteDto, CreateProfileDto, GetCastesDto, GetMatchesDto, GetProfileDto, GetTelegramAccountDto, GetProfilesDto, PartnerPreferenceDto } from './dto/profile.dto';
+import { CreateCasteDto, CreateProfileDto, GetCastesDto, GetMatchesDto, GetProfileDto, GetTelegramAccountDto, GetProfilesDto, PartnerPreferenceDto, PatternPaginationDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
 import { DocumentValidationDto, GetTelegramAccountsDto, BanProfileDto } from './dto/profile.dto';
 import { GetCitiesDto, GetCountriesDto, GetStatesDto } from './dto/location.dto';
@@ -12,6 +12,7 @@ import { WbAgent } from 'src/agent/entities/agent.entity';
 import { Profile } from './entities/profile.entity';
 import { TelegramService } from 'src/telegram/telegram.service';
 import { Match } from './entities/match.entity';
+import { agent } from 'supertest';
 // import { Profile } from './entities/profile.entity';
 // import { AwsService } from 'src/aws-service/aws-service.service';
 // import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
@@ -144,6 +145,21 @@ export class StatsController {
     }
 
 
+    @Get('/hard-delete-account-test/:uuid')
+    // @Roles(UserRole.ADMIN)
+    async hardDeleteAccount(
+        // @GetAgent() agent: WbAgent,
+        @Param('uuid', new ParseUUIDPipe()) uuid: string,
+    ) {
+        try {
+            await this.profileService.hardDeleteProfileForTesting(uuid);
+            return { status: 'OK' };
+        } catch (error) {
+            return { status: 'failed' };
+        }
+    }
+
+
     @Get('/')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async userStats() {
@@ -175,6 +191,15 @@ export class TelegramAccountController {
         //     options?.skip, options?.take
         // );
         return this.profileService.getTelegramAccounts(options);
+    }
+
+
+    @Get('/search/')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
+    async searchTelegramAccount(
+        @Query() options: PatternPaginationDto
+    ): Promise<IList<TelegramAccount>> {
+        return this.profileService.searchTelegramAccounts(options);
     }
 
 
@@ -296,8 +321,13 @@ export class MatchController {
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async sendMatches() {
         logger.log(`-> sendMatches()`);
-        await this.profileService.sendMatches();
-        return { status: "OK" };
+        try {
+            await this.profileService.sendMatches();
+            return { status: "OK" };
+        } catch (error) {
+            logger.error(error);
+            return { status: "failed" };
+        }
     }
 
 

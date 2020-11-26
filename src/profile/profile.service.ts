@@ -1,9 +1,9 @@
-import { Injectable, Logger, BadRequestException, NotFoundException, ConflictException, NotImplementedException, forwardRef, Inject, NotAcceptableException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, ConflictException, NotImplementedException, forwardRef, Inject, NotAcceptableException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, MaritalStatus, ProfileSharedWith, S3Option, RegistrationActionRequired, ProfileDeactivationDuration, ProfileDeletionReason, UserStatus, DocRejectionReason, AnnualIncome } from 'src/common/enum';
+import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, MaritalStatus, ProfileSharedWith, S3Option, RegistrationActionRequired, ProfileDeactivationDuration, ProfileDeletionReason, UserStatus, DocRejectionReason, AnnualIncome, UserRole } from 'src/common/enum';
 import { daysAhead, deDuplicateArray, getAgeInYearsFromDOB, nextWeek, setDifferenceFromArrays } from 'src/common/util';
-import { LessThanOrEqual, Like, Repository } from 'typeorm';
-import { PartnerPreferenceDto, CreateProfileDto, CreateCasteDto, SupportResolutionDto, GetTelegramAccountsDto, GetMatchesDto, GetProfilesDto } from './dto/profile.dto';
+import { IsNull, LessThanOrEqual, Like, Repository } from 'typeorm';
+import { PartnerPreferenceDto, CreateProfileDto, CreateCasteDto, SupportResolutionDto, GetTelegramAccountsDto, GetMatchesDto, GetProfilesDto, PatternPaginationDto } from './dto/profile.dto';
 import { Caste } from './entities/caste.entity';
 import { City } from './entities/city.entity';
 import { Country } from './entities/country.entity';
@@ -96,7 +96,6 @@ export class ProfileService {
                 result[UserStatus[status].toLowerCase()] = parseInt(count);
             }
         }
-
         // console.log('result:', result);
 
         for (let i = 1; i <= UserStatus.BANNED; i++) {
@@ -266,7 +265,7 @@ export class ProfileService {
 
 
     async getPreferenceById(id: string, { throwOnFail = true }): Promise<PartnerPreference | undefined> {
-        logger.log(`getProfileById(${id}, ${throwOnFail})`);
+        logger.log(`getPreferenceById(${id}, ${throwOnFail})`);
         this.validateId(id);
 
         const preference = await this.prefRepository.findOne(id);
@@ -436,13 +435,82 @@ export class ProfileService {
     }
 
 
+    @Transactional()
+    async hardDeleteProfileForTesting(accountId: string) { //, agent: WbAgent) {
+        logger.log(`hardDeleteProfile(${accountId})`); //, ${reason}, ${agent.email}, ${agent.role})`);
+
+        // if (agent.role !== UserRole.ADMIN) {
+        //     throw new UnauthorizedException();
+        // }
+
+        this.validateId(accountId);
+
+        let telegramAccount = await this.telegramRepository.findOne(accountId, {
+            relations: ['profile']
+        });
+        if (!telegramAccount) {
+            throw new NotFoundException(`Telegram account with id: ${accountId} not found!`);
+        }
+
+        // remove cyclic ref between telegram account and documents
+        telegramAccount.bioDataId = null;
+        telegramAccount.pictureId = null;
+        telegramAccount.idProofId = null;
+        telegramAccount.unverifiedBioDataId = null;
+        telegramAccount.unverifiedPictureId = null;
+        telegramAccount.unverifiedIdProofId = null;
+
+        telegramAccount = await this.telegramRepository.save(telegramAccount);
+
+        const profile: Profile = telegramAccount.profile;
+        const gender = profile.gender;
+
+        try {
+            await this.toDeleteProfileRepository.delete(telegramAccount.id);
+
+            if (profile) {
+                await this.deactivatedProfileRepository.delete(telegramAccount.id);
+
+                const matchDeleteQuery =
+                    this.matchRepository.createQueryBuilder('match');
+
+                if (gender === Gender.MALE) {
+                    matchDeleteQuery.where('match."maleProfileId" = :id', { id: profile.id });
+                } else {
+                    matchDeleteQuery.where('match."femaleProfileId" = :id', { id: profile.id });
+                }
+
+                await matchDeleteQuery.delete().execute();
+                await this.prefRepository.delete(telegramAccount.id);
+                await this.profileRepository.delete(telegramAccount.id);
+                logger.log('deleted profile ...');
+            }
+
+            // delete documents
+            await this.documentRepository.createQueryBuilder('document')
+                .where('document."telegramAccountId" = :telegramAccountId',
+                    { telegramAccountId: telegramAccount.id })
+                .delete().execute();
+
+            logger.log('deleted documents ...');
+
+            // finally delete telegram account
+            await this.telegramRepository.delete(telegramAccount.id);
+
+        } catch (error) {
+            logger.error(`Could not hard delete account. Error:\n${JSON.stringify(error)}`);
+            throw error;
+        }
+    }
+
+
     // TODO: test
     @Transactional()
     async softDeleteProfile(telegramUserId: number, reason: ProfileDeletionReason) {
         logger.log(`softDeleteProfile(${telegramUserId})`);
         this.validateId(telegramUserId);
 
-        const telegramAccount = await this.telegramRepository.findOne({
+        let telegramAccount = await this.telegramRepository.findOne({
             where: { userId: telegramUserId },
             relations: ['profile']
         });
@@ -457,12 +525,13 @@ export class ProfileService {
         }
 
         try {
-            await this.profileRepository.softDelete(telegramAccount.id);
-            await this.prefRepository.softDelete(telegramAccount.id);
+
+            await this.deactivatedProfileRepository.softDelete(telegramAccount.id);
+            await this.toDeleteProfileRepository.softDelete(telegramAccount.id);
 
             // delete documents
             await this.documentRepository.createQueryBuilder('document')
-                .where('document.telegramAccountId = :telegramAccountId',
+                .where('document."telegramAccountId" = :telegramAccountId',
                     { telegramAccountId: telegramAccount.id })
                 .softDelete().execute();
 
@@ -470,25 +539,22 @@ export class ProfileService {
                 this.matchRepository.createQueryBuilder('match');
 
             if (gender === Gender.MALE) {
-                matchDeleteQuery.where('match.maleProfileId = :id', { id: profile.id });
+                matchDeleteQuery.where('match."maleProfileId" = :id', { id: profile.id });
             } else {
-                matchDeleteQuery.where('match.femaleProfileId = :id', { id: profile.id });
+                matchDeleteQuery.where('match."femaleProfileId" = :id', { id: profile.id });
             }
 
             await matchDeleteQuery.softDelete().execute();
 
-            await this.deactivatedProfileRepository.createQueryBuilder()
-                .whereInIds(profile.id).softDelete().execute();
-
-            await this.toDeleteProfileRepository.createQueryBuilder()
-                .whereInIds(profile.id).softDelete().execute();
+            await this.profileRepository.softDelete(telegramAccount.id);
+            await this.prefRepository.softDelete(telegramAccount.id);
 
             telegramAccount.status = UserStatus.DELETED;
             telegramAccount.reasonForDeletion = reason;
             await this.telegramRepository.save(telegramAccount);
 
         } catch (error) {
-            logger.error(`Could not delete profile. Error:\n${JSON.stringify(error)}`);
+            logger.error(`Could not softhard delete account. Error:\n${JSON.stringify(error)}`);
             throw error;
         }
     }
@@ -960,9 +1026,31 @@ export class ProfileService {
             take = options?.take ?? 20;
         this.validatePagination(take);
 
-        const [matches, count] = await this.matchRepository.findAndCount({
-            skip, take
-        });
+        const matchQuery =
+            this.matchRepository.createQueryBuilder('match');
+
+        if (options?.sharedWith) {
+            switch (options.sharedWith) {
+                case ProfileSharedWith.NONE:
+                    matchQuery.andWhere('(match.sharedWithMaleOn IS NULL AND match.sharedWithFemaleOn IS NULL)');
+                    break;
+                case ProfileSharedWith.MALE:
+                    matchQuery.andWhere('(match.sharedWithMaleOn IS NOT NULL AND match.sharedWithFemaleOn IS NULL)');
+                    break;
+                case ProfileSharedWith.FEMALE:
+                    matchQuery.andWhere('(match.sharedWithMaleOn IS NULL AND match.sharedWithFemaleOn IS NOT NULL)');
+                    break;
+                case ProfileSharedWith.BOTH:
+                    matchQuery.andWhere('(match.sharedWithMaleOn IS NOT NULL AND match.sharedWithFemaleOn IS NOT NULL)');
+                    break;
+                default:
+                    throw new BadRequestException(`sharedWith should be between ${ProfileSharedWith.NONE} - ${ProfileSharedWith.BOTH}`);
+            }
+        }
+
+        const [matches, count] = await matchQuery
+            .skip(skip).take(take)
+            .getManyAndCount();
 
         return {
             count,
@@ -991,9 +1079,22 @@ export class ProfileService {
         }
 
         if (options?.sharedWith) {
-            matchQuery.andWhere('match.profileSharedWith = :who', {
-                who: options.sharedWith
-            });
+            switch (options.sharedWith) {
+                case ProfileSharedWith.NONE:
+                    matchQuery.andWhere('(match.sharedWithMaleOn IS NULL AND match.sharedWithFemaleOn IS NULL)');
+                    break;
+                case ProfileSharedWith.MALE:
+                    matchQuery.andWhere('match.sharedWithMaleOn IS NULL');
+                    break;
+                case ProfileSharedWith.FEMALE:
+                    matchQuery.andWhere('match.sharedWithFemaleOn IS NULL');
+                    break;
+                case ProfileSharedWith.BOTH:
+                    matchQuery.andWhere('(match.sharedWithMaleOn IS NOT NULL AND match.sharedWithFemaleOn IS NOT NULL)');
+                    break;
+                default:
+                    throw new BadRequestException(`sharedWith should be between ${ProfileSharedWith.NONE} - ${ProfileSharedWith.BOTH}`);
+            }
         }
 
         const [matches, count] = await matchQuery
@@ -1009,7 +1110,7 @@ export class ProfileService {
 
     @Transactional()
     async updateMatches(profileId: string, matches: Profile[]): Promise<Match[]> {
-        logger.log(`getMatches(${profileId}, ${JSON.stringify(matches.length)})`);
+        logger.log(`getMatches(${profileId}, ${matches.length})`);
 
         const profile = await this.getProfileById(profileId, { throwOnFail: true });
 
@@ -1017,11 +1118,13 @@ export class ProfileService {
         await this.matchRepository.delete(profile.gender === Gender.MALE ?
             {
                 maleProfileId: profileId,
-                profileSharedWith: ProfileSharedWith.NONE
+                sharedWithMaleOn: IsNull(),
+                sharedWithFemaleOn: IsNull()
             } :
             {
                 femaleProfileId: profileId,
-                profileSharedWith: ProfileSharedWith.NONE
+                sharedWithMaleOn: IsNull(),
+                sharedWithFemaleOn: IsNull()
             })
 
         const sentMatches = await this.matchRepository.find({
@@ -1042,12 +1145,12 @@ export class ProfileService {
                     matchProfileId === match.id
                 )))
         }
-        return this.saveMatches(profileId, matches)
+        return this.saveMatches(profileId, matches);
     }
 
 
     async getTelegramAccountForSending(profile: Profile): Promise<TelegramAccount | undefined> {
-        logger.log(`getTelegramAccountForSending(${profile})`);
+        logger.log(`-> getTelegramAccountForSending(${profile.id})`);
 
         return this.getTelegramAccountById(profile.id, {
             throwOnFail: true,
@@ -1056,11 +1159,32 @@ export class ProfileService {
     }
 
 
-    async sendMatch(match: Match) {
-        logger.log(`sendMatch(${JSON.stringify(match)})`);
+    async markMatchAsSent(match: Match, sentToMale: boolean): Promise<Match | undefined> {
+        logger.log(`-> markMatchAsSent(${match.maleProfile}, ${match.femaleProfile}, ${sentToMale})`);
 
-        if (!match?.maleProfile || !match.femaleProfile) {
+        const toUpdate = sentToMale ? 'sharedWithMaleOn' : 'sharedWithFemaleOn';
+        if (match[toUpdate]) {
+            logger.error(`match.${toUpdate} is already non-null`);
+            throw new ConflictException(`match.${toUpdate} is already non-null`);
+        }
+        match[toUpdate] = new Date();
+        return this.matchRepository.save(match);
+    }
+
+
+    async sendMatch(match: Match): Promise<Match | undefined> {
+        logger.log(`-> sendMatch(${match.maleProfileId}, ${match.femaleProfileId}, ${match.sharedWithMaleOn}, ${match.sharedWithFemaleOn})`);
+
+        if (!match?.maleProfile || !match.femaleProfile || !match.maleProfile?.city?.state?.country || !match.femaleProfile?.city?.state?.country) {
             throw new Error('Match object does not contain male or/and female profiles');
+        }
+
+        if (!match.maleProfile?.city?.state?.country || !match.femaleProfile?.city?.state?.country) {
+            throw new Error('Match male/female profile(s) do not contain city-state-country objects');
+        }
+
+        if (!match.maleProfile?.caste || !match.femaleProfile?.caste) {
+            throw new Error('Match male/female profile(s) do not contain caste objects');
         }
 
         assert(match.maleProfile.gender === Gender.MALE, `Male profile does not have male gender. Male profile Id: ${match.maleProfileId}, Female profile Id: ${match.femaleProfileId}`);
@@ -1075,34 +1199,49 @@ export class ProfileService {
 
         await this.telegramService.sendProfile(maleTeleProfile, femaleProfile, femaleTeleProfile);
 
+        match = await this.markMatchAsSent(match, true);
+
         await this.telegramService.sendProfile(femaleTeleProfile, maleProfile, maleTeleProfile);
+
+        match = await this.markMatchAsSent(match, false);
+        return match;
     }
 
 
     async sendMatches() {
-        logger.log('sendMatches()');
+        logger.log('-> sendMatches()');
         let skip = 0
-        const take = 50;
-        let [profiles, count] = await this.profileRepository.findAndCount({
+        const take = 100;
+        let [femaleProfiles, count] = await this.profileRepository.findAndCount({
             where: { gender: Gender.FEMALE },
             skip, take
         });
-        if (count > 0) {
-            do {
+        let femaleProfileIds = femaleProfiles.map(profile => `'${profile.id}'`);
+        logger.log(`femaleProfileIds: ${femaleProfileIds.join(',')}, count: ${count}`);
 
-                const matches = await this.matchRepository.createQueryBuilder('match')
-                    .select('DISTINCT ON (femaleProfileId) id, maleProfileId, femaleProfileId, profileSharedWith')
-                    .where('match.profileSharedWith = :none',
-                        { none: ProfileSharedWith.NONE })
-                    .andWhere('match.femaleProfileId IN (:...femaleProfileIds)',
-                        { femaleProfileIds: profiles.map(profile => profile.id) })
-                    .getMany();
+        if (count > 0 && femaleProfileIds?.length > 0) {
+            do {
+                const rawMatches = await this.matchRepository.query(
+                    `select DISTINCT ON (m."femaleProfileId") m."maleProfileId", m."femaleProfileId" from match m WHERE m."sharedWithMaleOn" IS NULL AND m."sharedWithFemaleOn" IS NULL AND m."femaleProfileId" IN (${femaleProfileIds.join(',')})`);
+
+                console.log('rawMatches?.length:', rawMatches?.length, rawMatches);
+
+                const matches = await this.matchRepository.findByIds(rawMatches, {
+                    relations: ['maleProfile', 'maleProfile.caste', 'maleProfile.city', 'maleProfile.city.state', 'maleProfile.city.state.country', 'femaleProfile', 'femaleProfile.caste', 'femaleProfile.city', 'femaleProfile.city.state', 'femaleProfile.city.state.country']
+                });
+
+                console.log('matches?.length:', matches?.length, matches.map(match => { return { "male": match.maleProfileId, "female": match.femaleProfileId } }));
+
+                for await (let match of matches) {
+                    match = await this.sendMatch(match);
+                }
 
                 skip += take;
-                [profiles, count] = await this.profileRepository.findAndCount({
+                [femaleProfiles, count] = await this.profileRepository.findAndCount({
                     where: { gender: Gender.FEMALE },
                     skip, take
                 });
+                femaleProfileIds = femaleProfiles.map(profile => profile.id);
 
             } while (skip < count)
         }
@@ -1186,6 +1325,30 @@ export class ProfileService {
     //         values: telegramAccounts
     //     };
     // }
+
+
+    async searchTelegramAccounts(options?: PatternPaginationDto): Promise<IList<TelegramAccount>> {
+        logger.log(`searchTelegramAccounts(${JSON.stringify(options)})`);
+        let { skip, take, like } = options;
+        skip = skip ?? 0, take = take ?? 20;
+        this.validatePagination(take);
+
+        if (!like)
+            return { count: 0, values: [] };
+
+        const query = this.telegramRepository.createQueryBuilder('account')
+            .leftJoinAndSelect('account.profile', 'profile')
+
+        query.where('account.phone ILIKE :what')
+            .orWhere('account.name ILIKE :what')
+            .orWhere('profile.name ILIKE :what', { what: `%${like}%` })
+
+        const [values, count] = await query
+            .skip(skip).take(take)
+            .getManyAndCount();
+
+        return { count, values };
+    }
 
 
     async getTelegramAccounts(options?: GetTelegramAccountsDto): Promise<IList<TelegramAccount> | undefined> {
@@ -1809,7 +1972,7 @@ export class ProfileService {
             query = query.andWhere('caste.religion = :religion', { religion });
         }
         if (like) {
-            query = query.andWhere("caste.name ILIKE :like", { like: `${like}%` });
+            query = query.andWhere("caste.name ILIKE :like", { like: `%${like}%` });
         }
         return query.skip(skip).take(take).getMany();
     }
@@ -2242,7 +2405,9 @@ export class ProfileService {
 
         this.validatePagination(take);
 
-        let query = this.cityRepository.createQueryBuilder("city");
+        let query = this.cityRepository.createQueryBuilder("city")
+            .leftJoinAndSelect('city.state', 'state')
+            .leftJoinAndSelect('state.country', 'country');
 
         if (pattern) {
             query = query.where("city.name ILIKE :pattern", { pattern: `${pattern}%` });
