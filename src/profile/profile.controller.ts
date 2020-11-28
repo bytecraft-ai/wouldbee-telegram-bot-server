@@ -1,4 +1,4 @@
-import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, Query, DefaultValuePipe, ParseArrayPipe, ParseUUIDPipe, Req, ParseBoolPipe } from '@nestjs/common';
+import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, Query, DefaultValuePipe, ParseArrayPipe, ParseUUIDPipe, Req, ParseBoolPipe, UseInterceptors, UploadedFiles } from '@nestjs/common';
 import { CreateCasteDto, CreateProfileDto, GetCastesDto, GetMatchesDto, GetProfileDto, GetTelegramAccountDto, GetProfilesDto, PartnerPreferenceDto, PatternPaginationDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
 import { DocumentValidationDto, GetTelegramAccountsDto, BanProfileDto } from './dto/profile.dto';
@@ -16,9 +16,9 @@ import { agent } from 'supertest';
 // import { Profile } from './entities/profile.entity';
 // import { AwsService } from 'src/aws-service/aws-service.service';
 // import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
-// import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
-// import { editFileName, imageOrDocFileFilter } from 'src/common/file-util';
-// import { diskStorage } from 'multer';
+import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { editFileName, getTempDir, imageOrDocFileFilter } from 'src/common/file-util';
 
 const logger = new Logger('ProfileController');
 
@@ -287,6 +287,38 @@ export class ProfileController {
             throwOnFail: true,
             relations
         });
+    }
+
+
+    @Post('/upload/:uuid')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
+    @UseInterceptors(FileFieldsInterceptor([
+        { name: 'bioData', maxCount: 1 },
+        { name: 'picture', maxCount: 1 },
+    ], {
+        storage: diskStorage({
+            destination: getTempDir(),
+            filename: editFileName,
+        }),
+        fileFilter: imageOrDocFileFilter,
+        limits: {
+            fields: 100,
+            fileSize: 5000000, // ~ 5 MB
+            files: 2,
+            parts: 50000
+        }
+    }))
+    async uploadVerifiedDocuments(
+        @GetAgent() agent: WbAgent,
+        @Param('uuid', new ParseUUIDPipe()) uuid: string,
+        @UploadedFiles() files) {
+
+        // console.log('-> uploadDocumentsAndCreateProfile', uuid);
+        // console.log('files:', files);
+        // console.log('agent:', agent);
+
+        return this.profileService.saveDocuments(uuid, files, agent);
+
     }
 
 

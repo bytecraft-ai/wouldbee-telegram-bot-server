@@ -11,6 +11,7 @@ const watermark = require('image-watermark');  // does not work with import synt
 import { convert } from 'libreoffice-convert';
 import { degrees, PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { months } from './enum';
+import { isNil } from 'lodash';
 
 // pdftk.configure({
 //     // bin: '/your/path/to/pdftk/bin',
@@ -21,7 +22,7 @@ import { months } from './enum';
 
 const watermarkOptions = {
     'text': 'wouldbee.com',
-    'override-image': true,
+    'override-image': false,
     'align': 'ltr',
     'position': 'South'
 };
@@ -141,6 +142,12 @@ export function getMinAndMaxFromPgRange(pgRange: string, intTrueFloatFalse: bool
 export function withinPGRange(what: number, range: string) {
     const [min, max] = getMinAndMaxFromPgRange(range, false);
     return (min <= what && what <= max);
+}
+
+
+export function getDateStringWithoutTime(date?: Date): string {
+    date = date ?? new Date();
+    return [date.getDate(), date.getMonth(), date.getFullYear()].join('-');
 }
 
 
@@ -337,11 +344,12 @@ export function deDuplicateArray<T>(array: Array<T>): Array<T> {
 
 
 export async function downloadFile(file_url: string, fileName: string,
-    DIR = '/tmp/') {
-    logger.log(`-> downloadFile(${file_url}, ${fileName}, ${DIR})`);
+    dir: string) {
+    logger.log(`-> downloadFile(${file_url}, ${fileName}, ${dir})`);
+    const inputFilePath = isNil(dir) ? fileName : join(dir, fileName);
 
     /* Create an empty file where we can save data */
-    let file = createWriteStream(join(DIR, fileName));
+    let file = createWriteStream(inputFilePath);
 
     /* Using Promises so that we can use the ASYNC AWAIT syntax */
     await new Promise((resolve, reject) => {
@@ -362,7 +370,7 @@ export async function downloadFile(file_url: string, fileName: string,
         })
             .pipe(file)
             .on('finish', () => {
-                logger.log(`Finished downloading ${fileName}`);
+                logger.log(`Finished downloading ${inputFilePath}`);
                 resolve();
             })
             .on('error', (error) => {
@@ -376,8 +384,10 @@ export async function downloadFile(file_url: string, fileName: string,
 
 
 export function download_file_http_get(file_url: string, fileName: string,
-    DIR = '/tmp/') {
-    logger.log(`-> download_file_http_get(${file_url}, ${fileName}, ${DIR})`);
+    dir?: string) {
+    logger.log(`-> download_file_http_get(${file_url}, ${fileName}, ${dir})`);
+
+    const inputFilePath = isNil(dir) ? fileName : join(dir, fileName);
 
     const options = {
         host: url.parse(file_url).host,
@@ -385,41 +395,46 @@ export function download_file_http_get(file_url: string, fileName: string,
         path: url.parse(file_url).pathname
     };
 
-    // var file_name = url.parse(file_url).pathname.split('/').pop();
-    const file = createWriteStream(join(DIR, fileName));
+    const file = createWriteStream(inputFilePath);
 
     http.get(options, function (res) {
         res.on('data', function (data) {
             file.write(data);
         }).on('end', function () {
             file.end();
-            logger.log(fileName + ' downloaded to ' + DIR);
+            logger.log('file downloaded to: ' + inputFilePath);
         });
     });
 };
 
 
-export async function deleteFile(fileName: string, DIR = '/tmp/') {
-    logger.log(`-> deleteFile(${fileName}, ${DIR})`);
+export async function deleteFile(fileName: string, dir?: string) {
+    logger.log(`-> deleteFile(${fileName}, ${dir})`);
+    const inputFilePath = isNil(dir) ? fileName : join(dir, fileName);
     try {
-        await fs.unlink(join(DIR, fileName));
+        await fs.unlink(inputFilePath);
     } catch (err) {
-        logger.error(`Could not delete file: ${join(DIR, fileName)}`);
+        logger.error(`Could not delete file: ${inputFilePath}`);
     }
 }
 
 
 // TODO: use something else for PDF files as it produces bad quality PDF.
-export function watermarkImage(fileName: string, DIR = '/tmp/'): Promise<string | undefined> {
-    logger.log(`-> watermarkImage(${fileName}, ${DIR})`);
+export function watermarkImage(fileName: string, dir?: string, outputFilePath?: string): Promise<string | undefined> {
+    logger.log(`-> watermarkImage(${fileName}, ${dir})`);
+    const inputFilePath = isNil(dir) ? fileName : join(dir, fileName);
+    outputFilePath = outputFilePath ?? inputFilePath;
+
+    watermarkOptions['dstPath'] = outputFilePath;
+
     return new Promise((resolve, reject) => {
         watermark.embedWatermarkWithCb(
-            join(DIR, fileName), watermarkOptions, function (err) {
+            inputFilePath, watermarkOptions, function (err) {
                 if (!err) {
                     resolve(fileName);
                 }
                 else {
-                    logger.error(`could not watermark image: ${join(DIR, fileName)}. Error: ${JSON.stringify(err)}`,);
+                    logger.error(`could not watermark image: ${inputFilePath}. Error: ${JSON.stringify(err)}`,);
                     reject(err);
                 }
             });
@@ -468,44 +483,42 @@ export const mimeTypes = {
 
 
 // requires libre-office
-export async function doc2pdf(fileName: string, DIR = '/tmp/'): Promise<string | null> {
-    logger.log(`-> doc2pdf(${fileName}, ${DIR})`);
-    let pdfFileName: string;
+export async function doc2pdf(fileName: string, dir?: string, outputFilePath?: string): Promise<string | null> {
+    logger.log(`-> doc2pdf(${fileName}, ${dir}, ${outputFilePath})`);
+    const inputFilePath = isNil(dir) ? fileName : join(dir, fileName);
+
     try {
         const nameSplit = fileName.split('.');
-
-        pdfFileName = `${nameSplit[0]}.pdf`;
-        const extension = nameSplit.length > 1 ? nameSplit.pop() : 'no';
-
+        const extension = nameSplit.length > 1 ? nameSplit.pop() : '';
         if (extension !== 'doc' && extension !== 'docx') {
             logger.error(`Can only convert word files with doc/docx extension. 
-            But Received ${fileName} with ${extension} extension`);
+            But Received ${fileName} with "${extension}" extension.`);
         }
-
-        const inputPath = join(DIR, fileName);
-        const outputPath = join(DIR, pdfFileName);
+        outputFilePath = outputFilePath ?? join(dir, `${fileName[0]}.pdf`);
 
         // Read file
-        let data = await fs.readFile(inputPath);
+        let data = await fs.readFile(inputFilePath);
         let done = await lib_convert(data, '.pdf', undefined);
-        await fs.writeFile(outputPath, done);
-        logger.log('converted file to pdf, path: ' + outputPath);
+        await fs.writeFile(outputFilePath, done);
+        logger.log('converted file to pdf, path: ' + outputFilePath);
+
     } catch (err) {
-        logger.error(`could not convert ${fileName} to pdf: ${JSON.stringify(err)}`);
+        logger.error(`could not convert ${inputFilePath} to pdf: ${JSON.stringify(err)}`);
         throw err;
     }
-    return pdfFileName;
+    return outputFilePath;
 }
 
 
-export async function watermarkPdf(fileName: string, DIR = '/tmp/'): Promise<string | null> {
-    logger.log(`-> watermarkPdf(${fileName}, ${DIR})`);
-    // const url = 'https://pdf-lib.js.org/assets/with_update_sections.pdf'
-    // const existingPdfBytes = await fetch(url).then(res => res.arrayBuffer())
+export async function watermarkPdf(fileName: string, dir?: string, outputFilePath?: string): Promise<string | null> {
+    logger.log(`-> watermarkPdf(${fileName}, ${dir}, ${outputFilePath})`);
 
-    const existingPdfBytes = await fs.readFile(join(DIR, fileName));
+    const inputFilePath = isNil(dir) ? fileName : join(dir, fileName);
+    outputFilePath = outputFilePath ?? inputFilePath;
+
+    const existingPdfBytes = await fs.readFile(inputFilePath);
     const pngImageBytes = await fs.readFile('assets/would_bee_logo.png');
-    // let data = await fs.readFile(join(DIR, fileName));
+    // let data = await fs.readFile(inputFilePath);
     // let existingPdfBytes = data.arrayBuffer();
 
     const pdfDoc = await PDFDocument.load(existingPdfBytes);
@@ -544,7 +557,7 @@ export async function watermarkPdf(fileName: string, DIR = '/tmp/'): Promise<str
     }
 
     const pdfBytes = await pdfDoc.save()
-    await fs.writeFile(join(DIR, fileName), pdfBytes);
+    await fs.writeFile(outputFilePath, pdfBytes);
     return fileName;
 }
 

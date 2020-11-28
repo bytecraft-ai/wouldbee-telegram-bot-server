@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { AwsServiceController } from './aws-service.controller';
 import { AwsService } from './aws-service.service';
-import { LoggerModule } from "nestjs-pino";
+import { conditionalImports } from 'src/common/conditional-module-imports';
 
 @Module({
-  imports: [LoggerModule.forRoot()],
+  imports: [...conditionalImports],
   providers: [AwsServiceController, AwsService],
   exports: [AwsService]
 })

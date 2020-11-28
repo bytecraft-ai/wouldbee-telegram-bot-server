@@ -5,10 +5,11 @@ import { AuthModule } from 'src/auth/auth.module';
 import { ProfileModule } from 'src/profile/profile.module';
 import { AgentModule } from 'src/agent/agent.module';
 import { LoggerModule } from "nestjs-pino";
+import { conditionalImports } from 'src/common/conditional-module-imports';
 
 
 @Module({
-  imports: [LoggerModule.forRoot(), AuthModule, ProfileModule, AgentModule],
+  imports: [...conditionalImports, AuthModule, ProfileModule, AgentModule],
   providers: [SeederService],
   controllers: [SeederController]
 })

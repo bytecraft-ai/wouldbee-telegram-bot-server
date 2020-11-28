@@ -3,7 +3,7 @@ import { forwardRef, Logger, Module } from '@nestjs/common';
 import { TelegrafModule } from 'nestjs-telegraf';
 import { ProfileModule } from 'src/profile/profile.module';
 import { TelegramService } from './telegram.service';
-import { LoggerModule } from "nestjs-pino";
+import { conditionalImports } from 'src/common/conditional-module-imports';
 
 
 // const logger = new Logger('TelegramModule');
@@ -12,9 +12,11 @@ import { LoggerModule } from "nestjs-pino";
 // logger.log(`DEV_BOT_TOKEN: ${process.env.DEV_BOT_TOKEN}`);
 // logger.log(`STAGING_BOT_TOKEN: ${process.env.STAGING_BOT_TOKEN}`);
 
+
+
 @Module({
   imports: [
-    LoggerModule.forRoot(),
+    ...conditionalImports,
     TelegrafModule.forRoot({
       token: process.env.NODE_ENV === 'production'
         ? process.env.BOT_TOKEN

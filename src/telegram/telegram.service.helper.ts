@@ -71,7 +71,7 @@ export async function getBioDataFileName(ctx: Context):
         link = await ctx.telegram.getFileLink(document.file_id);
         logger.log(`bio download link: ${link}`);
 
-        fileName = telegramAccountId + `_${Date.now().toString()}` + '_bio.'
+        fileName = telegramAccountId + `_${Date.now().toString()}` + '_bio.';
         const nameParts = link.split('.');
         // console.log('nameParts', nameParts);
 
@@ -117,24 +117,24 @@ export async function getBioDataFileName(ctx: Context):
 }
 
 
-export async function processBioDataFile(link: string, fileName: string, DIR: string, convertToPdf = false, watermark = false): Promise<string | undefined> {
+export async function processBioDataFile(link: string, fileName: string, dir: string, convertToPdf = false, watermark = false): Promise<string | undefined> {
 
-    logger.log(`-> processBioDataFile(${link}, ${fileName}, ${DIR}, ${convertToPdf}, ${watermark})`);
+    logger.log(`-> processBioDataFile(${link}, ${fileName}, ${dir}, ${convertToPdf}, ${watermark})`);
 
-    await downloadFile(link, fileName, DIR);
+    await downloadFile(link, fileName, dir);
     if (convertToPdf && !fileName.endsWith('.pdf')) {
 
         const originalFileName = fileName;
-        fileName = await doc2pdf(fileName, DIR);
+        fileName = await doc2pdf(fileName, dir);
 
         const extension = fileName.split('.').pop();
         logger.log(`converted ${extension} file to pdf!`);
 
-        await deleteFile(originalFileName, DIR);
+        await deleteFile(originalFileName, dir);
     }
 
     if (watermark && fileName.endsWith('.pdf')) {
-        fileName = await watermarkPdf(fileName, DIR);
+        fileName = await watermarkPdf(fileName, dir);
         logger.log('water marked file!');
     }
     return fileName;
@@ -218,12 +218,12 @@ export async function getPictureFileName(ctx: Context): Promise<{
 }
 
 
-export async function processPictureFile(link: string, fileName: string, watermark = false, DIR: string): Promise<string | undefined> {
-    logger.log(`-> processPictureFile(${link}, ${fileName}, ${watermark}, ${DIR})`);
+export async function processPictureFile(link: string, fileName: string, watermark = false, dir: string): Promise<string | undefined> {
+    logger.log(`-> processPictureFile(${link}, ${fileName}, ${watermark}, ${dir})`);
 
-    await downloadFile(link, fileName, DIR);
+    await downloadFile(link, fileName, dir);
     if (watermark) {
-        await watermarkImage(fileName, DIR);
+        await watermarkImage(fileName, dir);
         logger.log('water marked picture!');
     }
     return fileName;

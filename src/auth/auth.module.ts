@@ -7,14 +7,13 @@ import { AgentModule } from 'src/agent/agent.module';
 import { AuthController } from './auth.controller';
 import { get } from 'config';
 import { APP_GUARD } from '@nestjs/core';
-import { RolesGuard } from './role.guard';
 import { JwtGuard } from './jwt.guard';
-import { LoggerModule } from "nestjs-pino";
+import { conditionalImports } from 'src/common/conditional-module-imports';
 const jwtConfig = get('jwt');
 
 @Module({
   imports: [
-    LoggerModule.forRoot(),
+    ...conditionalImports,
     JwtModule.register({
       secret: process.env.JWT_SECRET || jwtConfig.secret,
       signOptions: {

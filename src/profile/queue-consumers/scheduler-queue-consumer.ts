@@ -15,9 +15,7 @@ export class SchedulerQueueConsumer {
 
     @Process('send-profiles')
     async sendMatches(job: Job<unknown>) {
-        logger.log(`processing send-profiles task ${JSON.stringify(job.data)}`);
-        logger.log(`Starting ${job.data['task']} at ${new Date()}`);
-
+        logger.log(`processing send-profiles task at ${new Date()}`);
         await this.profileService.sendMatches();
         return {};
     }

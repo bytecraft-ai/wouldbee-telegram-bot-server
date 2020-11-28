@@ -156,7 +156,7 @@ export class DocumentValidationDto {
     // @IsIn(Object.values(DocRejectionReason).filter(value => typeof value === 'number'))
     @IsIn(getEnumValues(DocRejectionReason))
     @Transform(value => Number(value))
-    rejectionReason: DocRejectionReason;
+    rejectionReason?: DocRejectionReason;
 
     @IsOptional()
     @MaxLength(docRejectionReasonMaxLength)

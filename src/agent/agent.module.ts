@@ -5,10 +5,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AgentRepository } from './repositories/agent.repository';
 import { PassportModule } from '@nestjs/passport';
 import { LoggerModule } from "nestjs-pino";
+import { conditionalImports } from 'src/common/conditional-module-imports';
 
 @Module({
   imports: [
-    LoggerModule.forRoot(),
+    ...conditionalImports,
     TypeOrmModule.forFeature([AgentRepository]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
   ],

@@ -55,11 +55,12 @@ export class Document extends Verifiable {
     typeOfIdProof?: TypeOfIdProof;
 
     // original
+    // Nullable as for cases when admin uploads the document from backend or user uploads from web interface
     @Exclude()
     @MaxLength(urlMaxLength)
     @IsString()
-    @Column("varchar", { length: urlMaxLength })
-    telegramFileId: string;
+    @Column("varchar", { length: urlMaxLength, nullable: true })
+    telegramFileId?: string;
 
     // watermarked
     @IsOptional()

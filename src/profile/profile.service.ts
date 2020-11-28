@@ -1,7 +1,7 @@
 import { Injectable, Logger, BadRequestException, NotFoundException, ConflictException, NotImplementedException, forwardRef, Inject, NotAcceptableException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { femaleAgeList, Gender, maleAgeList, Referee, Religion, TypeOfDocument, TypeOfIdProof, MaritalStatus, ProfileSharedWith, S3Option, RegistrationActionRequired, ProfileDeactivationDuration, ProfileDeletionReason, UserStatus, DocRejectionReason, AnnualIncome, UserRole } from 'src/common/enum';
-import { daysAhead, deDuplicateArray, getAgeInYearsFromDOB, nextWeek, setDifferenceFromArrays } from 'src/common/util';
+import { daysAhead, deDuplicateArray, deleteFile, doc2pdf, getAgeInYearsFromDOB, nextWeek, setDifferenceFromArrays, watermarkImage, watermarkPdf } from 'src/common/util';
 import { IsNull, LessThanOrEqual, Like, Repository } from 'typeorm';
 import { PartnerPreferenceDto, CreateProfileDto, CreateCasteDto, SupportResolutionDto, GetTelegramAccountsDto, GetMatchesDto, GetProfilesDto, PatternPaginationDto } from './dto/profile.dto';
 import { Caste } from './entities/caste.entity';
@@ -32,6 +32,9 @@ import { Support } from './entities/support.entity';
 import { DeactivatedProfile } from './entities/deactivated-profile.entity';
 import { ProfileMarkedForDeletion } from './entities/to-delete-profile.entity';
 import { query } from 'express';
+import { getTempDir } from 'src/common/file-util';
+import { join } from 'path';
+import { doc } from 'prettier';
 
 const logger = new Logger('ProfileService');
 
@@ -70,6 +73,15 @@ export class ProfileService {
         if (!id) {
             logger.error('id is falsy');
             throw new Error('id is falsy');
+        }
+    }
+
+    async validateAgent(agent: WbAgent, allowedRoles = [UserRole.ADMIN, UserRole.AGENT]) {
+        if (!agent.id) {
+            throw new UnauthorizedException('Agent without id');
+        }
+        if (!allowedRoles.includes(agent.role)) {
+            throw new UnauthorizedException('');
         }
     }
 
@@ -137,6 +149,75 @@ export class ProfileService {
     //         }),
     //     };
     // }
+
+
+    @Transactional()
+    async saveDocuments(telegramAccountId: string, files: any, agent: WbAgent) {
+        logger.log(`saveDocuments(${telegramAccountId}, ${JSON.stringify(files)}, ${JSON.stringify(agent)})`);
+        this.validateId(telegramAccountId);
+        this.validateAgent(agent);
+
+        const telegramAccount = await this.getTelegramAccountById(telegramAccountId);
+        const convertToPdf = true, applyWatermark = true;
+
+        const savedDocuments = {};
+
+        // if (files.bioData) toProcess.push(files.bioData[0]);
+        // if (files.bioData) toProcess.push(files.bioData[0]);
+
+        const { bioData, picture } = files;
+
+        for (let each of [bioData, picture]) {
+            if (each) {
+                const fileObject = each[0];
+
+                const fieldName = fileObject.fieldname;
+                const mimeType = fileObject.mimeType;
+                let fileName = fileObject.filename;
+                let filePath = fileObject.path;
+                const typeOfDocument = fieldName === 'picture' ? TypeOfDocument.PICTURE : TypeOfDocument.BIO_DATA;
+                const dir = getTempDir(typeOfDocument);
+
+                let newFileName = `${telegramAccountId}_${Date.now().toString()}` + (fieldName === 'picture' ? '_picture.' : '_bio.') + fileName.split('.')[1];
+                let newFilePath = join(dir, newFileName);
+
+                // console.log(fileName, filePath, newFileName, newFilePath);
+
+                if (fieldName === 'bioData') {
+                    if (convertToPdf && (fileName.endsWith('.doc') || fileName.endsWith('.docx'))) {
+                        newFileName = await doc2pdf(filePath, null, newFileName);
+                        logger.log(`converted doc file: ${filePath} to pdf: ${newFileName}!`);
+                        fileName = newFileName;
+                        filePath = newFilePath;
+                    }
+
+                    if (applyWatermark && fileName.endsWith('.pdf')) {
+                        await watermarkPdf(filePath, null, newFilePath);
+                        logger.log('water marked bio-data!');
+                    }
+                    await deleteFile(fileObject.path);
+
+                } else if (fieldName === 'picture') {
+                    if (applyWatermark) {
+                        await watermarkImage(filePath, null, newFilePath);
+                        logger.log('water marked picture!');
+                    }
+                    await deleteFile(fileObject.path);
+                }
+
+                let document = await this.uploadDocument(telegramAccount.userId, newFileName, dir, mimeType, typeOfDocument);
+
+                const validationInput: DocumentValidationDto = {
+                    documentId: document.id,
+                    valid: true
+                };
+                document = await this.validateDocument(validationInput, agent, { notifyUser: true });
+
+                savedDocuments[fieldName] = document;
+            }
+        }
+        return savedDocuments;
+    }
 
 
     @Transactional()
@@ -214,7 +295,7 @@ export class ProfileService {
         // add match-finding job to queue for create profile
         await this.schedulerQueue.add('create-profile',
             { profileId: profile.id },
-            { delay: 3000 }, // 3 seconds delayed
+            { delay: 5 * 60 * 1000 }, // 5 minutes delayed (gives window to fix mistakes.)
         );
 
         return profile;
@@ -1001,7 +1082,7 @@ export class ProfileService {
         this.validateId(profileId);
 
         const profile = await this.getProfileById(profileId, { throwOnFail: true });
-        console.log('profile:', profile)
+        // console.log('profile:', profile)
         const toSave: Match[] = [];
         if (profile.gender === Gender.MALE) {
             for (const match of matches) {
@@ -1196,24 +1277,26 @@ export class ProfileService {
         const maleProfile = match.maleProfile;
         const femaleProfile = match.femaleProfile;
 
-        const maleTeleProfile = await this.getTelegramAccountForSending
-            (maleProfile);
+        const maleTelegramAccount = await this.getTelegramAccountForSending(maleProfile);
 
-        const femaleTeleProfile = await this.getTelegramAccountForSending(femaleProfile);
+        const femaleTelegramAccount = await this.getTelegramAccountForSending(femaleProfile);
 
-        await this.telegramService.sendProfile(maleTeleProfile, femaleProfile, femaleTeleProfile);
+        await this.telegramService.sendProfile(maleTelegramAccount, femaleProfile, femaleTelegramAccount);
 
         match = await this.markMatchAsSent(match, true);
 
-        await this.telegramService.sendProfile(femaleTeleProfile, maleProfile, maleTeleProfile);
+        await this.telegramService.sendProfile(femaleTelegramAccount, maleProfile, maleTelegramAccount);
 
         match = await this.markMatchAsSent(match, false);
         return match;
     }
 
 
+    // TODO: try to create a better algorithm. First if 50 males have a common female match, then only one of those 50 is going to get a match.
+    //       second, even if the match table is all done, it will go through all the female profiles.
     async sendMatches() {
         logger.log('-> sendMatches()');
+
         let skip = 0
         const take = 100;
         let [femaleProfiles, count] = await this.profileRepository.findAndCount({
@@ -1221,20 +1304,64 @@ export class ProfileService {
             skip, take
         });
         let femaleProfileIds = femaleProfiles.map(profile => `'${profile.id}'`);
-        logger.log(`femaleProfileIds: ${femaleProfileIds.join(',')}, count: ${count}`);
+        // logger.log(`femaleProfileIds: ${femaleProfileIds.join(',')}, count: ${count}`);
 
         if (count > 0 && femaleProfileIds?.length > 0) {
             do {
                 const rawMatches = await this.matchRepository.query(
                     `select DISTINCT ON (m."femaleProfileId") m."maleProfileId", m."femaleProfileId" from match m WHERE m."sharedWithMaleOn" IS NULL AND m."sharedWithFemaleOn" IS NULL AND m."femaleProfileId" IN (${femaleProfileIds.join(',')})`);
 
-                console.log('rawMatches?.length:', rawMatches?.length, rawMatches);
+                // console.log('rawMatches?.length:', rawMatches?.length, rawMatches);
 
                 const matches = await this.matchRepository.findByIds(rawMatches, {
                     relations: ['maleProfile', 'maleProfile.caste', 'maleProfile.city', 'maleProfile.city.state', 'maleProfile.city.state.country', 'femaleProfile', 'femaleProfile.caste', 'femaleProfile.city', 'femaleProfile.city.state', 'femaleProfile.city.state.country']
                 });
 
-                console.log('matches?.length:', matches?.length, matches.map(match => { return { "male": match.maleProfileId, "female": match.femaleProfileId } }));
+                // console.log('matches?.length:', matches?.length, matches.map(match => { return { "male": match.maleProfileId, "female": match.femaleProfileId } }));
+
+                for await (let match of matches) {
+                    match = await this.sendMatch(match);
+                }
+
+                skip += take;
+                [femaleProfiles, count] = await this.profileRepository.findAndCount({
+                    where: { gender: Gender.FEMALE },
+                    skip, take
+                });
+                femaleProfileIds = femaleProfiles.map(profile => profile.id);
+
+            } while (skip < count)
+        }
+    }
+
+
+    async sendMatchesNew() {
+        logger.log('-> sendMatchesNew()');
+
+        let skip = 0
+        const take = 100;
+        const now = new Date();
+
+
+        let [femaleProfiles, count] = await this.profileRepository.findAndCount({
+            where: { gender: Gender.FEMALE },
+            skip, take
+        });
+        let femaleProfileIds = femaleProfiles.map(profile => `'${profile.id}'`);
+        // logger.log(`femaleProfileIds: ${femaleProfileIds.join(',')}, count: ${count}`);
+
+        if (count > 0 && femaleProfileIds?.length > 0) {
+            do {
+                const rawMatches = await this.matchRepository.query(
+                    `select DISTINCT ON (m."femaleProfileId") m."maleProfileId", m."femaleProfileId" from match m WHERE m."sharedWithMaleOn" IS NULL AND m."sharedWithFemaleOn" IS NULL AND m."femaleProfileId" IN (${femaleProfileIds.join(',')})`);
+
+                // console.log('rawMatches?.length:', rawMatches?.length, rawMatches);
+
+                const matches = await this.matchRepository.findByIds(rawMatches, {
+                    relations: ['maleProfile', 'maleProfile.caste', 'maleProfile.city', 'maleProfile.city.state', 'maleProfile.city.state.country', 'femaleProfile', 'femaleProfile.caste', 'femaleProfile.city', 'femaleProfile.city.state', 'femaleProfile.city.state.country']
+                });
+
+                // console.log('matches?.length:', matches?.length, matches.map(match => { return { "male": match.maleProfileId, "female": match.femaleProfileId } }));
 
                 for await (let match of matches) {
                     match = await this.sendMatch(match);
@@ -1494,11 +1621,14 @@ export class ProfileService {
     }
 
 
-    async getTelegramAccountById(telegramAccountId: string, {
-        throwOnFail = true,
-        relations = [],
+    async getTelegramAccountById(telegramAccountId: string, options?: {
+        throwOnFail?: boolean;
+        relations?: string[];
     }): Promise<TelegramAccount | undefined> {
-        logger.log(`-> getTelegramAccountById(${telegramAccountId}, ${throwOnFail}, ${relations})`);
+        logger.log(`-> getTelegramAccountById(${telegramAccountId}, ${JSON.stringify(options)})`);
+
+        const throwOnFail = options?.throwOnFail ?? true;
+        const relations = options?.relations ?? [];
 
         this.validateId(telegramAccountId);
 
@@ -1586,19 +1716,22 @@ export class ProfileService {
     // }
 
 
-    async getDocumentById(id: string, {
-        throwOnFail = true,
-        relations = [],
+    async getDocumentById(documentId: string, options?: {
+        throwOnFail?: boolean;
+        relations?: string[];
     }): Promise<Document | undefined> {
-        logger.log(`getDocumentById(${JSON.stringify({ id, throwOnFail, relations })})`);
-        this.validateId(id);
+        logger.log(`-> getDocumentById(${documentId}, ${JSON.stringify(options)})`);
+        this.validateId(documentId);
 
-        const document = await this.documentRepository.findOne(id, {
+        const throwOnFail = options?.throwOnFail ?? true;
+        const relations = options?.relations ?? [];
+
+        const document = await this.documentRepository.findOne(documentId, {
             relations
         });
         if (throwOnFail && !document) {
-            logger.log(`Document with id: ${id} not found!`);
-            throw new NotFoundException(`Document with id: ${id} not found!`);
+            logger.log(`Document with id: ${documentId} not found!`);
+            throw new NotFoundException(`Document with id: ${documentId} not found!`);
         }
         return document;
     }
@@ -1647,7 +1780,7 @@ export class ProfileService {
 
     // TODO: test
     @Transactional()
-    async uploadDocument(telegramUserId: number, fileName: string, dir: string, contentType: string, typeOfDocument: TypeOfDocument, telegramFileId: string, typeOfIdProof?: TypeOfIdProof): Promise<Document | undefined> {
+    async uploadDocument(telegramUserId: number, fileName: string, dir: string, contentType: string, typeOfDocument: TypeOfDocument, telegramFileId?: string, typeOfIdProof?: TypeOfIdProof): Promise<Document | undefined> {
         logger.log(`-> uploadDocument(${JSON.stringify({ telegramUserId, fileName, dir, contentType, typeOfDocument, telegramFileId, typeOfIdProof })})`);
 
         let relation: any;
@@ -1770,8 +1903,8 @@ export class ProfileService {
 
 
     @Transactional()
-    async validateDocument(validationInput: DocumentValidationDto, agent: WbAgent): Promise<Document | undefined> {
-        logger.log(`validateDocument(). Input: ${JSON.stringify(validationInput)}`);
+    async validateDocument(validationInput: DocumentValidationDto, agent: WbAgent, option?: { notifyUser: boolean }): Promise<Document | undefined> {
+        logger.log(`-> validateDocument(${JSON.stringify(validationInput)}, ${JSON.stringify(agent)}, ${JSON.stringify(option)})`);
 
         const { documentId, valid, rejectionReason, rejectionDescription } = validationInput;
 
@@ -1786,8 +1919,8 @@ export class ProfileService {
         }
 
         try {
-            let document = await this.documentRepository.findOne(documentId);
-            document = await this.getDocumentById(documentId, {
+            // let document = await this.documentRepository.findOne(documentId);
+            let document = await this.getDocumentById(documentId, {
                 throwOnFail: true,
                 relations: ['telegramAccount']
             });
@@ -1798,6 +1931,8 @@ export class ProfileService {
                 throw new ConflictException('Document already verified!');
             }
 
+            // console.log('1', document);
+
             document.isActive = valid;
             document.isValid = valid;
             document.invalidationReason = rejectionReason;
@@ -1805,12 +1940,21 @@ export class ProfileService {
             document.verifierId = agent.id;
             document.verifiedOn = new Date();
 
+            // console.log('2', document);
+
+            let currentActiveDocumentId: string;
+
             // Mark this document as active doc in Telegram account for that doc type
             switch (document.typeOfDocument) {
                 case TypeOfDocument.BIO_DATA:
+                    // console.log('case TypeOfDocument.BIO_DATA:');
                     telegramAccount.unverifiedBioData = null;
-                    if (valid)
+
+                    if (valid) {
+                        currentActiveDocumentId = telegramAccount.bioDataId;
                         telegramAccount.bioDataId = document.id;
+                        assert(currentActiveDocumentId !== document.id);
+                    }
 
                     if (telegramAccount.status === UserStatus.UNVERIFIED) {
                         telegramAccount.status = valid
@@ -1819,14 +1963,21 @@ export class ProfileService {
                     }
                     break;
                 case TypeOfDocument.PICTURE:
-                    telegramAccount.unverifiedPicture = null;
-                    if (valid)
+                    // console.log('case TypeOfDocument.PICTURE:');
+                    telegramAccount.unverifiedPictureId = null;
+                    if (valid) {
+                        currentActiveDocumentId = telegramAccount.pictureId;
                         telegramAccount.pictureId = document.id;
+                        assert(currentActiveDocumentId !== document.id);
+                    }
                     break;
                 case TypeOfDocument.ID_PROOF:
-                    telegramAccount.unverifiedIdProof = null;
-                    if (valid)
+                    telegramAccount.unverifiedIdProofId = null;
+                    if (valid) {
+                        currentActiveDocumentId = telegramAccount.idProofId;
                         telegramAccount.idProofId = document.id;
+                        assert(currentActiveDocumentId !== document.id);
+                    }
                     break;
                 case TypeOfDocument.VIDEO:
                 case TypeOfDocument.REPORT_ATTACHMENT:
@@ -1834,15 +1985,19 @@ export class ProfileService {
                     throw new NotImplementedException('Not implemented!');
             }
 
-            if (valid) {
+            // console.log('currentActiveDocumentId:', currentActiveDocumentId);
+
+            if (valid && currentActiveDocumentId) {
                 // find old active document, mark as inactive and delete from AWS in the end
-                let currentActiveDocument = await this.documentRepository.findOne({
-                    where: {
-                        telegramAccountId: document.telegramAccountId,
-                        typeOfDocument: document.typeOfDocument,
-                        isActive: true
-                    }
-                });
+                // let currentActiveDocument = await this.documentRepository.findOne({
+                //     where: {
+                //         telegramAccountId: document.telegramAccountId,
+                //         typeOfDocument: document.typeOfDocument,
+                //         isActive: true
+                //     }
+                // });
+
+                let currentActiveDocument = await this.documentRepository.findOne(currentActiveDocumentId);
 
                 let currentActiveDocumentFileName: string;
                 if (currentActiveDocument) {
@@ -1865,7 +2020,10 @@ export class ProfileService {
             await this.telegramRepository.save(telegramAccount);
 
             // notify user
-            this.telegramService.notifyUserOfVerification(telegramAccount, document, valid, rejectionReason, rejectionDescription);
+            const notifyUser = option?.notifyUser ?? true;
+            if (notifyUser) {
+                this.telegramService.notifyUserOfVerification(telegramAccount, document, valid, rejectionReason, rejectionDescription);
+            }
 
             return document;
         }
@@ -1874,16 +2032,6 @@ export class ProfileService {
             throw error;
         }
     }
-
-
-    // async generateS3SignedURLs(telegramAccountId: string,
-    //     fileName: string,
-    //     typeOfDocument: TypeOfDocument): Promise<string | undefined> {
-
-    //     const urlObj = await this.awsService.createSignedURL(telegramAccountId, fileName, typeOfDocument, false);
-
-    //     return urlObj.preSignedUrl;
-    // }
 
 
     async getSignedDownloadUrl(documentId: string): Promise<{ id: string, url: string } | undefined> {
@@ -1913,58 +2061,6 @@ export class ProfileService {
             throw err;
         };
     }
-
-
-    // TODO: Refactor -- This method cannot decide which document to send
-    // async getSignedDownloadUrlForUnverifiedDoc(telegramAccountId: string, docType: string, { throwOnFail = true }): Promise<{ id: string, url: string } | undefined> {
-    //     if (!docType) {
-    //         throw new BadRequestException('docType is required!')
-    //     }
-
-    //     let typeOfDocument: TypeOfDocument;
-    //     switch (docType) {
-    //         case 'bio-data':
-    //             typeOfDocument = TypeOfDocument.BIO_DATA;
-    //             break;
-    //         case 'picture':
-    //             typeOfDocument = TypeOfDocument.PICTURE;
-    //             break;
-    //         case 'id-proof':
-    //             typeOfDocument = TypeOfDocument.ID_PROOF;
-    //             break;
-    //         default:
-    //             throw new BadRequestException(`docType should be one of [bio-data, picture, id-proof]`);
-    //     }
-
-    //     const telegramAccount = await this.getTelegramAccountById(telegramAccountId, { throwOnFail: true });
-
-    //     const document = await this.documentRepository.createQueryBuilder('doc')
-    //         .where('doc.telegramAccountId = :telegramAccountId', { telegramAccountId })
-    //         .andWhere('doc.typeOfDocument = :typeOfDocument', { typeOfDocument })
-    //         .andWhere('doc.isActive IS NULL')
-    //         .orderBy('doc.createdOn', 'DESC')
-    //         .getOne();
-
-    //     if (!document) {
-    //         if (throwOnFail) {
-    //             throw new NotFoundException(`Document for Telegram account with id: ${telegramAccountId} and docType: ${typeOfDocument} does not exist!`);
-    //         } else {
-    //             return null;
-    //         }
-    //     }
-
-    //     try {
-    //         const urlObj = await this.awsService.createSignedURL(telegramAccountId, document.fileName, document.typeOfDocument, S3Option.GET);
-    //         return {
-    //             id: document.id,
-    //             url: urlObj.preSignedUrl
-    //         };
-    //     }
-    //     catch (err) {
-    //         logger.error(`Could not generate signed url for telegramAccountId: ${telegramAccountId}, and docType: ${docType}. Error: ${err}`);
-    //         throw err;
-    //     };
-    // }
 
 
     async getCastesLike(like: string, religion?: Religion, skip = 0, take = 20): Promise<Caste[]> {
@@ -2561,22 +2657,23 @@ export class ProfileService {
      */
 
     // ref- https://crontab.guru/#15_8-20/3_*_*_*
-    @Cron('*/16 5 8-21/3 * * *')   // try every 16 second of 5th minute
-    // @Cron('*/10 * 8-21/3 * * *')
+    // @Cron('*/16 5 8-21/3 * * *')   // try every 16 second of 5th minute
+    @Cron('*/10 3 8-21/3 * * *')
+    // @Cron('*/50 */2 21-23 * * *')   // try everyday at 02:31:01 am
     async queueSendProfilesTask() {
-        logger.debug('Scheduling send-profiles task');
+        logger.log('Scheduling send-profiles task');
         const jobId = (new Date()).setSeconds(0, 0);
         // setting job-id equal to date value up to minute ensure that duplicate values added in the minute (every 16th second) are not added. This is done to make it more probable that the task gets scheduled at least once (at 16th, 32nd, or 48th second) and at most once.
-        await this.schedulerQueue.add({ task: 'send-profiles' }, { jobId })
+        await this.schedulerQueue.add('send-profiles', { jobId })
     }
 
 
     @Cron('1 31 2 * * *')   // try everyday at 02:31:01 am
     async queueProfileMaintenanceTasks() {
-        logger.debug('Scheduling activate-profiles task');
+        logger.log('Scheduling activate-profiles task');
         const jobId = (new Date()).setSeconds(0, 0);
         // setting job-id equal to date value up to minute ensure that duplicate values added in the minute (every 16th second) are not added. This is done to make it more probable that the task gets scheduled at least once (at 16th, 32nd, or 48th second) and at most once.
-        await this.schedulerQueue.add({ task: 'reactivate-profiles' }, { jobId });
-        await this.schedulerQueue.add({ task: 'delete-profiles' }, { jobId });
+        await this.schedulerQueue.add('reactivate-profiles', { jobId });
+        await this.schedulerQueue.add('delete-profiles', { jobId });
     }
 }
