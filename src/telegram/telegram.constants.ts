@@ -100,7 +100,7 @@ Please retry with supported format or use /cancel to quit.`;
 export const supportMsg = `Please write your query or feedback (min 20 characters) or use /cancel to quit.`;
 
 
-export const deletionSuccessMsg = `Alright! We have deactivated your profile for a week, after which it will be deleted permanently. In case you change your mind within a week, you can use /recover command to reactivate your profile and cancel deletion. Note that once deleted, your profile will cannot be recovered. `;
+export const deletionSuccessMsg = `Alright! We have deactivated your profile for a week, after which it will be deleted permanently. In case you change your mind within a week, you can use /recover command to reactivate your profile and cancel deletion. Note that once deleted, your profile cannot be recovered. `;
 
 
 export const acknowledgeDeletionRequest = 'Sure. Kindly choose reason for deletion from below options. This will help us make our service better.';

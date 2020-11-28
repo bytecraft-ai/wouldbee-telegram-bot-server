@@ -6,6 +6,7 @@ import {
     JoinColumn,
     OneToOne,
     PrimaryColumn,
+    DeleteDateColumn,
 } from 'typeorm';
 import { TelegramAccount } from './telegram-account.entity';
 
@@ -37,4 +38,7 @@ export class ProfileMarkedForDeletion {
 
     @Column()
     deleteOn: Date;
+
+    @DeleteDateColumn()
+    deletedOn?: Date;
 }

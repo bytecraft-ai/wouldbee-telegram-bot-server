@@ -844,48 +844,36 @@ export class ProfileService {
 
         const count = await this.deactivatedProfileRepository
             .createQueryBuilder('d_profile')
-            .where('d_profile.activateOn <= :today', { today })
+            .where('d_profile."activateOn" <= :today', { today })
             .getCount();
 
-        const profileQuery = this.profileRepository
-            .createQueryBuilder('profile');
+        logger.log(`count: ${count}`);
 
-        profileQuery.where(qb => {
-            const subQuery = qb.subQuery()
-                .select("deactivated_profile.id")
-                .from(DeactivatedProfile, "deactivated_profile")
-                .where("deactivated_profile.activateOn <= :today")
-                .getQuery();
-            return "profile.id IN " + subQuery;
-        });
-        profileQuery.setParameter("today", today);
+        const subQuery = this.deactivatedProfileRepository
+            .createQueryBuilder().select('id')
+            .where('"activateOn" <= :today', { today });
 
-        const telegramAccountQuery = this.telegramRepository
-            .createQueryBuilder('tel_profile');
-
-        telegramAccountQuery.where(qb => {
-            const subQuery = qb.subQuery()
-                .select("deactivated_profile.id")
-                .from(DeactivatedProfile, "deactivated_profile")
-                .where("deactivated_profile.activateOn <= :today")
-                .getQuery();
-            return "tel_profile.id IN " + subQuery;
-        });
-        telegramAccountQuery.setParameter("today", today);
+        logger.log(`subQuery: ${subQuery.getQuery()}`);
 
         try {
-            await profileQuery.update()
+            await this.profileRepository.createQueryBuilder().update()
                 .set({ active: true })
+                .where('id IN (' + subQuery.getQuery() + ')')
+                .setParameters(subQuery.getParameters())
                 .execute();
 
-            await telegramAccountQuery.update()
+            await this.telegramRepository.createQueryBuilder().update()
                 .set({ status: UserStatus.ACTIVATED })
+                .where('id IN (' + subQuery.getQuery() + ')')
+                .setParameters(subQuery.getParameters())
                 .execute();
 
             // delete from deactivated_profile table
             await this.deactivatedProfileRepository.delete({ activateOn: LessThanOrEqual(today) });
 
             logger.log(`batch-reactivated ${count} profiles.`);
+
+            await this.schedulerQueue.add('notify-reactivated-profiles');
         }
         catch (error) {
             logger.error(`Could not activate profiles. Error:\n${JSON.stringify(error)}`);
@@ -901,67 +889,72 @@ export class ProfileService {
         const today = new Date();
         today.setHours(23, 59, 59);
 
-        const count = await this.toDeleteProfileRepository.count({
-            where: { deleteOn: LessThanOrEqual(today) }
-        });
+        const qb = this.toDeleteProfileRepository
+            .createQueryBuilder('tdp')
+            .select('tdp.id')
+            .where(`"deleteOn" <= :today`, { today });
 
-        let skip = 0, step = 1000, take = step;
-        while (skip < count) {
-            // const toDeleteProfiles = await this.toDeleteProfileRepository.find({
-            //     where: { deleteOn: LessThanOrEqual(today) },
-            //     skip, take
-            // });
-            const toDeleteProfileIds = await this.toDeleteProfileRepository.query(
-                `SELECT id FROM ProfileMarkedForDeletion WHERE deleteOn <= ${today}`
-            );
+        let count = await qb.getCount();
 
-            if (toDeleteProfileIds?.length) {
-                try {
-                    // Update, not delete, Telegram accounts
-                    await this.telegramRepository.createQueryBuilder('t_profile')
-                        .whereInIds(toDeleteProfileIds)
-                        .update('t_profile.status = :status', { status: UserStatus.DELETED }).execute();
+        if (count) {
+            try {
+                // Update, not delete, Telegram accounts
+                await this.telegramRepository.createQueryBuilder().update()
+                    .set({ status: UserStatus.DELETED })
+                    .where('id IN (' + qb.getQuery() + ')')
+                    .setParameters(qb.getParameters())
+                    .execute();
 
-                    // delete profile
-                    await this.profileRepository.createQueryBuilder()
-                        .whereInIds(toDeleteProfileIds).softDelete().execute();
+                // delete profile
+                await this.profileRepository.createQueryBuilder()
+                    .where('id IN (' + qb.getQuery() + ')')
+                    .setParameters(qb.getParameters())
+                    .softDelete()
+                    .execute();
 
-                    // delete preference
-                    await this.prefRepository.createQueryBuilder()
-                        .whereInIds(toDeleteProfileIds).softDelete().execute();
+                // delete preference
+                await this.prefRepository.createQueryBuilder()
+                    .where('id IN (' + qb.getQuery() + ')')
+                    .setParameters(qb.getParameters())
+                    .softDelete()
+                    .execute();
 
-                    // delete documents
-                    await this.documentRepository.createQueryBuilder('document')
-                        .where('document.telegramAccountId IN (:...ids)',
-                            { ids: toDeleteProfileIds }).softDelete().execute();
+                // delete documents
+                await this.documentRepository.createQueryBuilder('document')
+                    .where('"telegramAccountId" IN (' + qb.getQuery() + ')')
+                    .setParameters(qb.getParameters())
+                    .softDelete().execute();
 
-                    // delete matches
-                    await this.matchRepository.createQueryBuilder('match')
-                        .where('match.maleProfileIds IN (: ...ids)',
-                            { ids: toDeleteProfileIds })
-                        .orWhere('match.femaleProfileIds IN (: ...ids)',
-                            { ids: toDeleteProfileIds })
-                        .softDelete().execute();
+                // delete matches
+                await this.matchRepository.createQueryBuilder('match')
+                    .where('"maleProfileId" IN (' + qb.getQuery() + ')')
+                    .orWhere('"femaleProfileId" IN (' + qb.getQuery() + ')')
+                    .setParameters(qb.getParameters())
+                    .softDelete().execute();
 
-                    // delete from deactivated profile repo
-                    await this.deactivatedProfileRepository.createQueryBuilder()
-                        .whereInIds(toDeleteProfileIds).softDelete().execute();
+                // delete from deactivated profile repo
+                await this.deactivatedProfileRepository.createQueryBuilder()
+                    .where('id IN (' + qb.getQuery() + ')')
+                    .setParameters(qb.getParameters())
+                    .delete()       // does not have soft-delete capability
+                    .execute();
 
-                    // delete from to-delete profile repo
-                    await this.toDeleteProfileRepository.createQueryBuilder()
-                        .whereInIds(toDeleteProfileIds).softDelete().execute();
-
-                }
-                catch (error) {
-                    logger.error(`Could not batch delete profiles. Error:\n${JSON.stringify(error)}`);
-                    throw error;
-                }
+                // delete from to-delete profile repo
+                await this.toDeleteProfileRepository.createQueryBuilder()
+                    .where('id IN (' + qb.getQuery() + ')')
+                    .setParameters(qb.getParameters())
+                    .softDelete()
+                    .execute();
             }
-
-            skip += step;
-            take += step;
+            catch (error) {
+                logger.error(`Could not batch delete profiles. Error:\n${JSON.stringify(error)}`);
+                throw error;
+            }
         }
         logger.log(`batch deleted ${count} profiles`);
+
+        // TODO
+        // await this.schedulerQueue.add('notify-deleted-profiles');
     }
 
 
@@ -2669,11 +2662,13 @@ export class ProfileService {
 
 
     @Cron('1 31 2 * * *')   // try everyday at 02:31:01 am
+    // @Cron('50 28 13 * * *')
     async queueProfileMaintenanceTasks() {
-        logger.log('Scheduling activate-profiles task');
+        logger.log('Scheduling routine maintenance tasks');
         const jobId = (new Date()).setSeconds(0, 0);
         // setting job-id equal to date value up to minute ensure that duplicate values added in the minute (every 16th second) are not added. This is done to make it more probable that the task gets scheduled at least once (at 16th, 32nd, or 48th second) and at most once.
         await this.schedulerQueue.add('reactivate-profiles', { jobId });
         await this.schedulerQueue.add('delete-profiles', { jobId });
+        await this.schedulerQueue.add('clean-temp-directories', { jobId });
     }
 }

@@ -116,7 +116,6 @@ export class CommonController {
     async getCountry(@Param('id') id: number) {
         return this.profileService.getCountry(id, true);
     }
-
 }
 
 
@@ -270,6 +269,22 @@ export class ProfileController {
     }
 
 
+    @Get('/batch-delete')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
+    async triggerBatchDeleteProfiles() {
+        await this.profileService.batchDeleteProfiles();
+        return { status: "OK" };
+    }
+
+
+    @Get('/batch-reactivate')
+    @Roles(UserRole.AGENT, UserRole.ADMIN)
+    async triggerBatchReactivateProfiles() {
+        await this.profileService.batchReactivateProfiles();
+        return { status: "OK" };
+    }
+
+
     @Get(':uuid')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async getProfile(
@@ -409,7 +424,7 @@ export class PreferenceController {
     @Post('/')
     @Roles(UserRole.AGENT, UserRole.ADMIN)
     async setPreference(
-        @Req() req,
+        // @Req() req,
         @Body() preference: PartnerPreferenceDto
     ) {
         // console.log('set preference to', preference, req);

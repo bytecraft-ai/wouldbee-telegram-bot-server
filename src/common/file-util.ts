@@ -4,6 +4,7 @@ import { mkdirSync } from "fs";
 import { TypeOfDocument } from "./enum";
 import { exec } from 'child_process';
 import { randomInteger } from "./util";
+import { resolve } from "path";
 
 const logger = new Logger('file-util');
 
@@ -54,28 +55,31 @@ export function createTempDirs() {
 }
 
 
-export function cleanTempDirs(olderThanDays = 3, logStdout = false) {
-    logger.log(`-> cleanTempDirs()`);
+export async function cleanTempDirectories(olderThanDays = 1, logStdout = false) {
+    logger.log(`-> cleanTempDirectories()`);
     const dirPaths = getAllTempDirs();
 
     if (!olderThanDays || isNaN(olderThanDays)) {
-        olderThanDays = 3;
+        olderThanDays = 1;
     }
 
     //ref - https://askubuntu.com/questions/789602/auto-delete-files-older-than-7-days
-    const mtime = Math.max(olderThanDays - 1, 1);
+    const mtime = Math.max(olderThanDays - 1, 0);
 
     const command = `find ${getBaseTempDir()}* -mtime +${mtime} -type f -delete`;
     logger.log(`command: "${command}"`);
-    exec(command, (error, stdout, stderr) => {
-        if (error) {
-            logger.error(`exec error: ${error}`);
-            return;
-        }
-        if (logStdout) {
-            logger.log(`stdout: ${stdout}`);
-            logger.error(`stderr: ${stderr}`);
-        }
+    return new Promise((resolve, reject) => {
+        exec(command, (error, stdout, stderr) => {
+            if (error) {
+                logger.error(`exec error: ${error}`);
+                reject(error);
+            }
+            if (logStdout) {
+                logger.log(`stdout: ${stdout}`);
+                logger.error(`stderr: ${stderr}`);
+            }
+            resolve();
+        });
     });
 }
 
