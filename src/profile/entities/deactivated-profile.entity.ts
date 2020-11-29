@@ -31,6 +31,6 @@ export class DeactivatedProfile {
      * This will be null if the deactivation is done by the system.
      * upon activation, the row will be hard deleted from table
      */
-    @Column()
+    @Column({ nullable: true })
     activateOn: Date;
 }

@@ -118,7 +118,12 @@ export class TelegramService {
         }
         // handle deleted accounts
         else if (telegramAccount.status === UserStatus.DELETED) {
-            ctx.reply(`Hi ${telegramAccount.name ?? 'there'},\n You have deleted your profile. If you need to create another profile, please use a different phone number.`);
+            console.log('updateType:', ctx.updateType, 'updateSubType:', ctx.updateSubTypes, 'ctx.update', ctx.update, ctx.update.message.text);
+            if (ctx.updateType === 'message' && ctx.update.message.text === '/recover') {
+                await next();
+            } else {
+                await ctx.reply(`Hi ${telegramAccount.name ?? 'there'},\n You have deleted your profile. If you need to create another profile, please use a different phone number.`);
+            }
         }
         // else let it through
         else {
@@ -271,7 +276,7 @@ export class TelegramService {
                             one_time_keyboard: true,
                             keyboard: [
                                 [{
-                                    text: "Click to Confirm Phone Number",
+                                    text: "Click to Confirm\nPhone Number",
                                     request_contact: true
                                 },
                                 {
@@ -1229,10 +1234,17 @@ export class TelegramService {
             message += `\nYou can upload a new ${docType} or if you think that is a mistake, please contact our customer care.`;
         }
 
-        // TODO - fix formatting.
-        // await this.bot.telegram.sendMessage(chatId, format.escape(message), { parse_mode: "HTML" });
-        await this.bot.telegram.sendMessage(chatId, message,
-            { disable_notification: silentSend() });
+        try {
+            // TODO - fix formatting.
+            // await this.bot.telegram.sendMessage(chatId, format.escape(message), { parse_mode: "HTML" });
+            await this.bot.telegram.sendMessage(chatId, message,
+                { disable_notification: silentSend() });
+        }
+
+        catch (error) {
+            console.log('could not send message. ERROR:', error);
+            throw error;
+        }
     }
 
 
@@ -1301,7 +1313,7 @@ export class TelegramService {
     }
 
 
-    async sendPhoto(chatId: number | string, picture: Document, name: string, disable_notification: boolean) {
+    private async sendPhoto(chatId: number | string, picture: Document, name: string, disable_notification: boolean) {
         logger.log(`-> sendPhoto(${picture.id}, ${chatId})`);
         assert(picture.typeOfDocument === TypeOfDocument.PICTURE);
 
@@ -1333,7 +1345,7 @@ export class TelegramService {
     }
 
 
-    async sendBio(chatId: number | string, bio: Document, name: string, disable_notification: boolean) {
+    private async sendBio(chatId: number | string, bio: Document, name: string, disable_notification: boolean) {
         logger.log(`-> sendBio(${bio.id}, ${chatId})`);
         assert(bio.typeOfDocument === TypeOfDocument.BIO_DATA);
 
@@ -1377,31 +1389,30 @@ export class TelegramService {
 
         const name = profileToSend.name;
 
-
         try {
             await this.bot.telegram.sendMessage(chatId, openingMessage,
                 { disable_notification });
+
+            logger.log(`1`);
+            if (telegramAccountToSend.picture?.isActive && telegramAccountToSend.picture?.fileName) {
+                logger.log(`2`);
+                await this.sendPhoto(chatId, telegramAccountToSend.picture, name, disable_notification);
+                logger.log(`3`);
+            }
+
+            logger.log(`4`);
+            await this.sendBio(chatId, telegramAccountToSend.bioData, name, disable_notification);
+            logger.log(`5`);
+
+            await this.bot.telegram.sendMessage(chatId, createProfileCard(profileToSend),
+                { disable_notification });
+            logger.log(`6`);
+
         }
         catch (error) {
-            console.log('could not send message. ------ERROR------:', error);
-            return;
+            console.log('could not send message. ERROR:', error);
+            throw error;
         }
-
-        logger.log(`1`);
-
-        if (telegramAccountToSend.picture?.isActive && telegramAccountToSend.picture?.fileName) {
-            logger.log(`2`);
-            await this.sendPhoto(chatId, telegramAccountToSend.picture, name, disable_notification);
-            logger.log(`3`);
-        }
-
-        logger.log(`4`);
-        await this.sendBio(chatId, telegramAccountToSend.bioData, name, disable_notification);
-        logger.log(`5`);
-
-        await this.bot.telegram.sendMessage(chatId, createProfileCard(profileToSend),
-            { disable_notification });
-        logger.log(`6`);
     }
 
 

@@ -287,7 +287,7 @@ export class ProfileService {
         }
 
         if (createTrueEditFalse === true) {
-            this.telegramService.notifyUser(telegramAccount, 'Congratulations! Your profile has been activated. From now on, matching profiles will be forwarded to you!');
+            await this.botFunctionWrapper(this.telegramService.notifyUser, telegramAccount.userId, telegramAccount, 'Congratulations! Your profile has been activated. From now on, matching profiles will be forwarded to you!');
         }
 
         // delete-matches involving this profile.
@@ -295,7 +295,7 @@ export class ProfileService {
         // add match-finding job to queue for create profile
         await this.schedulerQueue.add('create-profile',
             { profileId: profile.id },
-            { delay: 5 * 60 * 1000 }, // 5 minutes delayed (gives window to fix mistakes.)
+            { delay: process.env.NODE_ENV === 'production' ? 2 * 60 * 1000 : 1 }, // 5 minutes delayed (gives window to fix mistakes.)
         );
 
         return profile;
@@ -1237,10 +1237,10 @@ export class ProfileService {
     }
 
 
-    async markMatchAsSent(match: Match, sentToMale: boolean): Promise<Match | undefined> {
-        logger.log(`-> markMatchAsSent(${match.maleProfile}, ${match.femaleProfile}, ${sentToMale})`);
-
-        const toUpdate = sentToMale ? 'sharedWithMaleOn' : 'sharedWithFemaleOn';
+    async markMatchAsSent(match: Match, sentTo: Gender): Promise<Match | undefined> {
+        logger.log(`-> markMatchAsSent(${match.maleProfileId}, ${match.femaleProfileId}, ${sentTo})`);
+        const toUpdate = sentTo === Gender.MALE ? 'sharedWithMaleOn' : 'sharedWithFemaleOn';
+        console.log('match:', match, 'toUpdate:', toUpdate);
         if (match[toUpdate]) {
             logger.error(`match.${toUpdate} is already non-null`);
             throw new ConflictException(`match.${toUpdate} is already non-null`);
@@ -1250,22 +1250,21 @@ export class ProfileService {
     }
 
 
-    async sendMatch(match: Match): Promise<Match | undefined> {
-        logger.log(`-> sendMatch(${match.maleProfileId}, ${match.femaleProfileId}, ${match.sharedWithMaleOn}, ${match.sharedWithFemaleOn})`);
+    async sendMatch(match: Match, options?: { toMale?: boolean; toFemale?: boolean }): Promise<Match | undefined> {
+        logger.log(`-> sendMatch(${match.maleProfileId}, ${match.femaleProfileId}, ${match.sharedWithMaleOn}, 
+            ${match.sharedWithFemaleOn}, ${options?.toMale}, ${options?.toFemale})`);
 
-        if (!match?.maleProfile || !match.femaleProfile || !match.maleProfile?.city?.state?.country || !match.femaleProfile?.city?.state?.country) {
-            throw new Error('Match object does not contain male or/and female profiles');
+        options = Object.assign({ toMale: false, toFemale: false }, options);
+
+        if (options.toMale && (!match.femaleProfile?.caste || !match.femaleProfile?.city?.state?.country)) {
+            throw new Error("Match object does not contain female profile's caste/city/state/country sub-relations");
         }
 
-        if (!match.maleProfile?.city?.state?.country || !match.femaleProfile?.city?.state?.country) {
-            throw new Error('Match male/female profile(s) do not contain city-state-country objects');
+        if (options.toFemale && (!match.maleProfile?.caste || !match.maleProfile?.city?.state?.country)) {
+            throw new Error("Match object does not contain male profile's caste/city/state/country sub-relations");
         }
 
-        if (!match.maleProfile?.caste || !match.femaleProfile?.caste) {
-            throw new Error('Match male/female profile(s) do not contain caste objects');
-        }
-
-        assert(match.maleProfile.gender === Gender.MALE, `Male profile does not have male gender. Male profile Id: ${match.maleProfileId}, Female profile Id: ${match.femaleProfileId}`);
+        assert(match.maleProfile.gender === Gender.MALE && match.femaleProfile.gender === Gender.FEMALE);
 
         const maleProfile = match.maleProfile;
         const femaleProfile = match.femaleProfile;
@@ -1273,48 +1272,48 @@ export class ProfileService {
         const maleTelegramAccount = await this.getTelegramAccountForSending(maleProfile);
         const femaleTelegramAccount = await this.getTelegramAccountForSending(femaleProfile);
 
-        try {
-            if (maleTelegramAccount.status !== UserStatus.ACTIVATED || femaleTelegramAccount.status !== UserStatus.ACTIVATED) {
-                return match;
+        if (options.toMale) {
+            try {
+                if (maleTelegramAccount.status !== UserStatus.ACTIVATED || femaleTelegramAccount.status !== UserStatus.ACTIVATED) {
+                    return match;
+                }
+                await this.telegramService.sendProfile(maleTelegramAccount, femaleProfile, femaleTelegramAccount);
+            } catch (error) {
+                if (error?.code === 403) {
+                    logger.log(`Blocked by male user with account id: ${maleTelegramAccount.id}. Deactivating!`);
+                    await this.deactivateProfile(maleTelegramAccount.userId, ProfileDeactivationDuration.INDEFINITELY);
+                    return;
+                } else {
+                    throw error;
+                }
             }
-            await this.telegramService.sendProfile(maleTelegramAccount, femaleProfile, femaleTelegramAccount);
-        } catch (error) {
-            if (error?.code === 403) {
-                logger.log(`Blocked by male user with account id: ${maleTelegramAccount.id}. Deactivating!`);
-                await this.deactivateProfile(maleTelegramAccount.userId, ProfileDeactivationDuration.INDEFINITELY);
-                return;
-            } else {
-                logger.error(`Unknown error: ${JSON.stringify(error)}`);
-                throw error;
-            }
+            match = await this.markMatchAsSent(match, Gender.MALE);
         }
 
-        match = await this.markMatchAsSent(match, true);
-
-        try {
-            if (maleTelegramAccount.status !== UserStatus.ACTIVATED || femaleTelegramAccount.status !== UserStatus.ACTIVATED) {
-                return match;
+        if (options.toFemale) {
+            try {
+                if (maleTelegramAccount.status !== UserStatus.ACTIVATED || femaleTelegramAccount.status !== UserStatus.ACTIVATED) {
+                    return match;
+                }
+                await this.telegramService.sendProfile(femaleTelegramAccount, maleProfile, maleTelegramAccount);
+            } catch (error) {
+                if (error?.code === 403) {
+                    logger.log(`Blocked by female user with account id: ${femaleTelegramAccount.id}. Deactivating!`);
+                    await this.deactivateProfile(femaleTelegramAccount.userId, ProfileDeactivationDuration.INDEFINITELY);
+                    return;
+                } else {
+                    throw error;
+                }
             }
-            await this.telegramService.sendProfile(femaleTelegramAccount, maleProfile, maleTelegramAccount);
-        } catch (error) {
-            if (error?.code === 403) {
-                logger.log(`Blocked by female user with account id: ${femaleTelegramAccount.id}. Deactivating!`);
-                await this.deactivateProfile(maleTelegramAccount.userId, ProfileDeactivationDuration.INDEFINITELY);
-                return;
-            } else {
-                logger.error(`Unknown error: ${JSON.stringify(error)}`);
-                throw error;
-            }
+            match = await this.markMatchAsSent(match, Gender.FEMALE);
         }
-
-        match = await this.markMatchAsSent(match, false);
         return match;
     }
 
 
     // TODO: try to create a better algorithm. First if 50 males have a common female match, then only one of those 50 is going to get a match.
     //       second, even if the match table is all done, it will go through all the female profiles.
-    async sendMatches() {
+    async sendMatchesOld() {
         logger.log('-> sendMatches()');
 
         let skip = 0
@@ -1334,16 +1333,16 @@ export class ProfileService {
                     p.active = true AND m."sharedWithMaleOn" IS NULL AND m."sharedWithFemaleOn" IS NULL
                     AND m."femaleProfileId" IN (${femaleProfileIds.join(',')})`);
 
-                console.log('rawMatches?.length:', rawMatches?.length, rawMatches);
+                // console.log('rawMatches?.length:', rawMatches?.length, rawMatches);
 
                 const matches = await this.matchRepository.findByIds(rawMatches, {
                     relations: ['maleProfile', 'maleProfile.caste', 'maleProfile.city', 'maleProfile.city.state', 'maleProfile.city.state.country', 'femaleProfile', 'femaleProfile.caste', 'femaleProfile.city', 'femaleProfile.city.state', 'femaleProfile.city.state.country']
                 });
 
-                console.log('matches?.length:', matches?.length, matches.map(match => { return { "male": match.maleProfileId, "female": match.femaleProfileId } }));
+                // console.log('matches?.length:', matches?.length, matches.map(match => { return { "male": match.maleProfileId, "female": match.femaleProfileId } }));
 
                 for await (let match of matches) {
-                    match = await this.sendMatch(match);
+                    match = await this.sendMatch(match, { toMale: true, toFemale: true });
                 }
 
                 skip += take;
@@ -1358,46 +1357,111 @@ export class ProfileService {
     }
 
 
-    async sendMatchesNew() {
-        logger.log('-> sendMatchesNew()');
+    async sendMatches() {
+        logger.log('-> sendMatches()');
+
+        const maleCountResult = await this.matchRepository.query(
+            `SELECT COUNT(*) FROM (SELECT DISTINCT ON (m."maleProfileId") m."maleProfileId"
+            from match m INNER JOIN profile mp ON mp.id = m."maleProfileId" 
+            INNER JOIN profile fp ON fp.id = m."femaleProfileId" 
+            WHERE mp.active = true AND fp.active = true AND m."sharedWithMaleOn" is NULL) as sub`);
+
+        const maleCount = parseInt(maleCountResult[0].count)
+        console.log('maleCount:', maleCount);
+
+        const femaleCountResult = await this.matchRepository.query(
+            `SELECT COUNT(*) FROM (SELECT DISTINCT ON (m."femaleProfileId") m."femaleProfileId"
+            from match m INNER JOIN profile mp ON mp.id = m."maleProfileId" 
+            INNER JOIN profile fp ON fp.id = m."femaleProfileId" 
+            WHERE mp.active = true AND fp.active = true AND m."sharedWithFemaleOn" is NULL) as sub`);
+
+        const femaleCount = parseInt(femaleCountResult[0].count)
+        console.log('femaleCount:', femaleCount);
+
+        // Send to males
 
         let skip = 0
         const take = 100;
-        const now = new Date();
 
+        while (skip < maleCount) {
+            let maleMatchIds = await this.matchRepository.createQueryBuilder('match')
+                .select('match.maleProfileId')
+                .addSelect('match.femaleProfileId')
+                .addSelect(`CASE
+                    WHEN match."sharedWithFemaleOn" IS NULL THEN 0
+                    ELSE 1
+                    END`, '_already_shared_with_female')
+                .distinctOn(['match.maleProfileId'])
+                .where('match.sharedWithMaleOn is NULL')
+                .orderBy('match.maleProfileId')
+                .addOrderBy('_already_shared_with_female', 'DESC')
+                .skip(skip).take(take)
+                .getMany();
 
-        let [femaleProfiles, count] = await this.profileRepository.findAndCount({
-            where: { gender: Gender.FEMALE },
-            skip, take
-        });
-        let femaleProfileIds = femaleProfiles.map(profile => `'${profile.id}'`);
-        // logger.log(`femaleProfileIds: ${femaleProfileIds.join(',')}, count: ${count}`);
+            // let maleMatchIds = await this.matchRepository.createQueryBuilder('match')
+            //     .select('match.maleProfileId')
+            //     .addSelect('match.femaleProfileId')
+            //     .addSelect(`CASE
+            //         WHEN match."sharedWithFemaleOn" IS NULL THEN 0
+            //         ELSE 1
+            //         END`, '_already_shared_with_female')
+            //     .distinctOn(['match.maleProfileId'])
+            //     .leftJoinAndSelect('match.maleProfile', 'maleProfile')
+            //     .leftJoinAndSelect('maleProfile.caste', 'maleProfile.caste')
+            //     .leftJoinAndSelect('maleProfile.city', 'maleProfile.city')
+            //     .leftJoinAndSelect('maleProfile.city.state', 'maleProfile.city.state')
+            //     // .leftJoinAndSelect('maleProfile.city.state.country', 'maleProfile.city.state.country')
+            //     .leftJoinAndSelect('match.femaleProfile', 'femaleProfile')
+            //     .leftJoinAndSelect('femaleProfile.caste', 'femaleProfile.caste')
+            //     .leftJoinAndSelect('femaleProfile.city', 'femaleProfile.city')
+            //     // .leftJoinAndSelect('femaleProfile.city.state', 'femaleProfile.city.state')
+            //     // .leftJoinAndSelect('femaleProfile.city.state.country', 'femaleProfile.city.state.country')
+            //     .orderBy('match.maleProfileId')
+            //     .addOrderBy('_already_shared_with_female', 'DESC')
+            //     .skip(skip).take(take)
+            //     .getMany();
 
-        if (count > 0 && femaleProfileIds?.length > 0) {
-            do {
-                const rawMatches = await this.matchRepository.query(
-                    `select DISTINCT ON (m."femaleProfileId") m."maleProfileId", m."femaleProfileId" from match m WHERE m."sharedWithMaleOn" IS NULL AND m."sharedWithFemaleOn" IS NULL AND m."femaleProfileId" IN (${femaleProfileIds.join(',')})`);
+            console.log('maleMatchIds:', maleMatchIds);
 
-                // console.log('rawMatches?.length:', rawMatches?.length, rawMatches);
+            const maleMatches = await this.matchRepository.findByIds(maleMatchIds, {
+                relations: ['maleProfile', 'femaleProfile', 'femaleProfile.caste', 'femaleProfile.city', 'femaleProfile.city.state', 'femaleProfile.city.state.country'] // 'maleProfile.caste', 'maleProfile.city', 'maleProfile.city.state', 'maleProfile.city.state.country',
+            });
 
-                const matches = await this.matchRepository.findByIds(rawMatches, {
-                    relations: ['maleProfile', 'maleProfile.caste', 'maleProfile.city', 'maleProfile.city.state', 'maleProfile.city.state.country', 'femaleProfile', 'femaleProfile.caste', 'femaleProfile.city', 'femaleProfile.city.state', 'femaleProfile.city.state.country']
-                });
+            for await (let match of maleMatches) {
+                match = await this.sendMatch(match, { toMale: true });
+            }
+            skip += take;
+        }
 
-                // console.log('matches?.length:', matches?.length, matches.map(match => { return { "male": match.maleProfileId, "female": match.femaleProfileId } }));
+        // Send to females
 
-                for await (let match of matches) {
-                    match = await this.sendMatch(match);
-                }
+        skip = 0
+        while (skip < femaleCount) {
 
-                skip += take;
-                [femaleProfiles, count] = await this.profileRepository.findAndCount({
-                    where: { gender: Gender.FEMALE },
-                    skip, take
-                });
-                femaleProfileIds = femaleProfiles.map(profile => profile.id);
+            let femaleMatchIds = await this.matchRepository.createQueryBuilder('match')
+                .select('match.maleProfileId')
+                .addSelect('match.femaleProfileId')
+                .addSelect(`CASE
+                    WHEN match."sharedWithMaleOn" IS NULL THEN 0
+                    ELSE 1
+                    END`, '_already_shared_with_male')
+                .distinctOn(['match.femaleProfileId'])
+                .where('match.sharedWithFemaleOn is NULL')
+                .orderBy('match.femaleProfileId')
+                .addOrderBy('_already_shared_with_male', 'DESC')
+                .skip(skip).take(take)
+                .getMany();
 
-            } while (skip < count)
+            console.log('femaleMatchIds:', femaleMatchIds);
+
+            const femaleMatches = await this.matchRepository.findByIds(femaleMatchIds, {
+                relations: ['maleProfile', 'maleProfile.caste', 'maleProfile.city', 'maleProfile.city.state', 'maleProfile.city.state.country', 'femaleProfile'] // 'femaleProfile.caste', 'femaleProfile.city', 'femaleProfile.city.state', 'femaleProfile.city.state.country'
+            });
+
+            for await (let match of femaleMatches) {
+                match = await this.sendMatch(match, { toFemale: true });
+            }
+            skip += take;
         }
     }
 
@@ -1426,17 +1490,6 @@ export class ProfileService {
     async sendTestMessage(telegramAccountId: string, testMessage: string = 'This is a test message. Please ignore it.') {
         logger.log(`sendTestMessage(${telegramAccountId}, ${testMessage})`);
         const telegramAccount = await this.getTelegramAccountById(telegramAccountId, { throwOnFail: true });
-        // console.log('telegramAccount:', telegramAccount);
-        // try {
-        //     await this.telegramService.notifyUser(telegramAccount, testMessage);
-        //     return { status: "OK" };
-        // } catch (error) {
-        //     this.handleTelegramBotError(error);
-        //     return {
-        //         status: "Failed",
-        //         reason: "Blocked by user"
-        //     };
-        // }
 
         await this.botFunctionWrapper(this.telegramService.notifyUser, telegramAccount.userId, telegramAccount, testMessage);
     }
@@ -2085,9 +2138,8 @@ export class ProfileService {
             // notify user
             const notifyUser = option?.notifyUser ?? true;
             if (notifyUser) {
-                try {
-                    this.telegramService.notifyUserOfVerification(telegramAccount, document, valid, rejectionReason, rejectionDescription);
-                } catch (error) { }
+                await this.botFunctionWrapper(this.telegramService.notifyUserOfVerification, telegramAccount.userId, telegramAccount, document, valid, rejectionReason, rejectionDescription);
+
             }
 
             return document;
