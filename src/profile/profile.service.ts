@@ -37,6 +37,8 @@ import { join } from 'path';
 import { doc } from 'prettier';
 
 const logger = new Logger('ProfileService');
+const convertToPdf = process.env.CONVERT_DOC_TO_PDF === 'true';
+const applyWatermark = process.env.APPLY_WATERMARK === 'true';
 
 // TODO: use data-loaders for speeding up stuff.
 @Injectable()
@@ -152,13 +154,12 @@ export class ProfileService {
 
 
     @Transactional()
-    async saveDocuments(telegramAccountId: string, files: any, agent: WbAgent) {
+    async uploadAndVerifyDocuments(telegramAccountId: string, files: any, agent: WbAgent) {
         logger.log(`saveDocuments(${telegramAccountId}, ${JSON.stringify(files)}, ${JSON.stringify(agent)})`);
         this.validateId(telegramAccountId);
         this.validateAgent(agent);
 
         const telegramAccount = await this.getTelegramAccountById(telegramAccountId);
-        const convertToPdf = true, applyWatermark = true;
 
         const savedDocuments = {};
 
@@ -188,7 +189,7 @@ export class ProfileService {
                         newFileName = await doc2pdf(filePath, null, newFileName);
                         logger.log(`converted doc file: ${filePath} to pdf: ${newFileName}!`);
                         fileName = newFileName;
-                        filePath = newFilePath;
+                        filePath = newFilePath = join(dir, newFileName);;
                     }
 
                     if (applyWatermark && fileName.endsWith('.pdf')) {
@@ -211,7 +212,7 @@ export class ProfileService {
                     documentId: document.id,
                     valid: true
                 };
-                document = await this.validateDocument(validationInput, agent, { notifyUser: true });
+                document = await this.validateDocument(validationInput, agent, { notifyUser: false });
 
                 savedDocuments[fieldName] = document;
             }
@@ -287,7 +288,16 @@ export class ProfileService {
         }
 
         if (createTrueEditFalse === true) {
-            await this.botFunctionWrapper(this.telegramService.notifyUser, telegramAccount.userId, telegramAccount, 'Congratulations! Your profile has been activated. From now on, matching profiles will be forwarded to you!');
+            try {
+                await this.telegramService.notifyUser(telegramAccount, 'Congratulations! Your profile has been activated. From now on, matching profiles will be forwarded to you!');
+            } catch (error) {
+                if (error?.code === 403) {
+                    logger.log(`Blocked by user. Deactivating!`);
+                    await this.deactivateProfile(telegramAccount.userId, ProfileDeactivationDuration.INDEFINITELY);
+                } else {
+                    throw error;
+                }
+            }
         }
 
         // delete-matches involving this profile.
@@ -520,6 +530,7 @@ export class ProfileService {
     }
 
 
+    // works only when profile has been created.
     @Transactional()
     async hardDeleteProfileForTesting(accountId: string) { //, agent: WbAgent) {
         logger.log(`hardDeleteProfile(${accountId})`); //, ${reason}, ${agent.email}, ${agent.role})`);
@@ -1467,31 +1478,40 @@ export class ProfileService {
 
 
     // ref - https://stackoverflow.com/questions/45020874/typescript-wrapping-function-with-generic-type
-    async botFunctionWrapper<Args extends any[], Return>(
-        fn: (...operationParameters: Args) => Return,
-        telegramUserId: number,
-        ...parameters: Args
-    ): Promise<Return> {
-        console.log(`outer `);
-        try {
-            const result = await fn(...parameters);
-            return result;
-        } catch (error) {
-            if (error?.code === 403) {
-                logger.log(`Blocked by user. Deactivating!`);
-                await this.deactivateProfile(telegramUserId, ProfileDeactivationDuration.INDEFINITELY);
-            } else {
-                throw error;
-            }
-        }
-    }
+    // async botFunctionWrapper<Args extends any[], Return>(
+    //     fn: (...operationParameters: Args) => Return,
+    //     telegramUserId: number,
+    //     ...parameters: Args
+    // ): Promise<Return> {
+    //     console.log(`outer `);
+    //     try {
+    //         const result = await fn(...parameters);
+    //         return result;
+    //     } catch (error) {
+    //         if (error?.code === 403) {
+    //             logger.log(`Blocked by user. Deactivating!`);
+    //             await this.deactivateProfile(telegramUserId, ProfileDeactivationDuration.INDEFINITELY);
+    //         } else {
+    //             throw error;
+    //         }
+    //     }
+    // }
 
 
     async sendTestMessage(telegramAccountId: string, testMessage: string = 'This is a test message. Please ignore it.') {
         logger.log(`sendTestMessage(${telegramAccountId}, ${testMessage})`);
         const telegramAccount = await this.getTelegramAccountById(telegramAccountId, { throwOnFail: true });
 
-        await this.botFunctionWrapper(this.telegramService.notifyUser, telegramAccount.userId, telegramAccount, testMessage);
+        try {
+            await this.telegramService.notifyUser(telegramAccount, testMessage);
+        } catch (error) {
+            if (error?.code === 403) {
+                logger.log(`Blocked by user. Deactivating!`);
+                await this.deactivateProfile(telegramAccount.userId, ProfileDeactivationDuration.INDEFINITELY);
+            } else {
+                throw error;
+            }
+        }
     }
 
 
@@ -2138,8 +2158,16 @@ export class ProfileService {
             // notify user
             const notifyUser = option?.notifyUser ?? true;
             if (notifyUser) {
-                await this.botFunctionWrapper(this.telegramService.notifyUserOfVerification, telegramAccount.userId, telegramAccount, document, valid, rejectionReason, rejectionDescription);
-
+                try {
+                    await this.telegramService.notifyUserOfVerification(telegramAccount, document, valid, rejectionReason, rejectionDescription);
+                } catch (error) {
+                    if (error?.code === 403) {
+                        logger.log(`Blocked by user. Deactivating!`);
+                        await this.deactivateProfile(telegramAccount.userId, ProfileDeactivationDuration.INDEFINITELY);
+                    } else {
+                        throw error;
+                    }
+                }
             }
 
             return document;

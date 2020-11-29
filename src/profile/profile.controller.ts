@@ -345,7 +345,7 @@ export class ProfileController {
         // console.log('files:', files);
         // console.log('agent:', agent);
 
-        return this.profileService.saveDocuments(uuid, files, agent);
+        return this.profileService.uploadAndVerifyDocuments(uuid, files, agent);
 
     }
 

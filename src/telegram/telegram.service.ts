@@ -57,10 +57,10 @@ const logger = new defaultLogger('TelegramService');
 const bioDir = getTempDir(TypeOfDocument.BIO_DATA);
 const pictureDir = getTempDir(TypeOfDocument.PICTURE);
 
-const processToPdf = process.env.CONVERT_DOC_TO_PDF === 'true';
+const convertToPdf = process.env.CONVERT_DOC_TO_PDF === 'true';
 const applyWatermark = process.env.APPLY_WATERMARK === 'true';
 
-logger.log(`Convert to PDF is ${processToPdf ? 'ENABLED' : 'DISABLED'}`);
+logger.log(`Convert to PDF is ${convertToPdf ? 'ENABLED' : 'DISABLED'}`);
 logger.log(`Apply Watermark is ${applyWatermark ? 'ENABLED' : 'DISABLED'}`);
 
 @Injectable()
@@ -276,10 +276,10 @@ export class TelegramService {
                             one_time_keyboard: true,
                             keyboard: [
                                 [{
-                                    text: "Click to Confirm\nPhone Number",
+                                    text: "Click to Confirm Phone Number",
                                     request_contact: true
-                                },
-                                {
+                                }],
+                                [{
                                     text: "Cancel",
                                 }],
                             ],
@@ -408,11 +408,11 @@ export class TelegramService {
                         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
                         if (fileName) {
-                            const mime_type = processToPdf
+                            const mime_type = convertToPdf
                                 ? mimeTypes['.pdf'] : document.mime_type
                             try {
                                 const fileToUpload
-                                    = await processBioDataFile(link, fileName, bioDir, processToPdf, applyWatermark);
+                                    = await processBioDataFile(link, fileName, bioDir, convertToPdf, applyWatermark);
 
                                 const bioData = await this.profileService.uploadDocument(ctx.from.id, fileToUpload, bioDir, mime_type, TypeOfDocument.BIO_DATA, document.file_id);
 
@@ -623,11 +623,11 @@ export class TelegramService {
                         await ctx.reply('Please wait ...');
                         await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
-                        const mime_type = processToPdf
+                        const mime_type = convertToPdf
                             ? mimeTypes['.pdf'] : document.mime_type
                         try {
                             const fileToUpload
-                                = await processBioDataFile(link, fileName, bioDir, processToPdf, applyWatermark);
+                                = await processBioDataFile(link, fileName, bioDir, convertToPdf, applyWatermark);
 
                             const bioData = await this.profileService.uploadDocument(ctx.from.id, fileToUpload, bioDir, mime_type, TypeOfDocument.BIO_DATA, document.file_id);
 

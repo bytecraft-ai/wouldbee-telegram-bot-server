@@ -486,7 +486,7 @@ export const mimeTypes = {
 export async function doc2pdf(fileName: string, dir?: string, outputFilePath?: string): Promise<string | null> {
     logger.log(`-> doc2pdf(${fileName}, ${dir}, ${outputFilePath})`);
     const inputFilePath = isNil(dir) ? fileName : join(dir, fileName);
-
+    let newFileName: string;
     try {
         const nameSplit = fileName.split('.');
         const extension = nameSplit.length > 1 ? nameSplit.pop() : '';
@@ -494,7 +494,8 @@ export async function doc2pdf(fileName: string, dir?: string, outputFilePath?: s
             logger.error(`Can only convert word files with doc/docx extension. 
             But Received ${fileName} with "${extension}" extension.`);
         }
-        outputFilePath = outputFilePath ?? join(dir, `${fileName[0]}.pdf`);
+        newFileName = `${nameSplit[0]}.pdf`;
+        outputFilePath = outputFilePath ?? join(dir, newFileName);
 
         // Read file
         let data = await fs.readFile(inputFilePath);
@@ -506,7 +507,7 @@ export async function doc2pdf(fileName: string, dir?: string, outputFilePath?: s
         logger.error(`could not convert ${inputFilePath} to pdf: ${JSON.stringify(err)}`);
         throw err;
     }
-    return outputFilePath;
+    return newFileName;
 }
 
 
