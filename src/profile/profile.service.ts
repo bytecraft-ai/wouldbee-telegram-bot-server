@@ -1271,14 +1271,41 @@ export class ProfileService {
         const femaleProfile = match.femaleProfile;
 
         const maleTelegramAccount = await this.getTelegramAccountForSending(maleProfile);
-
         const femaleTelegramAccount = await this.getTelegramAccountForSending(femaleProfile);
 
-        await this.telegramService.sendProfile(maleTelegramAccount, femaleProfile, femaleTelegramAccount);
+        try {
+            if (maleTelegramAccount.status !== UserStatus.ACTIVATED || femaleTelegramAccount.status !== UserStatus.ACTIVATED) {
+                return match;
+            }
+            await this.telegramService.sendProfile(maleTelegramAccount, femaleProfile, femaleTelegramAccount);
+        } catch (error) {
+            if (error?.code === 403) {
+                logger.log(`Blocked by male user with account id: ${maleTelegramAccount.id}. Deactivating!`);
+                await this.deactivateProfile(maleTelegramAccount.userId, ProfileDeactivationDuration.INDEFINITELY);
+                return;
+            } else {
+                logger.error(`Unknown error: ${JSON.stringify(error)}`);
+                throw error;
+            }
+        }
 
         match = await this.markMatchAsSent(match, true);
 
-        await this.telegramService.sendProfile(femaleTelegramAccount, maleProfile, maleTelegramAccount);
+        try {
+            if (maleTelegramAccount.status !== UserStatus.ACTIVATED || femaleTelegramAccount.status !== UserStatus.ACTIVATED) {
+                return match;
+            }
+            await this.telegramService.sendProfile(femaleTelegramAccount, maleProfile, maleTelegramAccount);
+        } catch (error) {
+            if (error?.code === 403) {
+                logger.log(`Blocked by female user with account id: ${femaleTelegramAccount.id}. Deactivating!`);
+                await this.deactivateProfile(maleTelegramAccount.userId, ProfileDeactivationDuration.INDEFINITELY);
+                return;
+            } else {
+                logger.error(`Unknown error: ${JSON.stringify(error)}`);
+                throw error;
+            }
+        }
 
         match = await this.markMatchAsSent(match, false);
         return match;
@@ -1293,7 +1320,7 @@ export class ProfileService {
         let skip = 0
         const take = 100;
         let [femaleProfiles, count] = await this.profileRepository.findAndCount({
-            where: { gender: Gender.FEMALE },
+            where: { gender: Gender.FEMALE, active: true },
             skip, take
         });
         let femaleProfileIds = femaleProfiles.map(profile => `'${profile.id}'`);
@@ -1302,15 +1329,18 @@ export class ProfileService {
         if (count > 0 && femaleProfileIds?.length > 0) {
             do {
                 const rawMatches = await this.matchRepository.query(
-                    `select DISTINCT ON (m."femaleProfileId") m."maleProfileId", m."femaleProfileId" from match m WHERE m."sharedWithMaleOn" IS NULL AND m."sharedWithFemaleOn" IS NULL AND m."femaleProfileId" IN (${femaleProfileIds.join(',')})`);
+                    `select DISTINCT ON (m."femaleProfileId") m."maleProfileId", m."femaleProfileId" from match m 
+                    INNER JOIN profile p ON p.id = m."maleProfileId" WHERE
+                    p.active = true AND m."sharedWithMaleOn" IS NULL AND m."sharedWithFemaleOn" IS NULL
+                    AND m."femaleProfileId" IN (${femaleProfileIds.join(',')})`);
 
-                // console.log('rawMatches?.length:', rawMatches?.length, rawMatches);
+                console.log('rawMatches?.length:', rawMatches?.length, rawMatches);
 
                 const matches = await this.matchRepository.findByIds(rawMatches, {
                     relations: ['maleProfile', 'maleProfile.caste', 'maleProfile.city', 'maleProfile.city.state', 'maleProfile.city.state.country', 'femaleProfile', 'femaleProfile.caste', 'femaleProfile.city', 'femaleProfile.city.state', 'femaleProfile.city.state.country']
                 });
 
-                // console.log('matches?.length:', matches?.length, matches.map(match => { return { "male": match.maleProfileId, "female": match.femaleProfileId } }));
+                console.log('matches?.length:', matches?.length, matches.map(match => { return { "male": match.maleProfileId, "female": match.femaleProfileId } }));
 
                 for await (let match of matches) {
                     match = await this.sendMatch(match);
@@ -1369,6 +1399,46 @@ export class ProfileService {
 
             } while (skip < count)
         }
+    }
+
+
+    // ref - https://stackoverflow.com/questions/45020874/typescript-wrapping-function-with-generic-type
+    async botFunctionWrapper<Args extends any[], Return>(
+        fn: (...operationParameters: Args) => Return,
+        telegramUserId: number,
+        ...parameters: Args
+    ): Promise<Return> {
+        console.log(`outer `);
+        try {
+            const result = await fn(...parameters);
+            return result;
+        } catch (error) {
+            if (error?.code === 403) {
+                logger.log(`Blocked by user. Deactivating!`);
+                await this.deactivateProfile(telegramUserId, ProfileDeactivationDuration.INDEFINITELY);
+            } else {
+                throw error;
+            }
+        }
+    }
+
+
+    async sendTestMessage(telegramAccountId: string, testMessage: string = 'This is a test message. Please ignore it.') {
+        logger.log(`sendTestMessage(${telegramAccountId}, ${testMessage})`);
+        const telegramAccount = await this.getTelegramAccountById(telegramAccountId, { throwOnFail: true });
+        // console.log('telegramAccount:', telegramAccount);
+        // try {
+        //     await this.telegramService.notifyUser(telegramAccount, testMessage);
+        //     return { status: "OK" };
+        // } catch (error) {
+        //     this.handleTelegramBotError(error);
+        //     return {
+        //         status: "Failed",
+        //         reason: "Blocked by user"
+        //     };
+        // }
+
+        await this.botFunctionWrapper(this.telegramService.notifyUser, telegramAccount.userId, telegramAccount, testMessage);
     }
 
 
@@ -2015,7 +2085,9 @@ export class ProfileService {
             // notify user
             const notifyUser = option?.notifyUser ?? true;
             if (notifyUser) {
-                this.telegramService.notifyUserOfVerification(telegramAccount, document, valid, rejectionReason, rejectionDescription);
+                try {
+                    this.telegramService.notifyUserOfVerification(telegramAccount, document, valid, rejectionReason, rejectionDescription);
+                } catch (error) { }
             }
 
             return document;

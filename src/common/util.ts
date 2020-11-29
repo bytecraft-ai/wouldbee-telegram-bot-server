@@ -604,3 +604,21 @@ export function toTitleCase(input: string) {
 
     return str;
 }
+
+
+// export async function botFunctionWrapper<Args extends any[], Return>(
+//     fn: (...operationParameters: Args) => Return,
+//     telegramAccount: TelegramAccount
+//     ...parameters: Args
+// ): Promise<Return> {
+//     console.log(`outer `);
+//     try {
+//         const result = await fn(...parameters);
+//         return result;
+//     } catch (error) {
+//         console.log(`Caught error!`);
+//         if (error.code === 403) {
+//             logger.warn(`Blocked by user`);
+//         }
+//     }
+// }

@@ -89,6 +89,12 @@ export const unverifiedProfileMsg = `Your profile is pending verification! This 
 export const deactivatedProfileMsg = `Your profile is not active! This action requires you to first activate your profile. To do that use the /status command and then follow the steps suggested. `;
 
 
+export const bioUpdatePendingMsg = `You cannot update bio-data until the previously uploaded bio-data is verified.`;
+
+
+export const picUpdatePendingMsg = `You cannot update picture until the previously uploaded picture is verified.`;
+
+
 export const unsupportedPictureFormat = `Error: Only 'jpg' and 'png' formats are accepted for profile pictures. 
 Please retry with supported format or use /cancel to quit.`;
 

@@ -12,7 +12,6 @@ import { WbAgent } from 'src/agent/entities/agent.entity';
 import { Profile } from './entities/profile.entity';
 import { TelegramService } from 'src/telegram/telegram.service';
 import { Match } from './entities/match.entity';
-import { agent } from 'supertest';
 // import { Profile } from './entities/profile.entity';
 // import { AwsService } from 'src/aws-service/aws-service.service';
 // import { TelegramAuthenticateDto } from './dto/telegram-auth.dto';
@@ -180,6 +179,20 @@ export class TelegramAccountController {
     //         test: 'success'
     //     };
     // }
+
+
+    @Get('/send-test-message/:uuid')
+    @Roles(UserRole.ADMIN)
+    async sendTestMessage(
+        @Param('uuid', new ParseUUIDPipe()) uuid: string,
+        @Query('message') message?: string
+    ) {
+        logger.log(`sendTestMessage(${uuid}, ${message})`);
+        // return this.profileService.getTelegramAccountsForVerification(
+        //     options?.skip, options?.take
+        // );
+        return this.profileService.sendTestMessage(uuid, message);
+    }
 
 
     @Get('/')

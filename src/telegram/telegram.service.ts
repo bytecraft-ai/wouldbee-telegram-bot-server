@@ -33,25 +33,22 @@ import {
     Stage,
     Command,
     Action,
-    // Use,
 } from 'nestjs-telegraf';
 import { RegistrationActionRequired, TypeOfDocument, DocRejectionReason, UserStatus, ProfileDeactivationDuration, ProfileDeletionReason } from 'src/common/enum';
 import { deleteFile, mimeTypes, toTitleCase } from 'src/common/util';
 import { Profile } from 'src/profile/entities/profile.entity';
 import { TelegramAccount } from 'src/profile/entities/telegram-account.entity';
 import { ProfileService } from 'src/profile/profile.service';
-import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, deactivatedProfileMsg, registrationCancelled, supportMsg, deletionSuccessMsg, acknowledgeDeletionRequest, unsupportedBioFormat, unverifiedProfileMsg } from './telegram.constants';
+import { welcomeMessage, helpMessage, bioCreateSuccessMsg, askForBioUploadMsg, pictureCreateSuccessMsg, registrationSuccessMsg, alreadyRegisteredMsg, fatalErrorMsg, unregisteredUserMsg, deactivatedProfileMsg, registrationCancelled, supportMsg, deletionSuccessMsg, acknowledgeDeletionRequest, unsupportedBioFormat, unverifiedProfileMsg, bioUpdatePendingMsg, picUpdatePendingMsg } from './telegram.constants';
 import { getBioDataFileName, getPictureFileName, processBioDataFile, processPictureFile, validateBioDataFileSize, validatePhotoFileSize, silentSend, createProfileCard } from './telegram.service.helper';
 import { Document } from 'src/profile/entities/document.entity';
 import { supportResolutionMaxLength, supportResolutionMinLength } from 'src/common/field-length';
 import telegrafThrottler from 'telegraf-throttler';
 import { html as format } from 'telegram-format';
-// import { Logger } from "nestjs-pino";
 import { Logger as defaultLogger } from '@nestjs/common';
 import { join } from 'path';
 import { createReadStream } from 'fs';
 import { existsSync } from 'fs';
-import { ReadStream } from 'fs';
 import { getTempDir } from 'src/common/file-util';
 require('dotenv').config();
 
@@ -72,7 +69,6 @@ export class TelegramService {
     private enableAdminNotification = process.env.ADMIN_NOTIFICATIONS === 'true';
 
     constructor(
-        // private readonly logger: Logger,
 
         // @InjectQueue('scheduler-queue') private schedulerQueue: Queue,
         @InjectBot() private bot: TelegrafProvider,
@@ -90,6 +86,7 @@ export class TelegramService {
 
         // set session middleware - required for creating wizard
         this.bot.use(session());
+        this.bot.use(this.myMiddleware);
 
         this.createRegistrationWizard();
         this.createUpdateBioWizard();
@@ -98,14 +95,39 @@ export class TelegramService {
         // TODO - will enable once admin panel has support for this
         // this.createSupportWizard();
 
-        // TODO: test
-        this.bot.catch((err, ctx) => {
-            logger.error('ERROR!')
-            logger.error(`updateType: ${ctx.updateType}, Error:\n${JSON.stringify(err)}`);
-            ctx.reply(fatalErrorMsg);
-        })
-
         this.setCommands();
+    }
+
+
+    // Need fat arrow function to capture `this`. Normally declared function will not have access to `this` object.
+    myMiddleware = async (ctx: Context, next: any) => {
+        const start = Date.now();
+
+        // Handle bot
+        if (ctx.from.is_bot) {
+            logger.log(`A bot visited us. ctx.from: ${ctx.from}`);
+            logger.log(`TG Response time: ${Date.now() - start}`);
+            return;
+        }
+
+        const telegramAccount = await this.getOrCreateTelegramAccount(ctx);
+
+        // handle banned accounts
+        if (telegramAccount.status === UserStatus.BANNED) {
+            await ctx.reply('Hi there,\n Your account has been banned.');
+        }
+        // handle deleted accounts
+        else if (telegramAccount.status === UserStatus.DELETED) {
+            ctx.reply(`Hi ${telegramAccount.name ?? 'there'},\n You have deleted your profile. If you need to create another profile, please use a different phone number.`);
+        }
+        // else let it through
+        else {
+            // console.log('updateType:', ctx.updateType, 'updateSubType:', ctx.updateSubTypes, 'ctx.update', ctx.update);
+            await next();
+        }
+
+        // log response time in handling request
+        logger.log(`TG Response time: ${Date.now() - start}`);
     }
 
 
@@ -562,8 +584,12 @@ export class TelegramService {
                     await ctx.reply(deactivatedProfileMsg);
                     return ctx.scene.leave();
                 } else {
-                    assert(telegramAccount.status > UserStatus.UNVERIFIED,
-                        ctx.wizard.state.data.telegramAccountId = telegramAccount.id);
+                    assert(telegramAccount.status > UserStatus.UNVERIFIED && telegramAccount.status < UserStatus.DEACTIVATED);
+                    if (telegramAccount.unverifiedBioDataId) {
+                        await ctx.reply(bioUpdatePendingMsg);
+                        return ctx.scene.leave();
+                    }
+                    ctx.wizard.state.data.telegramAccountId = telegramAccount.id;
                 }
 
                 await ctx.reply(askForBioUploadMsg);
@@ -667,8 +693,13 @@ export class TelegramService {
                 } else if (telegramAccount.status > UserStatus.ACTIVATED) {
                     await ctx.reply(deactivatedProfileMsg);
                     return ctx.scene.leave();
-                } else {
-                    assert(telegramAccount.status > UserStatus.UNVERIFIED, telegramAccount.status < UserStatus.DEACTIVATED);
+                }
+                else {
+                    assert(telegramAccount.status > UserStatus.UNVERIFIED && telegramAccount.status < UserStatus.DEACTIVATED);
+                    if (telegramAccount.unverifiedPictureId) {
+                        await ctx.reply(picUpdatePendingMsg);
+                        return ctx.scene.leave();
+                    }
                     ctx.wizard.state.data.telegramAccountId = telegramAccount.id;
                 }
 
@@ -1146,19 +1177,25 @@ export class TelegramService {
 
 
     // fails silently
-    async notifyUser(telegramAccount: TelegramAccount, message: string, sendHi = true) {
+    // async notifyUser(telegramAccount: TelegramAccount, message: string, sendHi = true) {
+    public notifyUser = async (telegramAccount: TelegramAccount, message: string, sendHi = true) => {
         logger.log(`-> notifyUser(${telegramAccount.id}, ${message}, ${sendHi})`);
+
         try {
             const chatId = telegramAccount.chatId;
             if (sendHi) {
-                const name = telegramAccount.name || 'there';
+                const name = telegramAccount?.name || 'there';
                 message = `Hi ${name},\n${message}`;
             }
+            logger.log(`sending message: ${message}, ${sendHi}`);
+
+            await this.bot.telegram.sendChatAction(chatId, 'typing');
             await this.bot.telegram.sendMessage(chatId, message,
                 { disable_notification: silentSend() });
         }
         catch (error) {
-            logger.error(`Could not notify user. Telegram account id: ${JSON.stringify(telegramAccount.id)}, message: ${message}, name: ${name}, ERROR:\n${JSON.stringify(error)}`);
+            logger.error(`Could not notify user. Telegram account id: ${JSON.stringify(telegramAccount.id)}, message: ${message}, ERROR:\n${JSON.stringify(error)}`);
+            throw error;
         }
     }
 

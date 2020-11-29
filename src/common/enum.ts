@@ -50,6 +50,7 @@ export enum UserStatus {
     PENDING_DELETION,
     DELETED,
     BANNED,
+    BLOCKED_BY_USER
 }
 
 
