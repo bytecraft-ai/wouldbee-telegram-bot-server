@@ -128,7 +128,7 @@ export class StatsController {
 
 
     @Get('/turn-on-notifications')
-    // @Roles(UserRole.ADMIN)
+    @Roles(UserRole.ADMIN)
     async turnAdminNotificationsOn() {
         this.telegramService.setAdminNotifications(true);
         return { notifications: 'on' };
@@ -136,7 +136,7 @@ export class StatsController {
 
 
     @Get('/turn-off-notifications')
-    // @Roles(UserRole.ADMIN)
+    @Roles(UserRole.ADMIN)
     async turnAdminNotificationsOff() {
         this.telegramService.setAdminNotifications(false);
         return { notifications: 'off' };
@@ -144,7 +144,7 @@ export class StatsController {
 
 
     @Get('/hard-delete-account-test/:uuid')
-    // @Roles(UserRole.ADMIN)
+    @Roles(UserRole.ADMIN)
     async hardDeleteAccount(
         // @GetAgent() agent: WbAgent,
         @Param('uuid', new ParseUUIDPipe()) uuid: string,

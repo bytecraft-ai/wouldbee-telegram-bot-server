@@ -1,11 +1,10 @@
 db:
   database: 'telegram_production'
-  synchronize: true
-  dropSchema: false
+  # synchronize: false
+  # dropSchema: false
   logging: false
 
 jwt:
-  # secret: 'move-it-to-env-variable'
   expiresIn: '7d'
 
 aws:

@@ -11,7 +11,7 @@ export const typeOrmConfig: TypeOrmModuleOptions = {
     password: dbConfig.password || process.env.RDS_PASSWORD,
     database: dbConfig.database || process.env.RDS_DB_NAME,
     synchronize: dbConfig.synchronize || process.env.TYPEORM_SYNC,
-    dropSchema: dbConfig.dropSchema,
+    dropSchema: process.env.NODE_ENV === 'production' ? false : dbConfig.dropSchema,
     logging: ["error"], //true, //["error"],
     maxQueryExecutionTime: 1000, //log queries that run for more than 1 sec
     cache: {
