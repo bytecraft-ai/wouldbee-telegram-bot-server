@@ -90,6 +90,26 @@ export class GetTelegramAccountsDto extends PaginationDto {
     })
     isNew?: boolean;
 
+    // isPending = isPendingRegistration = Only Phone verified
+    @IsOptional()
+    @IsBoolean()
+    @Transform(value => {
+        if (value === 'true' || value === true) return true;
+        else if (value === 'false' || value === false) return false;
+        else throw new BadRequestException(`${value} is not a boolean type! It's type is ${typeof value}`);
+    })
+    isPending?: boolean;
+
+    // isRejected = isInvalidated = BioData of a new profile was rejected
+    @IsOptional()
+    @IsBoolean()
+    @Transform(value => {
+        if (value === 'true' || value === true) return true;
+        else if (value === 'false' || value === false) return false;
+        else throw new BadRequestException(`${value} is not a boolean type! It's type is ${typeof value}`);
+    })
+    isRejected?: boolean;
+
     @IsOptional()
     @IsBoolean()
     @Transform(value => {

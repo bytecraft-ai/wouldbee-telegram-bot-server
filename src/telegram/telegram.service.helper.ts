@@ -23,7 +23,7 @@ export function validateBioDataFileSize(ctx: Context) {
 
     if (document.file_size > fileSizeLimit) {
         const size = (document.file_size / ONE_MB).toFixed(2);
-        errorMessage = `Bio-data should not be more than 2 MB in size. The size of file you sent is ${size} MB. Please reduce the bio-data size and resend using /upload_bio command.`;
+        errorMessage = `Bio-data should not be more than 2 MB in size. The size of file you sent is ${size} MB. Please reduce its size and resend.`;
     }
     return errorMessage;
 }
@@ -37,7 +37,7 @@ export function validatePhotoFileSize(ctx: Context) {
 
     if (file_size > fileSizeLimit) {
         const size = (file_size / ONE_MB).toFixed(2);
-        const errMessage = `Profile Picture should not be more than 2 MB in size. The size of file you sent is ${size} MB. Please reduce its size and resend using /upload_picture command.`;
+        const errMessage = `Profile Picture should not be more than 2 MB in size. The size of file you sent is ${size} MB. Please reduce its size and resend.`;
         return errMessage;
     }
     return null;

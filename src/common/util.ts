@@ -576,34 +576,37 @@ export function getHumanReadableDate(date?: Date): string {
 }
 
 
-export function toTitleCase(input: string) {
-    let str = input.replace(/_/g, ' ');
+export function toTitleCase(input: string): string {
+    logger.log(`-> toTitleCase(${input})`);
 
-    str = input.replace(/DASH/g, '-');
-    str = input.replace(/SLASH/g, '/');
-    str = input.replace(/OR/g, '/');
+    let output = input.replace(/_DASH_/g, '-')
+        .replace(/_SLASH_/g, ' / ')
+        .replace(/_OR_/g, ' / ')
+        .replace(/_/g, ' ');
 
-    str = input.replace(/([^\W_]+[^\s-]*) */g, function (txt) {
+    output = output.replace(/([^\W_]+[^\s-]*) */g, function (txt) {
         return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
     });
 
     // Certain minor words should be left lowercase unless 
     // they are the first or last words in the string
-    let lowers = ['A', 'An', 'The', 'And', 'But', 'Or', 'For', 'Nor', 'As', 'At',
+    const lowers = ['A', 'An', 'The', 'And', 'But', 'Or', 'For', 'Nor', 'As', 'At',
         'By', 'For', 'From', 'In', 'Into', 'Near', 'Of', 'On', 'Onto', 'To', 'With'];
     for (let i = 0, j = lowers.length; i < j; i++)
-        str = str.replace(new RegExp('\\s' + lowers[i] + '\\s', 'g'),
+        output = output.replace(new RegExp('\\s' + lowers[i] + '\\s', 'g'),
             function (txt) {
                 return txt.toLowerCase();
             });
 
     // Certain words such as initialisms or acronyms should be left uppercase
-    let uppers = ['Id', 'Tv', 'IT', 'ITES', 'BPO', 'IAS', 'IPS', 'IFS', 'IRS', 'CEO', 'CTO', 'CXO'];
-    for (let i = 0, j = uppers.length; i < j; i++)
-        str = str.replace(new RegExp('\\b' + uppers[i] + '\\b', 'g'),
-            uppers[i].toUpperCase());
+    const uppers = ['IT', 'ITES', 'BPO', 'IAS', 'IPS', 'IFS', 'IRS', 'IES', 'CEO', 'CTO', 'CXO', 'PR', 'UI', 'UX', 'VP', 'AVP', 'GM', 'DGM', 'NGO', 'PHD'];
+    for (let upper of uppers) {
+        // console.log('upper:', upper);
+        output = output.replace(new RegExp('\\b' + upper + '\\b', 'gi'),
+            upper.toUpperCase());
+    }
 
-    return str;
+    return output;
 }
 
 

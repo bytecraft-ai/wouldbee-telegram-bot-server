@@ -173,13 +173,6 @@ export class StatsController {
 export class TelegramAccountController {
     constructor(private readonly profileService: ProfileService) { }
 
-    // @Get('/test')
-    // test() {
-    //     return {
-    //         test: 'success'
-    //     };
-    // }
-
 
     @Get('/send-test-message/:uuid')
     @Roles(UserRole.ADMIN)

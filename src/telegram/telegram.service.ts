@@ -461,7 +461,8 @@ export class TelegramService {
             async (ctx: Context) => {
                 logger.log(`Step-5:: status-${ctx.wizard.state.data.status}`);
 
-                if (ctx.wizard.state.data.status > RegistrationActionRequired.UPLOAD_PICTURE) {
+                if (ctx.wizard.state.data.status > RegistrationActionRequired.UPLOAD_PICTURE
+                    || ctx.wizard.state.data.status === RegistrationActionRequired.UPLOAD_BIO) {
                     logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-5`);
                     ctx.wizard.state.data.next_without_user_input = true;
                     ctx.wizard.next();
@@ -480,7 +481,8 @@ export class TelegramService {
             async (ctx: Context) => {
                 logger.log(`Step-6:: status-${ctx.wizard.state.data.status}`);
 
-                if (ctx.wizard.state.data.status > RegistrationActionRequired.UPLOAD_PICTURE) {
+                if (ctx.wizard.state.data.status > RegistrationActionRequired.UPLOAD_PICTURE
+                    || ctx.wizard.state.data.status === RegistrationActionRequired.UPLOAD_BIO) {
                     logger.log(`Status: ${ctx.wizard.state.data.status}, skipping step-6, leaving wizard!`);
 
                 } else {

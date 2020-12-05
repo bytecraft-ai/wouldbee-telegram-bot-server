@@ -1621,7 +1621,7 @@ export class ProfileService {
     async getTelegramAccounts(options?: GetTelegramAccountsDto): Promise<IList<TelegramAccount> | undefined> {
         logger.log(`getTelegramAccounts(${JSON.stringify(options)})`);
 
-        const { isNew, isUpdated, getProfile, skip, take } = options;
+        const { isNew, isUpdated, isPending, isRejected, getProfile, skip, take } = options;
 
         this.validatePagination(take);
 
@@ -1630,9 +1630,6 @@ export class ProfileService {
         if (getProfile)
             query.leftJoinAndSelect('tel_profile.profile', 'profile');
 
-        // TODO: fix
-        // if (getPreference)
-        //     query.leftJoinAndSelect(PartnerPreference, 'preference', 'tel_profile.id = preference.id');
 
         if (!isNil(isNew)) {
             if (isNew)
@@ -1651,6 +1648,20 @@ export class ProfileService {
                 query.andWhere('tel_profile.unverifiedBioDataId IS NULL')
                     .andWhere('tel_profile.unverifiedPictureId IS NULL')
                     .andWhere('tel_profile.unverifiedIdProofId IS NULL');
+        }
+
+        // isPending = isPendingRegistration = Only Phone verified
+        if (!isNil(isPending)) {
+            if (isPending) {
+                query.andWhere('tel_profile.status = :phoneVerified', { phoneVerified: UserStatus.PHONE_VERIFIED })
+            }
+        }
+
+        // isRejected = isInvalidated = BioData of a new profile was rejected
+        if (!isNil(isRejected)) {
+            if (isRejected) {
+                query.andWhere('tel_profile.status = :rejected', { rejected: UserStatus.VERIFICATION_FAILED })
+            }
         }
 
         const [telegramAccounts, count] = await query.skip(skip).take(take).getManyAndCount();
