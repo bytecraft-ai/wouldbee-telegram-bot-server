@@ -301,17 +301,21 @@ export class TelegramService {
                     ctx.wizard.state.data.next_without_user_input = true;
                 } else {
                     logger.log(`HERE-1`);
-                    console.log(ctx.message.text);
+                    // console.log(ctx.message.text);
                     await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
 
-                    // console.log(ctx.update.message.contact, ctx.update);
+                    console.log(ctx.message.contact, ctx.from);
                     const msg = ctx.update.message;
                     const contact = ctx.update.message.contact;
 
                     if (contact) {
                         logger.log(`Got contact`);
                         // Check that contact is not an attached contact!
-                        if (contact["vcard"]) {
+                        // if (contact["vcard"]) {
+
+                        // The user sent other user contact
+                        // Ref - https://github.com/telegraf/telegraf/issues/1157#issue-725758343
+                        if (ctx.message.contact.user_id !== ctx.from.id) {
                             logger.log(`Got vcard`);
                             await ctx.reply('Please click the button below to confirm your phone number. Do not type or attach a contact.')
                             // re-enter the scene

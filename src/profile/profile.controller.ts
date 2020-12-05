@@ -1,4 +1,4 @@
-import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, Query, DefaultValuePipe, ParseArrayPipe, ParseUUIDPipe, Req, ParseBoolPipe, UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, Query, DefaultValuePipe, ParseArrayPipe, ParseUUIDPipe, Req, ParseBoolPipe, UseInterceptors, UploadedFiles, Delete } from '@nestjs/common';
 import { CreateCasteDto, CreateProfileDto, GetCastesDto, GetMatchesDto, GetProfileDto, GetTelegramAccountDto, GetProfilesDto, PartnerPreferenceDto, PatternPaginationDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
 import { DocumentValidationDto, GetTelegramAccountsDto, BanProfileDto } from './dto/profile.dto';
@@ -143,14 +143,14 @@ export class StatsController {
     }
 
 
-    @Get('/hard-delete-account-test/:uuid')
+    @Delete('/hard-delete-account-test/:uuid')
     @Roles(UserRole.ADMIN)
     async hardDeleteAccount(
-        // @GetAgent() agent: WbAgent,
+        @GetAgent() agent: WbAgent,
         @Param('uuid', new ParseUUIDPipe()) uuid: string,
     ) {
         try {
-            await this.profileService.hardDeleteProfileForTesting(uuid);
+            await this.profileService.hardDeleteProfileForTesting(uuid, agent);
             return { status: 'OK' };
         } catch (error) {
             return { status: 'failed' };

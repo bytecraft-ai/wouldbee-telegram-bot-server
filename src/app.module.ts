@@ -11,7 +11,9 @@ import { AuthModule } from './auth/auth.module';
 import { BullModule } from '@nestjs/bull';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SeederModule } from './seeder/seeder.module';
-import { LoggerMiddleware } from './common/logger.middleware';
+// import { LoggerMiddleware } from './common/logger.middleware';
+// import { APP_INTERCEPTOR } from '@nestjs/core';
+// import { DataLoaderInterceptor } from './common/nest-gql-dataloader';
 
 // import { MulterModule } from '@nestjs/platform-express';
 // import { GraphQLModule } from '@nestjs/graphql';
@@ -70,6 +72,10 @@ import { LoggerMiddleware } from './common/logger.middleware';
   ],
   providers: [
     AppService,
+    // {
+    //   provide: APP_INTERCEPTOR,
+    //   useClass: DataLoaderInterceptor,
+    // },
   ],
   controllers: [AppController]
 })

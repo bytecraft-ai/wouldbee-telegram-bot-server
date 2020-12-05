@@ -532,12 +532,12 @@ export class ProfileService {
 
     // works only when profile has been created.
     @Transactional()
-    async hardDeleteProfileForTesting(accountId: string) { //, agent: WbAgent) {
-        logger.log(`hardDeleteProfile(${accountId})`); //, ${reason}, ${agent.email}, ${agent.role})`);
+    async hardDeleteProfileForTesting(accountId: string, agent: WbAgent) {
+        logger.log(`hardDeleteProfile(${accountId}, ${agent.email}, ${agent.role})`);
 
-        // if (agent.role !== UserRole.ADMIN) {
-        //     throw new UnauthorizedException();
-        // }
+        if (agent.role !== UserRole.ADMIN) {
+            throw new UnauthorizedException();
+        }
 
         this.validateId(accountId);
 
@@ -556,12 +556,19 @@ export class ProfileService {
         telegramAccount.unverifiedPictureId = null;
         telegramAccount.unverifiedIdProofId = null;
 
-        telegramAccount = await this.telegramRepository.save(telegramAccount);
-
-        const profile: Profile = telegramAccount.profile;
-        const gender = profile.gender;
+        const profile: Profile = telegramAccount?.profile;
+        const gender = profile?.gender;
 
         try {
+
+            // No documents have been submitted by the user
+            if (telegramAccount.status <= UserStatus.PHONE_VERIFIED) {
+                await this.telegramRepository.delete(telegramAccount.id);
+                return;
+            }
+
+            telegramAccount = await this.telegramRepository.save(telegramAccount);
+
             await this.toDeleteProfileRepository.delete(telegramAccount.id);
 
             if (profile) {
