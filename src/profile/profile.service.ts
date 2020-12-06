@@ -621,8 +621,9 @@ export class ProfileService {
             throw new NotFoundException(`Telegram account with telegram user id: ${telegramUserId} not found!`);
         }
 
-        const profile: Profile = telegramAccount.profile;
-        const gender = profile.gender;
+        const profile: Profile = telegramAccount?.profile;
+        const gender = profile?.gender;
+
         if (!profile) {
             throw new NotFoundException('Profile for this telegram user does not exist!');
         }
