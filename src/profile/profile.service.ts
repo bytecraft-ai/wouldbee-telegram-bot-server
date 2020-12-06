@@ -536,7 +536,7 @@ export class ProfileService {
         logger.log(`hardDeleteProfile(${accountId}, ${agent.email}, ${agent.role})`);
 
         if (agent.role !== UserRole.ADMIN) {
-            throw new UnauthorizedException();
+            throw new UnauthorizedException('unauthorized');
         }
 
         this.validateId(accountId);

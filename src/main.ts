@@ -16,7 +16,9 @@ const serverConfig = get('server');
 const logger = new Logger();
 
 const nodeEnv = process.env.NODE_ENV || 'development';
-console.log('nodeEnv:', nodeEnv);
+const usePinoLogger = process.env.USE_PINO_LOGGER === 'true';
+
+console.log('[main] nodeEnv:', nodeEnv, 'usePinoLogger:', usePinoLogger);
 
 async function bootstrap() {
   // Initialize cls-hooked for typeorm transaction.
@@ -27,7 +29,7 @@ async function bootstrap() {
 
   let app: NestExpressApplication;
 
-  if (nodeEnv === 'production') {
+  if (nodeEnv === 'production' && usePinoLogger) {
     app = await NestFactory.create<NestExpressApplication>(
       AppModule, { logger: false });
     app.useLogger(app.get(Logger));

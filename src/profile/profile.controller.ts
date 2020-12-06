@@ -153,6 +153,7 @@ export class StatsController {
             await this.profileService.hardDeleteProfileForTesting(uuid, agent);
             return { status: 'OK' };
         } catch (error) {
+            console.log('error::', error);
             return { status: 'failed' };
         }
     }
