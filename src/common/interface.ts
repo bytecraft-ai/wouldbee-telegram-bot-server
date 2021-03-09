@@ -15,6 +15,8 @@ export interface CommonData {
 
 
 export interface IList<T> {
+    skip?: number;
+    take?: number;
     count: number;
     values: Array<T>;
 }

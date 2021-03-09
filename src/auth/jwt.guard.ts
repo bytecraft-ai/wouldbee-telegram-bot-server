@@ -4,7 +4,6 @@ import { Reflector } from "@nestjs/core";
 import { AuthGuard } from "@nestjs/passport";
 import { Request } from "express";
 import { UserRole } from "src/common/enum";
-import { RolesGuard } from "./role.guard";
 
 const logger = new Logger('JwtGuard');
 

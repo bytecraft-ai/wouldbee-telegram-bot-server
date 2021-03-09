@@ -6,7 +6,7 @@ const dbConfig = get('db');
 export const typeOrmConfig: TypeOrmModuleOptions = {
     type: dbConfig.type,
     host: dbConfig.host || process.env.RDS_HOSTNAME,
-    port: dbConfig.port || process.env.RDS_PORT,
+    port: dbConfig.port || parseInt(process.env.RDS_PORT),
     username: dbConfig.username || process.env.RDS_USERNAME,
     password: dbConfig.password || process.env.RDS_PASSWORD,
     database: dbConfig.database || process.env.RDS_DB_NAME,

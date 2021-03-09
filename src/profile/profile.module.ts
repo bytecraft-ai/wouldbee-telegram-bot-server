@@ -17,11 +17,10 @@ import { AuthModule } from 'src/auth/auth.module';
 import { Match } from './entities/match.entity';
 import { BullModule } from '@nestjs/bull';
 import { TelegramModule } from 'src/telegram/telegram.module';
-import { SchedulerQueueConsumer } from './queue-consumers/scheduler-queue-consumer';
+import { TaskQueueConsumer } from './queue-consumers/task-queue-consumer';
 import { Support } from './entities/support.entity';
 import { DeactivatedProfile } from './entities/deactivated-profile.entity';
 import { ProfileMarkedForDeletion } from './entities/to-delete-profile.entity';
-import { LoggerModule } from "nestjs-pino";
 import { conditionalImports } from 'src/common/conditional-module-imports';
 
 @Module({
@@ -31,11 +30,11 @@ import { conditionalImports } from 'src/common/conditional-module-imports';
         TypeOrmModule.forFeature([Caste, City, Country, PartnerPreference, Profile, State, TelegramAccount, Document, Match, Support, DeactivatedProfile, ProfileMarkedForDeletion]), AwsServiceModule,
         PassportModule.register({ defaultStrategy: 'jwt' }),
         BullModule.registerQueue(
-            { name: 'scheduler-queue' },
+            { name: 'task-queue' },
         ),
         forwardRef(() => TelegramModule)
     ],
-    providers: [ProfileService, SchedulerQueueConsumer],
+    providers: [ProfileService, TaskQueueConsumer],
     controllers: [ProfileController, PreferenceController, CommonController, TelegramAccountController, StatsController, MatchController],
     exports: [ProfileService]
 })

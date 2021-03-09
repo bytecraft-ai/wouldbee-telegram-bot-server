@@ -51,8 +51,12 @@ export const helpMessage = `Hi there. I am Would Bee Matrimony bot. As I am not 
 export const registrationCancelled = `Registration cancelled. Use /register command to start registration process again or use /help command to see how to interact with the Would Bee bot.`;
 
 
-export const askForBioUploadMsg = `Upload your bio-data (in PDF or MS-Word format) or use /cancel to quit.
- - Your bio-data must have the phone number you used to register with us, otherwise it will fail verification.`;
+export const askForBioUploadMsg = `Upload your bio-data (in PDF or MS-Word format) or use /cancel to quit. Your bio-data must have the following fields, otherwise it will fail verification.
+ - Name, gender, date of birth, Marital Status
+ - Religion, Caste, Mother Tongue
+ - Highest education, occupation, annual income, city living in
+ - contact details
+ `;
 
 
 export const bioCreateSuccessMsg = `Success! Your bio-data has been saved!` // You can update it anytime using the /update_bio command.

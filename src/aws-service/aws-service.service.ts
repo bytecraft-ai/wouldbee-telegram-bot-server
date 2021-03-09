@@ -143,7 +143,7 @@ export class AwsService {
 
 
     validateFileNameForS3Upload(fileName: string, typeOfDocument: TypeOfDocument, id: string): boolean {
-
+        logger.log(`-> validateFileNameForS3Upload(${fileName}, ${typeOfDocument}, ${id})`)
         if (!fileName.includes(id)) {
             logger.log(`fileName: ${fileName}, id: ${id}`);
             throw new Error('fileName does not contain the id');
@@ -195,8 +195,7 @@ export class AwsService {
 
 
     async uploadFileToS3(id: string, fileName: string, contentType: string, typeOfDocument: TypeOfDocument, dir = '/tmp/'): Promise<string | undefined> {
-
-        logger.log(`Uploading files to the bucket. Params: ${id}, ${fileName}, ${contentType}, ${typeOfDocument}, ${dir}`);
+        logger.log(`->uploadFileToS3(${id}, ${fileName}, ${contentType}, ${typeOfDocument}, ${dir})`);
 
         this.validateFileNameForS3Upload(fileName, typeOfDocument, id);
         const S3_BUCKET = this.getS3Bucket(typeOfDocument);

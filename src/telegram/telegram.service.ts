@@ -70,7 +70,7 @@ export class TelegramService {
 
     constructor(
 
-        // @InjectQueue('scheduler-queue') private schedulerQueue: Queue,
+        // @InjectQueue('task-queue') private schedulerQueue: Queue,
         @InjectBot() private bot: TelegrafProvider,
 
         @Inject(forwardRef(() => ProfileService))

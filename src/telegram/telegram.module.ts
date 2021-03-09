@@ -12,8 +12,6 @@ import { conditionalImports } from 'src/common/conditional-module-imports';
 // logger.log(`DEV_BOT_TOKEN: ${process.env.DEV_BOT_TOKEN}`);
 // logger.log(`STAGING_BOT_TOKEN: ${process.env.STAGING_BOT_TOKEN}`);
 
-
-
 @Module({
   imports: [
     ...conditionalImports,
@@ -24,9 +22,6 @@ import { conditionalImports } from 'src/common/conditional-module-imports';
           ? process.env.DEV_BOT_TOKEN
           : process.env.STAGING_BOT_TOKEN,
     }),
-    // BullModule.registerQueue(
-    //   { name: 'scheduler-queue' },
-    // ),
     forwardRef(() => ProfileModule),
   ],
   providers: [TelegramService],

@@ -20,7 +20,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     async validate(payload: JwtPayload): Promise<WbAgent | undefined> {
         const agent = await this.authService.validate(payload);
-        if (!agent) throw new UnauthorizedException();
+        // if (!agent) throw new UnauthorizedException();
 
         return agent;
     }

@@ -7,10 +7,10 @@ import {
   patchTypeORMRepositoryWithBaseRepository
 } from 'typeorm-transactional-cls-hooked';
 import { createTempDirs } from './common/file-util';
-import { get } from 'config';
 import { Logger as NestPinoLogger } from "nestjs-pino";
 
 require('dotenv').config();
+import { get } from 'config';
 const serverConfig = get('server');
 
 const logger = new Logger();

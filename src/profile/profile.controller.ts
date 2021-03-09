@@ -1,4 +1,4 @@
-import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, Query, DefaultValuePipe, ParseArrayPipe, ParseUUIDPipe, Req, ParseBoolPipe, UseInterceptors, UploadedFiles, Delete } from '@nestjs/common';
+import { Controller, Post, Body, ValidationPipe, Get, UsePipes, Param, Logger, Query, DefaultValuePipe, ParseArrayPipe, ParseUUIDPipe, Req, ParseBoolPipe, UseInterceptors, UploadedFiles, Delete, Res, HttpStatus } from '@nestjs/common';
 import { CreateCasteDto, CreateProfileDto, GetCastesDto, GetMatchesDto, GetProfileDto, GetTelegramAccountDto, GetProfilesDto, PartnerPreferenceDto, PatternPaginationDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
 import { DocumentValidationDto, GetTelegramAccountsDto, BanProfileDto } from './dto/profile.dto';
@@ -18,6 +18,7 @@ import { Match } from './entities/match.entity';
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { editFileName, getTempDir, imageOrDocFileFilter } from 'src/common/file-util';
+import { Response } from 'express';
 
 const logger = new Logger('ProfileController');
 
@@ -270,9 +271,13 @@ export class ProfileController {
     constructor(private readonly profileService: ProfileService) { }
 
     @Get('/')
-    @Roles(UserRole.AGENT, UserRole.ADMIN)
-    async getProfiles(@Query() options: GetProfilesDto): Promise<IList<Profile> | undefined> {
-        return this.profileService.getProfiles(options);
+    // @Roles(UserRole.AGENT, UserRole.ADMIN)
+    async getProfiles(@Res() res: Response, @Query() options: GetProfilesDto) { //}: Promise<IList<Profile> | undefined> {
+        const { skip, take, count, values: profiles } = await this.profileService.getProfiles(options);
+        res
+            .status(HttpStatus.OK)
+            .header('Content-Range', `profile ${skip}-${skip + take}/${count}`)
+            .json(profiles);
     }
 
 

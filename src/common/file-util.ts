@@ -4,7 +4,6 @@ import { mkdirSync } from "fs";
 import { TypeOfDocument } from "./enum";
 import { exec } from 'child_process';
 import { randomInteger } from "./util";
-import { resolve } from "path";
 
 const logger = new Logger('file-util');
 
@@ -55,7 +54,7 @@ export function createTempDirs() {
 }
 
 
-export async function cleanTempDirectories(olderThanDays = 1, logStdout = false) {
+export async function cleanTempDirectories(olderThanDays = 1, logStdout = false): Promise<void> {
     logger.log(`-> cleanTempDirectories()`);
     const dirPaths = getAllTempDirs();
 

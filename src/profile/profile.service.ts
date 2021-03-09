@@ -31,10 +31,8 @@ import { assert } from 'console';
 import { Support } from './entities/support.entity';
 import { DeactivatedProfile } from './entities/deactivated-profile.entity';
 import { ProfileMarkedForDeletion } from './entities/to-delete-profile.entity';
-import { query } from 'express';
-import { getTempDir } from 'src/common/file-util';
 import { join } from 'path';
-import { doc } from 'prettier';
+import { getTempDir } from 'src/common/file-util';
 
 const logger = new Logger('ProfileService');
 const convertToPdf = process.env.CONVERT_DOC_TO_PDF === 'true';
@@ -50,7 +48,7 @@ export class ProfileService {
         @Inject(forwardRef(() => TelegramService))
         private readonly telegramService: TelegramService,
 
-        @InjectQueue('scheduler-queue') private schedulerQueue: Queue,
+        @InjectQueue('task-queue') private taskQueue: Queue,
 
         @InjectRepository(Profile) private profileRepository: Repository<Profile>,
         @InjectRepository(TelegramAccount) private telegramRepository: Repository<TelegramAccount>,
@@ -303,9 +301,9 @@ export class ProfileService {
         // delete-matches involving this profile.
 
         // add match-finding job to queue for create profile
-        await this.schedulerQueue.add('create-profile',
+        await this.taskQueue.add('create-profile',
             { profileId: profile.id },
-            { delay: process.env.NODE_ENV === 'production' ? 2 * 60 * 1000 : 1 }, // 5 minutes delayed (gives window to fix mistakes.)
+            { delay: process.env.NODE_ENV === 'production' ? 1 * 60 * 1000 : 1 }, // 1 minute delayed (gives window to fix mistakes.)
         );
 
         return profile;
@@ -333,6 +331,7 @@ export class ProfileService {
             .getManyAndCount();
 
         return {
+            skip, take,
             count,
             values: profiles
         };
@@ -520,7 +519,7 @@ export class ProfileService {
         logger.log(`saved preference for profile with id: ${profile.id}`);
 
         // add match-finding job to queue for update profile
-        await this.schedulerQueue.add('update-profile',
+        await this.taskQueue.add('update-profile',
             { profileId: profile.id },
             { delay: 3000 }, // 3 seconds delayed
         );
@@ -892,7 +891,7 @@ export class ProfileService {
 
             logger.log(`batch-reactivated ${count} profiles.`);
 
-            await this.schedulerQueue.add('notify-reactivated-profiles');
+            await this.taskQueue.add('notify-reactivated-profiles');
         }
         catch (error) {
             logger.error(`Could not activate profiles. Error:\n${JSON.stringify(error)}`);
@@ -2828,7 +2827,7 @@ export class ProfileService {
         logger.log('Scheduling send-profiles task');
         const jobId = (new Date()).setSeconds(0, 0);
         // setting job-id equal to date value up to minute ensure that duplicate values added in the minute (every 16th second) are not added. This is done to make it more probable that the task gets scheduled at least once (at 16th, 32nd, or 48th second) and at most once.
-        await this.schedulerQueue.add('send-profiles', { jobId })
+        await this.taskQueue.add('send-profiles', { jobId })
     }
 
 
@@ -2838,8 +2837,8 @@ export class ProfileService {
         logger.log('Scheduling routine maintenance tasks');
         const jobId = (new Date()).setSeconds(0, 0);
         // setting job-id equal to date value up to minute ensure that duplicate values added in the minute (every 16th second) are not added. This is done to make it more probable that the task gets scheduled at least once (at 16th, 32nd, or 48th second) and at most once.
-        await this.schedulerQueue.add('reactivate-profiles', { jobId });
-        await this.schedulerQueue.add('delete-profiles', { jobId });
-        await this.schedulerQueue.add('clean-temp-directories', { jobId });
+        await this.taskQueue.add('reactivate-profiles', { jobId });
+        await this.taskQueue.add('delete-profiles', { jobId });
+        await this.taskQueue.add('clean-temp-directories', { jobId });
     }
 }

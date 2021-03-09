@@ -4,10 +4,10 @@ import { Job } from 'bull';
 import { ProfileService } from '../profile.service';
 import { cleanTempDirectories } from 'src/common/file-util';
 
-const logger = new Logger('SchedulerQueueConsumer');
+const logger = new Logger('TaskQueueConsumer');
 
-@Processor('scheduler-queue')
-export class SchedulerQueueConsumer {
+@Processor('task-queue')
+export class TaskQueueConsumer {
 
     constructor(
         private readonly profileService: ProfileService,
